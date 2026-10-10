@@ -38,7 +38,7 @@ const hotkeys = new Hotkeys(onHotkey)
 
 // ---------------------------------------------------------------- настройки окон
 
-const UI_DEFAULTS = { pinned: true, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top' }
+const UI_DEFAULTS = { pinned: true, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top' }
 let ui = { ...UI_DEFAULTS }
 const uiPath = () => path.join(app.getPath('userData'), 'ui.json')
 function loadUi() {
@@ -154,8 +154,9 @@ const webPrefs = () => ({
 
 function showPanel() {
   if (panel) { panel.show(); panel.focus(); return }
+  const b = ui.panelBounds || {}
   panel = new BrowserWindow({
-    width: 380, height: 700, minWidth: 320, minHeight: 160,
+    width: b.width || PANEL_W, height: b.height || PANEL_H, x: b.x, y: b.y, minWidth: PANEL_MIN_W, minHeight: PANEL_MIN_H,
     frame: false, alwaysOnTop: ui.pinned, backgroundColor: '#12131a', title: 'HoloVoice', icon: ICON,
     webPreferences: webPrefs(),
   })
@@ -167,7 +168,31 @@ function showPanel() {
     else quit()
   })
   panel.on('closed', () => { panel = null })
+  // размер и место широкого окна запоминаются (в компактном режиме — нет)
+  const keep = () => { if (panel && !panelCompact) { ui.panelBounds = panel.getBounds(); saveUi() } }
+  panel.on('resized', keep)
+  panel.on('moved', keep)
 }
+
+const PANEL_W = 1080, PANEL_H = 700, PANEL_MIN_W = 880, PANEL_MIN_H = 560
+let panelCompact = false
+
+/** Компактный режим — только карточки дорожек: узкое окно по высоте содержимого; обратно — прежний размер */
+ipcMain.handle('win:compact', (_e, on, h) => {
+  if (!panel) return
+  const maxH = screen.getDisplayMatching(panel.getBounds()).workArea.height - 20
+  if (on) {
+    if (!panelCompact) { ui.panelBounds = panel.getBounds(); saveUi() }
+    panelCompact = true
+    panel.setMinimumSize(260, 150)
+    panel.setSize(300, Math.min(maxH, Math.max(150, Math.round(h))))
+  } else {
+    panelCompact = false
+    panel.setMinimumSize(PANEL_MIN_W, PANEL_MIN_H)
+    const b = ui.panelBounds || {}
+    panel.setBounds({ x: b.x ?? panel.getBounds().x, y: b.y ?? panel.getBounds().y, width: b.width || PANEL_W, height: b.height || PANEL_H })
+  }
+})
 
 function showWidget() {
   if (widget) { widget.show(); return }

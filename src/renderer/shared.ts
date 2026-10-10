@@ -24,6 +24,10 @@ export interface EngineState {
   mics: Device[]; outs: Device[]
   hint: Record<LaneId, Hint>
   ready: boolean
+  preview: Preview
+}
+/** «Проверить на записи»: запись своего голоса и прослушивание через эффект дорожки «Мой голос» */
+export interface Preview { recording: boolean; ready: boolean; playing: boolean; seconds: number
 }
 
 export type Cmd =
@@ -34,13 +38,15 @@ export type Cmd =
   | { type: 'fxRamp'; lane: LaneId; effect: EffectId; which: 'rampIn' | 'rampOut'; value: number }
   | { type: 'fxReset'; lane: LaneId; effect: EffectId }
   | { type: 'quality'; lane: LaneId; value: Quality }
+  | { type: 'record' } | { type: 'play' } | { type: 'stopPreview' }
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }
   /** горячая клавиша: toggle / next / prev / id эффекта */
   | { type: 'hotkey'; lane: LaneId; action: string }
 
-export interface Levels { mic: [number, number]; sys: [number, number] }
+/** уровни вход/выход, %, и тон голоса: текущий и средний, Гц (0 — нет голоса) */
+export interface Levels { mic: [number, number]; sys: [number, number]; f0: Record<LaneId, [number, number]> }
 
 export interface UiConfig { pinned: boolean; compact: boolean; tab: LaneId; widget: boolean; widgetPinned: boolean }
 
@@ -68,6 +74,7 @@ export interface HoloApi {
   minimize(): Promise<void>
   close(): Promise<void>
   setHeight(h: number): Promise<void>
+  compact(on: boolean, height: number): Promise<void>
   open(url: string): Promise<void>
   getHotkeys(): Promise<HotkeyInfo>
   setHotkey(action: string, accel: string): Promise<HotkeyInfo>

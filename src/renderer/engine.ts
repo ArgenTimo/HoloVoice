@@ -8,7 +8,7 @@
 // У каждой дорожки свой AudioContext: у них разные устройства вывода.
 import { VoiceRig } from './dsp/rig'
 import { EFFECT, EFFECTS, NEUTRAL, effectTarget, type EffectId, type FxParams } from './effects'
-import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type RouteResult, type Settings } from './shared'
+import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings } from './shared'
 
 const isWin = holo.platform === 'win32'
 
@@ -45,7 +45,7 @@ let ready = false
 function publish(): void {
   try { localStorage.setItem(KEY, JSON.stringify(S)) } catch { /* не страшно */ }
   const dev = (d: MediaDeviceInfo) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? 'По умолчанию' : d.deviceId.slice(0, 8)) })
-  const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready }
+  const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview }
   holo.pushState(st)
 }
 
@@ -72,6 +72,8 @@ class Lane {
   stream: MediaStream | null = null
   src: MediaStreamAudioSourceNode | null = null
   rig: VoiceRig | null = null
+  /** тон голоса от вокодера: текущий и средний, Гц */
+  f0: [number, number] = [0, 0]
   private loaded = false
 
   constructor(readonly id: LaneId) {
@@ -114,6 +116,7 @@ class Lane {
     }
     const fftSize = this.cfg.quality === 'fast' ? 1024 : 2048
     const rig = new VoiceRig(this.ctx, new AudioWorkletNode(this.ctx, 'holo-voice', { processorOptions: { fftSize } }))
+    rig.voice.port.onmessage = (e: MessageEvent) => { this.f0 = [e.data.f0, e.data.avg] }
     const old = this.rig
     rig.apply(old?.current ?? NEUTRAL, 0)
     this.gate.connect(rig.input)
@@ -131,6 +134,7 @@ class Lane {
   /** Плавно перейти к настройкам за seconds: нарастание, затухание, переход между эффектами */
   update(seconds = 0.05): void {
     this.rig?.apply(this.target(), seconds)
+    if (this.id === 'mic') previewFollow()
     // заметный переход — показать полосу нарастания (main решает, включена ли она)
     if (seconds >= 0.15) holo.pushRamp({ lane: this.id, seconds, dir: this.cfg.enabled ? 'in' : 'out' })
   }
@@ -172,6 +176,78 @@ class Lane {
 }
 
 const lanes: Record<LaneId, Lane> = { mic: new Lane('mic'), sys: new Lane('sys') }
+
+// ---------------------------------------------------------------- проверить на записи
+
+const preview: Preview = { recording: false, ready: false, playing: false, seconds: 0 }
+const REC_SECONDS = 6
+let recBuffer: AudioBuffer | null = null
+let tap: AudioWorkletNode | null = null
+let pv: { ctx: SinkCtx; rig: VoiceRig; src: AudioBufferSourceNode | null } | null = null
+
+/** Эффект дорожки «Мой голос» — тот, что выбран, даже если дорожка выключена: его и хотят послушать */
+function previewTarget(): FxParams {
+  const c = S.lanes.mic
+  return effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
+}
+function previewFollow(): void { pv?.rig.apply(previewTarget(), 0.05) }
+
+async function startRecording(): Promise<void> {
+  if (preview.recording) return
+  stopPreview()
+  const lane = lanes.mic
+  if (!tap) {
+    tap = new AudioWorkletNode(lane.ctx, 'holo-tap')
+    lane.hpIn.connect(tap) // до шумодава и эффекта — чистая запись
+    tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
+      const data = e.data
+      preview.recording = false
+      if (data.length > lane.ctx.sampleRate * 0.3) {
+        recBuffer = new AudioBuffer({ length: data.length, sampleRate: lane.ctx.sampleRate, numberOfChannels: 1 })
+        recBuffer.copyToChannel(data, 0)
+        preview.ready = true
+        preview.seconds = data.length / lane.ctx.sampleRate
+        playPreview()
+      }
+      publish()
+    }
+  }
+  preview.recording = true
+  tap.port.postMessage({ start: REC_SECONDS })
+  publish()
+}
+
+async function playPreview(): Promise<void> {
+  if (!recBuffer) return
+  stopPreview()
+  if (!pv) {
+    const ctx = new AudioContext({ latencyHint: 'interactive' }) as SinkCtx
+    await ctx.audioWorklet.addModule(new URL('../../dist/dsp/worklet.js', location.href).href)
+    const rig = new VoiceRig(ctx, new AudioWorkletNode(ctx, 'holo-voice', { processorOptions: { fftSize: 2048 } }))
+    const lim = ctx.createDynamicsCompressor()
+    lim.threshold.value = -3; lim.ratio.value = 20; lim.attack.value = 0.002
+    rig.output.connect(lim).connect(ctx.destination)
+    pv = { ctx, rig, src: null }
+  }
+  // в наушники: при перехвате звука компьютера выход по умолчанию — наш, поэтому явно настоящий
+  try { await pv.ctx.setSinkId?.(realOutId) } catch { /* по умолчанию */ }
+  await pv.ctx.resume()
+  pv.rig.apply(previewTarget(), 0)
+  const src = pv.ctx.createBufferSource()
+  src.buffer = recBuffer
+  src.connect(pv.rig.input)
+  src.onended = () => { if (pv?.src === src) { pv.src = null; preview.playing = false; publish() } }
+  src.start()
+  pv.src = src
+  preview.playing = true
+  publish()
+}
+
+function stopPreview(): void {
+  if (preview.recording) tap?.port.postMessage({ stop: true })
+  if (pv?.src) { const s = pv.src; pv.src = null; try { s.stop() } catch { /* уже */ } }
+  preview.playing = false
+}
 
 // ---------------------------------------------------------------- устройства
 
@@ -404,6 +480,9 @@ async function handle(c: Cmd): Promise<void> {
       S.lanes[c.lane].quality = c.value
       await lanes[c.lane].makeRig()
       break
+    case 'record': await startRecording(); return
+    case 'play': await playPreview(); return
+    case 'stopPreview': stopPreview(); break
     case 'mic': S.mic = c.id; await openMic(); break
     case 'out': S.out = c.id; await lanes.mic.setSink(c.id); updateMicHint(); break
     case 'monitor': S.monitor = c.on; await applyMonitor(); break
@@ -447,6 +526,7 @@ async function main(): Promise<void> {
     holo.pushLevels({
       mic: [pct(lanes.mic.level('in', buf)), pct(lanes.mic.level('out', buf))],
       sys: [pct(lanes.sys.level('in', buf)), pct(lanes.sys.level('out', buf))],
+      f0: { mic: lanes.mic.f0, sys: lanes.sys.f0 },
     })
   }, 50)
 }

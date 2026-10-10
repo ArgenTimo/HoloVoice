@@ -4,6 +4,7 @@
 
 export type ParamKey =
   | 'denoise' | 'pitch' | 'formant' | 'vibrato' | 'vibratoHz' | 'robot' | 'whisper'
+  | 'autoTarget' | 'targetHz' | 'formantFollow' | 'tune' | 'mono' | 'monoHz'
   | 'comp' | 'deess' | 'warmth' | 'clarity' | 'excite' | 'double'
   | 'drive' | 'crush' | 'decimate' | 'ring' | 'ringHz'
   | 'lowcut' | 'highcut' | 'bass' | 'presence' | 'air'
@@ -25,12 +26,18 @@ const hz = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} кГц` : `${v 
 const sec = (v: number) => `${v.toFixed(2)} с`
 
 export const PARAMS: ParamDef[] = [
-  { key: 'pitch', label: 'Высота', group: 'Голос', min: -24, max: 24, step: 0.5, fmt: st },
+  { key: 'targetHz', label: 'Целевая высота голоса', group: 'Голос', min: 60, max: 450, step: 1, fmt: hz, log: true },
+  { key: 'autoTarget', label: 'Подстройка под цель', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'formantFollow', label: 'Тембр следом за высотой', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'pitch', label: 'Высота (сдвиг)', group: 'Голос', min: -24, max: 24, step: 0.5, fmt: st },
   { key: 'formant', label: 'Тембр (форманты)', group: 'Голос', min: -12, max: 12, step: 0.5, fmt: st },
   { key: 'whisper', label: 'Дыхание / шёпот', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'vibrato', label: 'Вибрато', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'vibratoHz', label: 'Скорость вибрато', group: 'Голос', min: 0.5, max: 12, step: 0.1, fmt: hz, log: true },
-  { key: 'robot', label: 'Робот', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'tune', label: 'Автотюн (к нотам)', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'mono', label: 'Монотонность', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'monoHz', label: 'Нота монотонности', group: 'Голос', min: 50, max: 450, step: 1, fmt: hz, log: true },
+  { key: 'robot', label: 'Робот (жужжание)', group: 'Голос', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'denoise', label: 'Шумоподавление', group: 'Улучшение', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'comp', label: 'Компрессия (ровность)', group: 'Улучшение', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'deess', label: 'Де-эссер (свист «с»)', group: 'Улучшение', min: 0, max: 1, step: 0.01, fmt: pct },
@@ -65,6 +72,7 @@ export const PARAM = Object.fromEntries(PARAMS.map((p) => [p.key, p])) as Record
 
 export const NEUTRAL: FxParams = {
   denoise: 0, pitch: 0, formant: 0, vibrato: 0, vibratoHz: 5, robot: 0, whisper: 0,
+  autoTarget: 0, targetHz: 150, formantFollow: 0, tune: 0, mono: 0, monoHz: 110,
   comp: 0, deess: 0, warmth: 0, clarity: 0, excite: 0, double: 0,
   drive: 0, crush: 0, decimate: 0, ring: 0, ringHz: 60, noise: 0,
   lowcut: 20, highcut: 20000, bass: 0, presence: 0, air: 0, level: 0,
@@ -73,7 +81,7 @@ export const NEUTRAL: FxParams = {
 }
 
 export type EffectId =
-  | 'clean' | 'male' | 'female' | 'child' | 'giant' | 'chipmunk'
+  | 'clean' | 'male' | 'female' | 'child' | 'autotune' | 'giant' | 'chipmunk'
   | 'demon' | 'ghost' | 'digital' | 'whisper' | 'radio'
   | 'hologram_classic' | 'hologram_warm' | 'smolder' | 'ice' | 'electric' | 'vhs' | 'cave'
 
@@ -88,22 +96,25 @@ export const EFFECTS: EffectInfo[] = [
     preset: { denoise: 0.3, comp: 0.45, deess: 0.3, warmth: 1.5, clarity: 2, presence: 1.5, air: 2, excite: 0.15, lowcut: 70, level: 2.5 },
     main: ['denoise', 'comp', 'deess', 'warmth', 'clarity', 'presence', 'air', 'excite', 'double', 'reverb'] },
   { id: 'male', label: 'Мужской', emoji: '👨',
-    preset: { pitch: -4, formant: -2.5, warmth: 2.5, bass: 2, clarity: 1, comp: 0.4, deess: 0.2, denoise: 0.2, presence: -0.5, level: 0.5 },
-    main: ['pitch', 'formant', 'warmth', 'bass', 'whisper', 'vibrato', 'comp', 'denoise'] },
+    preset: { autoTarget: 1, targetHz: 105, formantFollow: 1, warmth: 2.5, bass: 2, clarity: 1, comp: 0.4, deess: 0.2, denoise: 0.2, presence: -0.5, level: -0.5 },
+    main: ['targetHz', 'formant', 'warmth', 'bass', 'whisper', 'vibrato', 'comp', 'denoise'] },
   { id: 'female', label: 'Женский', emoji: '👩',
-    preset: { pitch: 5, formant: 3, whisper: 0.08, lowcut: 130, warmth: -1, bass: -2, clarity: 2, presence: 2, air: 3, comp: 0.4, deess: 0.45, excite: 0.15, denoise: 0.2 },
-    main: ['pitch', 'formant', 'whisper', 'air', 'warmth', 'presence', 'vibrato', 'deess'] },
+    preset: { autoTarget: 1, targetHz: 215, formantFollow: 1, whisper: 0.08, lowcut: 130, warmth: -1, bass: -2, clarity: 2, presence: 2, air: 3, comp: 0.4, deess: 0.45, excite: 0.15, denoise: 0.2, level: 0.5 },
+    main: ['targetHz', 'formant', 'whisper', 'air', 'warmth', 'presence', 'vibrato', 'deess'] },
   { id: 'child', label: 'Детский', emoji: '🧒',
-    preset: { pitch: 8, formant: 5, whisper: 0.05, lowcut: 200, warmth: -2, clarity: 2, presence: 2.5, air: 3, comp: 0.35, deess: 0.5, denoise: 0.2, level: -1 },
-    main: ['pitch', 'formant', 'air', 'presence', 'whisper', 'vibrato', 'deess'] },
+    preset: { autoTarget: 1, targetHz: 290, formantFollow: 1, formant: 1, whisper: 0.05, lowcut: 200, warmth: -2, clarity: 2, presence: 2.5, air: 3, comp: 0.35, deess: 0.5, denoise: 0.2, level: -0.5 },
+    main: ['targetHz', 'formant', 'air', 'presence', 'whisper', 'vibrato', 'deess'] },
+  { id: 'autotune', label: 'Автотюн', emoji: '🎤',
+    preset: { tune: 1, comp: 0.45, deess: 0.35, clarity: 2, presence: 2, air: 2.5, excite: 0.2, double: 0.3, reverb: 0.15, size: 0.3, level: -3.5 },
+    main: ['tune', 'pitch', 'formant', 'double', 'reverb'] },
   { id: 'demon', label: 'Демон', emoji: '😈', preset: { pitch: -8, formant: -5, drive: 0.45, bass: 6, reverb: 0.35, size: 0.6, level: -3.5 },
     main: ['pitch', 'formant', 'drive', 'reverb'] },
   { id: 'ghost', label: 'Призрак', emoji: '👻',
     preset: { pitch: 3, formant: 2, whisper: 0.55, lowcut: 300, air: 3, echo: 0.4, echoTime: 0.33, echoFb: 0.45, reverb: 0.6, size: 0.9,
       tremolo: 0.35, tremoloHz: 4, level: 2.5 },
     main: ['whisper', 'echo', 'reverb', 'tremolo'] },
-  { id: 'digital', label: 'Робот', emoji: '🤖', preset: { robot: 1, ring: 0.35, ringHz: 60, crush: 0.25, presence: 2, highcut: 9000, level: 8 },
-    main: ['robot', 'ring', 'ringHz', 'crush'] },
+  { id: 'digital', label: 'Робот', emoji: '🤖', preset: { mono: 1, monoHz: 100, ring: 0.35, ringHz: 60, crush: 0.25, presence: 2, highcut: 9000, level: -2 },
+    main: ['monoHz', 'mono', 'ring', 'ringHz', 'crush'] },
   { id: 'hologram_classic', label: 'Голограмма', emoji: '🛰️',
     preset: { ring: 0.5, ringHz: 50, lowcut: 400, highcut: 4500, presence: 4, chorus: 0.5, chorusRate: 0.3, noise: 0.15, level: -2.5 },
     main: ['ring', 'ringHz', 'chorus', 'noise'] },

@@ -185,5 +185,11 @@
   "u.st": "nc",
   "u.s": "giây",
   "u.on": "bật",
-  "u.off": "tắt"
+  "u.off": "tắt",
+  "grp.custom": "Hiệu ứng của tôi",
+  "ins.saveTitle": "💾 Hiệu ứng riêng",
+  "ins.saveHint": "Lưu cài đặt hiện tại thành hiệu ứng mới — nó sẽ xuất hiện trong “Hiệu ứng của tôi”, trong tiện ích và phím tắt.",
+  "ins.saveName": "Tên",
+  "ins.save": "Lưu",
+  "ins.delete": "Xóa hiệu ứng"
 }

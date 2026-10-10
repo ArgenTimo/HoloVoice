@@ -2,7 +2,7 @@
 // по центру каталог эффектов для выбранной дорожки, справа настройки выбранного эффекта и «Проверить на записи»,
 // снизу — устройства. Горячие клавиши и подсказка на экране — в окнах поверх панели.
 // Звук здесь не обрабатывается (см. engine.ts).
-import { EFFECT, PARAM, PARAMS, effectFull, fxLabel, groupLabel, paramLabel, type EffectId, type ParamDef, type ParamKey } from './effects'
+import { PARAM, PARAMS, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type UiConfig } from './shared'
 
@@ -13,11 +13,20 @@ const LANES: LaneId[] = ['mic', 'sys']
 const laneName = (id: LaneId) => t(`lane.${id}`)
 const LANE_ICO: Record<LaneId, string> = { mic: '🎙️', sys: '🔊' }
 
-const GROUPS: [string, EffectId[]][] = [
+const BUILTIN_GROUPS: [string, EffectId[]][] = [
   ['grp.voices', ['clean', 'male', 'female', 'child', 'autotune', 'giant', 'chipmunk', 'whisper']],
   ['grp.characters', ['demon', 'ghost', 'digital', 'smolder']],
   ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'vhs', 'radio', 'cave']],
 ]
+/** Группы каталога: встроенные + «Мои эффекты», если они есть */
+function groups(): [string, EffectId[]][] {
+  const mine = customs().map((c) => c.id)
+  return mine.length ? [...BUILTIN_GROUPS, ['grp.custom', mine]] : BUILTIN_GROUPS
+}
+/** Подпись набора своих эффектов: меняется — каталог, списки и горячие клавиши перестраиваются */
+let customSig = ''
+const sigOf = () => customs().map((c) => c.id + c.name + c.emoji).join('|')
+const emojiOf = (id: EffectId) => effectInfo(id)?.emoji ?? '⭐'
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => {
   const e = document.createElement(tag)
@@ -62,11 +71,7 @@ function buildLanes(): void {
     })
     $(`sw-${id}`).onclick = () => holo.cmd({ type: 'toggle', lane: id })
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
-    for (const [, ids] of GROUPS) for (const fx of ids) {
-      const o = el('option', '', `${EFFECT[fx].emoji} ${fxLabel(fx)}`)
-      o.value = fx
-      sel.appendChild(o)
-    }
+    fillFxSelect(sel)
     sel.onchange = () => holo.cmd({ type: 'effect', lane: id, effect: sel.value as EffectId })
     const ctrls = $(`ctrls-${id}`)
     for (const d of LANE_SLIDERS.filter((x) => x.lanes.includes(id))) {
@@ -92,11 +97,20 @@ function buildLanes(): void {
   }
 }
 
+function fillFxSelect(sel: HTMLSelectElement): void {
+  sel.innerHTML = ''
+  for (const [, ids] of groups()) for (const fx of ids) {
+    const o = el('option', '', `${emojiOf(fx)} ${fxLabel(fx)}`)
+    o.value = fx
+    sel.appendChild(o)
+  }
+}
+
 function renderLanes(): void {
   if (!st) return
   for (const id of LANES) {
     const cfg = st.S.lanes[id]
-    const fx = EFFECT[cfg.effect]
+    const fx = { id: cfg.effect, emoji: emojiOf(cfg.effect) }
     $(`card-${id}`).classList.toggle('on', cfg.enabled)
     $(`card-${id}`).classList.toggle('sel', ui.tab === id)
     $(`sw-${id}`).classList.toggle('on', cfg.enabled)
@@ -131,16 +145,22 @@ function selectLane(id: LaneId): void {
 
 function buildCatalog(): void {
   const box = $('groups')
-  for (const [title, ids] of GROUPS) {
+  box.innerHTML = ''
+  for (const [title, ids] of groups()) {
     const g = el('div', 'group')
     g.appendChild(el('h3', '', t(title)))
     const tiles = el('div', 'tiles')
     for (const id of ids) {
-      const fx = EFFECT[id]
       const tile = el('button', 'tile')
       tile.dataset.effect = id
-      tile.append(el('span', 't-emoji', fx.emoji), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
+      tile.append(el('span', 't-emoji', emojiOf(id)), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
       tile.onclick = () => holo.cmd({ type: 'effect', lane: ui.tab, effect: id })
+      if (isCustom(id)) {
+        const del = el('span', 't-del', '✕')
+        del.title = t('ins.delete')
+        del.onclick = (e) => { e.stopPropagation(); holo.cmd({ type: 'customDelete', id }) }
+        tile.appendChild(del)
+      }
       tiles.appendChild(tile)
     }
     g.appendChild(tiles)
@@ -218,7 +238,7 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   const box = $('inspector')
   box.innerHTML = ''
   fxInputs.length = 0
-  const info = EFFECT[effect]
+  const info = effectInfo(effect) ?? effectInfo('clean')!
 
   const head = el('div', 'ins-head')
   const titles = el('div')
@@ -256,6 +276,34 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   btns.appendChild(reset)
   main.appendChild(btns)
   box.appendChild(main)
+
+  // свой эффект: сохранить текущие настройки под своим именем
+  const mine = el('div', 'box')
+  mine.appendChild(el('div', 'box-title', t('ins.saveTitle')))
+  mine.appendChild(el('div', 'prev-status', t('ins.saveHint')))
+  const EMOJIS = ['⭐', '🔥', '🎭', '🦊', '🐉', '👽', '🎃', '🤖', '🧙', '💀', '🌊', '⚡', '🍄', '🎸', '👑', '🫧']
+  let pick = EMOJIS[0]
+  const emo = el('div', 'emoji-row')
+  for (const e of EMOJIS) {
+    const b = el('button', 'emoji-btn' + (e === pick ? ' sel' : ''), e)
+    b.onclick = () => { pick = e; emo.querySelectorAll('.emoji-btn').forEach((x) => x.classList.toggle('sel', x === b)) }
+    emo.appendChild(b)
+  }
+  const row = el('div', 'row-btns')
+  const name = el('input', 'name-input')
+  name.type = 'text'; name.maxLength = 40; name.placeholder = t('ins.saveName')
+  name.value = `${fxLabel(effect)} ★`
+  const save = el('button', 'btn primary', t('ins.save'))
+  save.onclick = () => holo.cmd({ type: 'customSave', lane, name: name.value, emoji: pick })
+  name.onkeydown = (e) => { if (e.key === 'Enter') save.click() }
+  row.append(name, save)
+  mine.append(emo, row)
+  if (isCustom(effect)) {
+    const del = el('button', 'btn', t('ins.delete'))
+    del.onclick = () => holo.cmd({ type: 'customDelete', id: effect })
+    mine.appendChild(del)
+  }
+  box.appendChild(mine)
 
   if (lane === 'mic') {
     const p = el('div', 'box')
@@ -359,6 +407,16 @@ function renderDevices(): void {
 }
 
 function render(): void {
+  if (st) setCustom(st.S.custom)
+  if (sigOf() !== customSig) {
+    // набор своих эффектов изменился — каталог, списки в карточках и горячие клавиши строим заново
+    customSig = sigOf()
+    buildCatalog()
+    for (const id of LANES) fillFxSelect($(`fxsel-${id}`) as HTMLSelectElement)
+    buildHotkeys()
+    renderHotkeys()
+    shown = ''
+  }
   renderLanes()
   renderCatalog()
   renderInspector()
@@ -394,7 +452,7 @@ function buildHotkeys(): void {
     list.innerHTML = ''
     const actions: [string, string][] = [
       ['toggle', t('hk.toggle')], ['next', t('hk.next')], ['prev', t('hk.prev')],
-      ...GROUPS.flatMap(([, ids]) => ids.map((id): [string, string] => [id, `${EFFECT[id].emoji} ${fxLabel(id)}`])),
+      ...groups().flatMap(([, ids]) => ids.map((id): [string, string] => [id, `${emojiOf(id)} ${fxLabel(id)}`])),
     ]
     for (const [what, label] of actions) {
       const row = el('div', 'hk-row')

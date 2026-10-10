@@ -1,13 +1,27 @@
 // Виджет рабочего стола: без регуляторов — только эффект на вход/выход из списка и мгновенное вкл/выкл.
 // Пульт движка, как и панель; закреплённый виджет запускается вместе с системой (main.js).
-import { EFFECTS, fxLabel, type EffectId } from './effects'
+import { allEffects, customs, fxLabel, setCustom, type EffectId } from './effects'
 import { applyStatic, setLang } from './i18n'
 import { $, holo, type EngineState, type LaneId } from './shared'
 
 const rows = {} as Record<LaneId, HTMLElement>
 document.querySelectorAll<HTMLElement>('.w-row').forEach((r) => { rows[r.dataset.lane as LaneId] = r })
 
+let sig = ''
+function fillOptions(sel: HTMLSelectElement): void {
+  sel.innerHTML = ''
+  for (const e of allEffects()) {
+    const o = document.createElement('option')
+    o.value = e.id
+    o.textContent = `${e.emoji} ${fxLabel(e.id)}`
+    sel.appendChild(o)
+  }
+}
+
 function render(st: EngineState): void {
+  setCustom(st.S.custom)
+  const now = customs().map((c) => c.id + c.name + c.emoji).join('|')
+  if (now !== sig) { sig = now; for (const id of ['mic', 'sys'] as LaneId[]) fillOptions(rows[id].querySelector<HTMLSelectElement>('.w-fx')!) }
   for (const id of ['mic', 'sys'] as LaneId[]) {
     const cfg = st.S.lanes[id]
     const row = rows[id]
@@ -27,12 +41,7 @@ async function main(): Promise<void> {
   for (const id of ['mic', 'sys'] as LaneId[]) {
     const row = rows[id]
     const sel = row.querySelector<HTMLSelectElement>('.w-fx')!
-    for (const e of EFFECTS) {
-      const o = document.createElement('option')
-      o.value = e.id
-      o.textContent = `${e.emoji} ${fxLabel(e.id)}`
-      sel.appendChild(o)
-    }
+    fillOptions(sel)
     sel.onchange = () => holo.cmd({ type: 'effect', lane: id, effect: sel.value as EffectId })
     row.querySelector<HTMLButtonElement>('.w-sw')!.onclick = () => holo.cmd({ type: 'toggle', lane: id })
   }

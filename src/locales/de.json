@@ -185,5 +185,11 @@
   "u.st": "HT",
   "u.s": "s",
   "u.on": "an",
-  "u.off": "aus"
+  "u.off": "aus",
+  "grp.custom": "Meine Effekte",
+  "ins.saveTitle": "💾 Eigener Effekt",
+  "ins.saveHint": "Speichere die aktuellen Einstellungen als neuen Effekt — er erscheint unter „Meine Effekte“, im Widget und bei den Tastenkürzeln.",
+  "ins.saveName": "Name",
+  "ins.save": "Speichern",
+  "ins.delete": "Effekt löschen"
 }

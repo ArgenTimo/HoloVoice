@@ -185,5 +185,11 @@
   "u.st": "st",
   "u.s": "s",
   "u.on": "lig",
-  "u.off": "desl"
+  "u.off": "desl",
+  "grp.custom": "Meus efeitos",
+  "ins.saveTitle": "💾 Efeito próprio",
+  "ins.saveHint": "Salve as configurações atuais como um novo efeito — ele aparece em “Meus efeitos”, no widget e nos atalhos.",
+  "ins.saveName": "Nome",
+  "ins.save": "Salvar",
+  "ins.delete": "Excluir efeito"
 }

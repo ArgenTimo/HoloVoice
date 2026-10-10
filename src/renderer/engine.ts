@@ -8,7 +8,7 @@
 // У каждой дорожки свой AudioContext: у них разные устройства вывода.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { EFFECT, EFFECTS, NEUTRAL, effectTarget, type EffectId, type FxParams } from './effects'
+import { NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, isCustom, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings } from './shared'
 
 const isWin = holo.platform === 'win32'
@@ -21,16 +21,17 @@ const DEFAULTS: Settings = {
     // звук компьютера по умолчанию не перехватывается — пока его не включили
     sys: { enabled: false, effect: 'hologram_classic', amount: 100, gate: -80, gain: 100, quality: 'hq', fx: {} },
   },
-  mic: 'default', out: '', monitor: false, monitorVol: 70,
+  mic: 'default', out: '', monitor: false, monitorVol: 70, custom: [],
 }
 const KEY = 'holovoice.settings.v2'
 function loadSettings(): Settings {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<Settings>
+    setCustom(raw.custom) // свои эффекты — до проверки дорожек: на них может стоять свой эффект
     const lane = (id: LaneId): LaneSettings => {
       // из прежних версий: лишние ключи (strength, pitch, space) не мешают, эффекты, которых больше нет, — «Чистый»
       const l = { ...DEFAULTS.lanes[id], ...raw.lanes?.[id] }
-      if (!EFFECT[l.effect]) l.effect = 'clean'
+      if (!effectInfo(l.effect)) l.effect = 'clean'
       l.fx ??= {}
       return l
     }
@@ -455,12 +456,13 @@ async function handle(c: Cmd): Promise<void> {
       const cfg = S.lanes[c.lane]
       if (c.action === 'toggle') return handle({ type: 'toggle', lane: c.lane })
       if (c.action === 'next' || c.action === 'prev') {
-        const i = EFFECTS.findIndex((e) => e.id === cfg.effect)
-        const n = EFFECTS.length
-        const next = EFFECTS[(i + (c.action === 'next' ? 1 : n - 1)) % n].id
+        const list = allEffects()
+        const i = list.findIndex((e) => e.id === cfg.effect)
+        const n = list.length
+        const next = list[(i + (c.action === 'next' ? 1 : n - 1)) % n].id
         return handle({ type: 'effect', lane: c.lane, effect: next })
       }
-      if (!EFFECTS.some((e) => e.id === c.action)) break
+      if (!effectInfo(c.action)) break
       // то же сочетание у включённого эффекта — выключить: «нажал — включил, нажал ещё раз — выключил»
       if (cfg.enabled && cfg.effect === c.action) return handle({ type: 'toggle', lane: c.lane, on: false })
       return handle({ type: 'effect', lane: c.lane, effect: c.action as EffectId })
@@ -488,6 +490,29 @@ async function handle(c: Cmd): Promise<void> {
       publish()
       setTimeout(() => location.reload(), 100)
       return
+    case 'customSave': {
+      // снимок того, что звучит сейчас (пресет + правки), под своим именем; дорожка сразу переходит на него
+      const cfg = S.lanes[c.lane]
+      const src = cfg.effect
+      const id = `c-${Date.now().toString(36)}` as const
+      const base: BuiltinId = isCustom(src) ? (S.custom.find((x) => x.id === src)?.base ?? 'clean') : src
+      S.custom.push({ id, name: c.name.trim().slice(0, 40) || id, emoji: c.emoji || '⭐', base, preset: effectFull(src, cfg.fx[src]) })
+      setCustom(S.custom)
+      cfg.fx[id] = { rampIn: cfg.fx[src]?.rampIn, rampOut: cfg.fx[src]?.rampOut }
+      cfg.effect = id
+      if (cfg.enabled) lanes[c.lane].update()
+      break
+    }
+    case 'customDelete': {
+      S.custom = S.custom.filter((x) => x.id !== c.id)
+      setCustom(S.custom)
+      for (const id of ['mic', 'sys'] as LaneId[]) {
+        const cfg = S.lanes[id]
+        delete cfg.fx[c.id]
+        if (cfg.effect === c.id) { cfg.effect = 'clean'; lanes[id].update() }
+      }
+      break
+    }
     case 'record': await startRecording(); return
     case 'play': await playPreview(); return
     case 'stopPreview': stopPreview(); break

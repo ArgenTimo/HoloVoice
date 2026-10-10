@@ -185,5 +185,11 @@
   "u.st": "st",
   "u.s": "s",
   "u.on": "sì",
-  "u.off": "no"
+  "u.off": "no",
+  "grp.custom": "I miei effetti",
+  "ins.saveTitle": "💾 Effetto personale",
+  "ins.saveHint": "Salva le impostazioni attuali come nuovo effetto: comparirà in «I miei effetti», nel widget e nelle scorciatoie.",
+  "ins.saveName": "Nome",
+  "ins.save": "Salva",
+  "ins.delete": "Elimina effetto"
 }

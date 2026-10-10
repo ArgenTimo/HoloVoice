@@ -185,5 +185,11 @@
   "u.st": "半音",
   "u.s": "秒",
   "u.on": "开",
-  "u.off": "关"
+  "u.off": "关",
+  "grp.custom": "我的效果",
+  "ins.saveTitle": "💾 自定义效果",
+  "ins.saveHint": "把当前设置保存为新效果 — 它会出现在“我的效果”、小组件和快捷键中。",
+  "ins.saveName": "名称",
+  "ins.save": "保存",
+  "ins.delete": "删除效果"
 }

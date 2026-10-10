@@ -3,7 +3,7 @@
 // Идея и первые цепочки — из holo-messenger (src/client/audio/voice-fx.ts). Названия — в словарях (src/locales).
 import { t } from './i18n'
 
-export const fxLabel = (id: string) => t(`fx.${id}`)
+export const fxLabel = (id: string) => (isCustom(id) ? CUSTOM.find((c) => c.id === id)?.name ?? id : t(`fx.${id}`))
 export const paramLabel = (k: string) => t(`p.${k}`)
 export const groupLabel = (g: string) => t(`pg.${g}`)
 
@@ -88,10 +88,15 @@ export const NEUTRAL: FxParams = {
   echo: 0, echoTime: 0.3, echoFb: 0.35, reverb: 0, size: 0.5,
 }
 
-export type EffectId =
+export type BuiltinId =
   | 'clean' | 'male' | 'female' | 'child' | 'autotune' | 'giant' | 'chipmunk'
   | 'demon' | 'ghost' | 'digital' | 'whisper' | 'radio'
   | 'hologram_classic' | 'hologram_warm' | 'smolder' | 'ice' | 'electric' | 'vhs' | 'cave'
+
+/** Свой эффект пользователя — снимок всех параметров встроенного (с его правками) под своим именем */
+export type CustomId = `c-${string}`
+export type EffectId = BuiltinId | CustomId
+export interface CustomEffect { id: CustomId; name: string; emoji: string; base: BuiltinId; preset: FxParams }
 
 export interface EffectInfo {
   id: EffectId; emoji: string
@@ -149,14 +154,32 @@ export const EFFECTS: EffectInfo[] = [
   { id: 'cave', emoji: '🕳️', preset: { reverb: 0.8, size: 1, echo: 0.3, echoTime: 0.45, echoFb: 0.3, bass: 2, level: -1.5 },
     main: ['reverb', 'size', 'echo'] },
 ]
-export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Record<EffectId, EffectInfo>
+export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Record<BuiltinId, EffectInfo>
+
+// ---------------------------------------------------------------- свои эффекты (хранятся в настройках движка)
+
+let CUSTOM: CustomEffect[] = []
+const customInfo = new Map<string, EffectInfo>()
+export function setCustom(list: CustomEffect[] | undefined): void {
+  CUSTOM = list ?? []
+  customInfo.clear()
+  for (const c of CUSTOM) customInfo.set(c.id, { id: c.id, emoji: c.emoji, preset: c.preset, main: EFFECT[c.base]?.main ?? EFFECT.clean.main })
+}
+export function customs(): CustomEffect[] { return CUSTOM }
+export const isCustom = (id: string): id is CustomId => id.startsWith('c-')
+/** Любой эффект — встроенный или свой */
+export function effectInfo(id: string): EffectInfo | undefined {
+  return isCustom(id) ? customInfo.get(id) : EFFECT[id as BuiltinId]
+}
+/** Все эффекты по порядку: встроенные, затем свои */
+export function allEffects(): EffectInfo[] { return [...EFFECTS, ...customInfo.values()] }
 
 /** Настройки одного эффекта, сохранённые пользователем (поверх пресета) */
 export interface EffectUser { p?: Partial<FxParams>; rampIn?: number; rampOut?: number }
 
 /** Полные параметры эффекта: нейтраль ← пресет ← свои правки */
 export function effectFull(id: EffectId, user?: EffectUser): FxParams {
-  return { ...NEUTRAL, ...(EFFECT[id]?.preset ?? {}), ...(user?.p ?? {}) }
+  return { ...NEUTRAL, ...(effectInfo(id)?.preset ?? {}), ...(user?.p ?? {}) }
 }
 
 /** Между a и b на долю t; частоты — в логарифме, чтобы звучало равномерно */

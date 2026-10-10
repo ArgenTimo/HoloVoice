@@ -185,5 +185,11 @@
   "u.st": "pt",
   "u.s": "s",
   "u.on": "wł",
-  "u.off": "wył"
+  "u.off": "wył",
+  "grp.custom": "Moje efekty",
+  "ins.saveTitle": "💾 Własny efekt",
+  "ins.saveHint": "Zapisz bieżące ustawienia jako nowy efekt — pojawi się w „Moje efekty”, w widżecie i w skrótach.",
+  "ins.saveName": "Nazwa",
+  "ins.save": "Zapisz",
+  "ins.delete": "Usuń efekt"
 }

@@ -185,5 +185,11 @@
   "u.st": "st",
   "u.s": "dtk",
   "u.on": "nyala",
-  "u.off": "mati"
+  "u.off": "mati",
+  "grp.custom": "Efek saya",
+  "ins.saveTitle": "💾 Efek sendiri",
+  "ins.saveHint": "Simpan pengaturan saat ini sebagai efek baru — efek akan muncul di “Efek saya”, di widget, dan di pintasan.",
+  "ins.saveName": "Nama",
+  "ins.save": "Simpan",
+  "ins.delete": "Hapus efek"
 }

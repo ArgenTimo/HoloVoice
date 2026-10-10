@@ -185,5 +185,11 @@
   "u.st": "yt",
   "u.s": "sn",
   "u.on": "açık",
-  "u.off": "kapalı"
+  "u.off": "kapalı",
+  "grp.custom": "Efektlerim",
+  "ins.saveTitle": "💾 Kendi efektim",
+  "ins.saveHint": "Geçerli ayarları yeni bir efekt olarak kaydedin — “Efektlerim”de, widget'ta ve kısayollarda görünür.",
+  "ins.saveName": "Ad",
+  "ins.save": "Kaydet",
+  "ins.delete": "Efekti sil"
 }

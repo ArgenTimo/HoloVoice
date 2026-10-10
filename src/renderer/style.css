@@ -215,3 +215,13 @@ body.widget .brand { font-size: 12px; }
   text-align: start; white-space: nowrap; }
 .lang-menu button:hover { background: var(--panel); }
 .lang-menu button.sel { background: #251f45; }
+
+/* ---------------------------------------------------------------- свои эффекты */
+.tile .t-del { position: absolute; top: 4px; left: 6px; font-size: 11px; color: var(--faint); opacity: 0; padding: 2px 4px; border-radius: 4px; }
+.tile:hover .t-del { opacity: 1; }
+.tile .t-del:hover { color: #fff; background: #e5484d; }
+.emoji-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.emoji-btn { width: 30px; height: 30px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; font-size: 15px; padding: 0; }
+.emoji-btn.sel { border-color: var(--accent); background: #251f45; }
+.name-input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; user-select: text; }
+.name-input:focus { outline: 2px solid var(--accent); outline-offset: 0; }

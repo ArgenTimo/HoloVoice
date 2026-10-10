@@ -1,6 +1,6 @@
 // Подсказка поверх экрана: какая дорожка и эффект (при горячей клавише) и полоса нарастания/затухания —
 // заполняется ровно за время перехода, на пике окно прячет main.
-import { EFFECT, fxLabel } from './effects'
+import { effectInfo, fxLabel, setCustom } from './effects'
 import { setLang, t } from './i18n'
 import { $, holo, type EngineState, type OsdMsg } from './shared'
 
@@ -11,7 +11,8 @@ let anim = 0
 function renderText(): void {
   if (!st || !cur) return
   const cfg = st.S.lanes[cur.lane]
-  const fx = EFFECT[cfg.effect]
+  setCustom(st.S.custom)
+  const fx = effectInfo(cfg.effect)
   $('lane').textContent = `${cur.lane === 'mic' ? '🎙️' : '🔊'} ${t(`lane.${cur.lane}`)}`
   $('ico').textContent = cfg.enabled ? (fx?.emoji ?? '') : '⏻'
   $('text').textContent = cfg.enabled ? fxLabel(cfg.effect) : t('osd.off')

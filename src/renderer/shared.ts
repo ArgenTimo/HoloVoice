@@ -1,5 +1,5 @@
 // Общее для движка (engine — скрытое окно со звуком) и пультов (panel — главное окно, widget — виджет).
-import type { EffectId, EffectUser, ParamKey } from './effects'
+import type { CustomEffect, EffectId, EffectUser, ParamKey } from './effects'
 
 export type LaneId = 'mic' | 'sys'
 
@@ -14,6 +14,7 @@ export interface LaneSettings {
 export interface Settings {
   lanes: Record<LaneId, LaneSettings>
   mic: string; out: string; monitor: boolean; monitorVol: number
+  custom: CustomEffect[] // свои эффекты
 }
 export interface Hint { html: string; warn: boolean }
 export interface Device { id: string; label: string }
@@ -39,6 +40,8 @@ export type Cmd =
   | { type: 'fxReset'; lane: LaneId; effect: EffectId }
   | { type: 'quality'; lane: LaneId; value: Quality }
   | { type: 'record' } | { type: 'play' } | { type: 'stopPreview' }
+  | { type: 'customSave'; lane: LaneId; name: string; emoji: string }
+  | { type: 'customDelete'; id: EffectId }
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }

@@ -57,18 +57,18 @@ type SinkEl = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }
 // ---------------------------------------------------------------- дорожка
 
 class Lane {
-  readonly ctx = new AudioContext({ latencyHint: 'interactive' }) as SinkCtx
-  readonly inGain = this.ctx.createGain()
+  readonly ctx: SinkCtx
+  readonly inGain: GainNode
   // Срез низа на входе: постоянное смещение и гул микрофона эффекты (низкая полка, насыщение) раздувают в рокот
   readonly hpIn: BiquadFilterNode
   // Шумовой гейт: в паузах эффекты раздувают фон комнаты в шипение
-  readonly gate = this.ctx.createGain()
-  readonly outGain = this.ctx.createGain()
+  readonly gate: GainNode
+  readonly outGain: GainNode
   readonly hpOut: BiquadFilterNode
-  readonly limiter = this.ctx.createDynamicsCompressor() // эффекты с насыщением не должны клиповать
-  readonly anIn = this.ctx.createAnalyser()
-  readonly anOut = this.ctx.createAnalyser()
-  readonly tap = this.ctx.createMediaStreamDestination() // для самопрослушки
+  readonly limiter: DynamicsCompressorNode // эффекты с насыщением не должны клиповать
+  readonly anIn: AnalyserNode
+  readonly anOut: AnalyserNode
+  readonly tap: MediaStreamAudioDestinationNode // для самопрослушки
   stream: MediaStream | null = null
   src: MediaStreamAudioSourceNode | null = null
   rig: VoiceRig | null = null
@@ -77,6 +77,15 @@ class Lane {
   private loaded = false
 
   constructor(readonly id: LaneId) {
+    // буфер: в «качестве» 25 мс — запас против щелчков, когда система нагружена; в «быстро» — минимальный (для игр)
+    const c = (this.ctx = new AudioContext({ latencyHint: S.lanes[id].quality === 'fast' ? 'interactive' : 0.025 }) as SinkCtx)
+    this.inGain = c.createGain()
+    this.gate = c.createGain()
+    this.outGain = c.createGain()
+    this.limiter = c.createDynamicsCompressor()
+    this.anIn = c.createAnalyser()
+    this.anOut = c.createAnalyser()
+    this.tap = c.createMediaStreamDestination()
     this.hpIn = this.biquad('highpass', id === 'mic' ? 80 : 20)
     this.hpOut = this.biquad('highpass', 25)
     const L = this.limiter
@@ -477,9 +486,11 @@ async function handle(c: Cmd): Promise<void> {
       if (S.lanes[c.lane].effect === c.effect) lanes[c.lane].update()
       break
     case 'quality':
+      // размер буфера задаётся при создании AudioContext — перезапускаем движок (маршрутизация переживает это)
       S.lanes[c.lane].quality = c.value
-      await lanes[c.lane].makeRig()
-      break
+      publish()
+      setTimeout(() => location.reload(), 100)
+      return
     case 'record': await startRecording(); return
     case 'play': await playPreview(); return
     case 'stopPreview': stopPreview(); break
@@ -519,6 +530,13 @@ async function main(): Promise<void> {
   publish()
 
   navigator.mediaDevices.addEventListener('devicechange', () => { refreshDevices() })
+  // в скрытом окне движка devicechange не приходит — подключённую гарнитуру иначе не увидеть: сверяем список раз в 3 с
+  let devSig = ''
+  setInterval(async () => {
+    const sig = (await navigator.mediaDevices.enumerateDevices()).map((d) => d.kind + d.deviceId + d.label).join('|')
+    if (devSig && sig !== devSig) refreshDevices()
+    devSig = sig
+  }, 3000)
   // индикаторы уровня для пультов, 20 раз в секунду
   const buf = new Float32Array(1024)
   const pct = (db: number) => Math.max(0, Math.min(100, ((db + 60) / 60) * 100))

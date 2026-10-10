@@ -164,12 +164,13 @@ class LinuxRouter {
     return { realSinkLabel: await sinkDescription(s.realSink), monitorLabel: CAPTURE_LABEL }
   }
 
-  /** Перенести в перехват потоки, играющие мимо него (начатые до перехвата или привязанные к устройству). */
+  /** Перенести в перехват потоки, играющие в мой настоящий выход мимо него (начатые до перехвата или привязанные
+   *  к устройству). Потоки в другие устройства (второй выход, виртуальные устройства OBS и т. п.) не трогаем. */
   async followStreams() {
     if (!this.s.sys.length) return 0
     let n = 0
     for (const si of await sinkInputs()) {
-      if (OURS.includes(si.sink) || this.isOwn(si)) continue
+      if (si.sink !== this.s.realSink || this.isOwn(si)) continue
       try {
         await pactl('move-sink-input', si.id, IN_SINK)
         this.s.moved[si.id] = si.sink

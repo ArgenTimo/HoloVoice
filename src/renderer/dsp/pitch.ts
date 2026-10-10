@@ -24,6 +24,7 @@ export class PitchTracker {
   private readonly d: Float32Array
   private readonly frame: Float32Array
   private readonly hist = new Float32Array(400) // последние тона голоса (~2 с при кадре 256 отсчётов)
+  private readonly sorted = new Float32Array(400)
   private hi = 0
   private hn = 0
   private since2 = 0
@@ -106,8 +107,11 @@ export class PitchTracker {
     if (this.hn < this.hist.length) this.hn++
     if (this.hn >= 40 && (++this.since2 >= 8 || this.avg <= 0)) {
       this.since2 = 0
-      const v = Array.from(this.hist.subarray(0, this.hn)).sort((p, q) => p - q)
-      this.avg = v[v.length >> 1]
+      // без выделений памяти в аудиопотоке (сборщик мусора давал паузы — треск)
+      const v = this.sorted.subarray(0, this.hn)
+      v.set(this.hist.subarray(0, this.hn))
+      v.sort()
+      this.avg = v[this.hn >> 1]
     }
     void dt
   }

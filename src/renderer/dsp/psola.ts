@@ -9,6 +9,7 @@
 
 const RING = 1 << 15
 const MASK = RING - 1
+const MARKS = 256
 
 export class Psola {
   /** отношение высот (2 — на октаву выше) */
@@ -25,8 +26,11 @@ export class Psola {
   private l2 = 0
   private readonly lpA: number
   // метки анализа: позиция импульса и период вокруг него (0 — глухой участок)
-  private markPos: number[] = []
-  private markT: number[] = []
+  // метки — кольцо фиксированного размера (без выделений памяти в аудиопотоке)
+  private readonly markPos = new Float64Array(MARKS)
+  private readonly markT = new Float32Array(MARKS)
+  private mHead = 0 // индекс следующей записи
+  private mCount = 0
   private lastMark = 0
   private nextSyn = 0
   private readonly tu: number
@@ -88,25 +92,29 @@ export class Psola {
   }
 
   private pushMark(pos: number, T: number): void {
-    this.markPos.push(pos)
-    this.markT.push(T > 0 ? Math.min(T, this.maxHalf) : 0)
+    this.markPos[this.mHead] = pos
+    this.markT[this.mHead] = T > 0 ? Math.min(T, this.maxHalf) : 0
+    this.mHead = (this.mHead + 1) % MARKS
+    if (this.mCount < MARKS) this.mCount++
     this.lastMark = pos
-    // старые метки не нужны
-    if (this.markPos.length > 400) { this.markPos.splice(0, 200); this.markT.splice(0, 200) }
   }
+
+  /** i-я метка от самой старой из хранящихся */
+  private mi(i: number): number { return (this.mHead - this.mCount + i + MARKS) % MARKS }
 
   /** Расставить зёрна с новым шагом, пока они покрывают выдачу до outEnd с запасом */
   private synthesize(outEnd: number): void {
-    const marks = this.markPos
-    if (!marks.length) return
+    const n = this.mCount
+    if (!n) return
+    const pos = this.markPos
     if (this.nextSyn < outEnd - this.latency) this.nextSyn = outEnd - this.latency // после паузы/старта
     let j = 0
     while (this.nextSyn <= outEnd + this.maxHalf) {
       const s = this.nextSyn
       // ближайшая к s метка анализа
-      while (j < marks.length - 1 && Math.abs(marks[j + 1] - s) <= Math.abs(marks[j] - s)) j++
-      const a = marks[j]
-      const T = this.markT[j]
+      while (j < n - 1 && Math.abs(pos[this.mi(j + 1)] - s) <= Math.abs(pos[this.mi(j)] - s)) j++
+      const a = pos[this.mi(j)]
+      const T = this.markT[this.mi(j)]
       const voiced = T > 0
       const half = voiced ? T : this.tu
       // зерну нужен вход до a + half: если ещё не пришёл — ждём следующего блока

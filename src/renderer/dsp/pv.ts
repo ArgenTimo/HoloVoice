@@ -68,6 +68,9 @@ export class PhaseVocoder {
   denoise = 0 // 0..1 — спектральное шумоподавление
   vibrato = 0 // глубина, полутоны
   vibratoHz = 5
+  /** холостой ход: вход копится (буфер всегда свежий), но кадры не считаются — выход тишина. Включается, когда
+   *  вокодер не нужен (нейтраль, PSOLA): это основная нагрузка, а её пики давали треск */
+  idle = false
 
   private fft: FFT
   private win: Float32Array
@@ -147,7 +150,8 @@ export class PhaseVocoder {
       this.rover++
       if (this.rover >= n) {
         this.rover = latency
-        this.frame()
+        if (this.idle) { this.outFifo.fill(0, 0, this.hop); this.inFifo.copyWithin(0, this.hop, n) }
+        else this.frame()
       }
     }
   }

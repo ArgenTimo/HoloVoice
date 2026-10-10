@@ -72,6 +72,25 @@ class HoloVoice extends AudioWorkletProcessor {
   constructor(options: { processorOptions?: { fftSize?: number } }) {
     super(options)
     this.n = options.processorOptions?.fftSize ?? 2048
+    this.warmup()
+  }
+
+  /** Прогрев JIT: пока код не скомпилирован, кадры вокодера считаются в разы дольше — первые секунды после
+   *  запуска давали щелчки. Прогоняем всё на шуме ~1 с до начала звука; состояние потом сбрасывается. */
+  private warmup(): void {
+    const ch = new Channel(this.n)
+    const tr = new PitchTracker(sampleRate)
+    const x = new Float32Array(128), y = new Float32Array(128)
+    let s = 1
+    ch.pv.denoise = 0.3
+    ch.pv.pitch = 1.2
+    ch.ps.ratio = 1.3
+    for (let b = 0; b < 400; b++) {
+      for (let i = 0; i < 128; i++) { s = (s * 16807) % 2147483647; x[i] = 0.1 * Math.sin((b * 128 + i) * 0.03) + 0.02 * (s / 2147483647 - 0.5) }
+      tr.push(x)
+      ch.pv.process(x, y)
+      ch.ps.process(x, y, b % 3 ? 220 : 0)
+    }
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][], params: Record<(typeof PARAMS)[number], Float32Array>): boolean {
@@ -127,7 +146,9 @@ class HoloVoice extends AudioWorkletProcessor {
       pv.denoise = denoise
       pv.vibrato = vibrato * 0.8 // до 0.8 полутона
       pv.vibratoHz = vibratoHz
-      pv.process(x, st.pvBuf) // крутится всегда: при включении фазы уже прогреты
+      // вокодер считает, только когда нужен (или ещё звучит в переходе); иначе холостой ход
+      pv.idle = !active && st.mix < 0.001
+      pv.process(x, st.pvBuf)
       if (psola > 0.001 || st.psMix > 0.001) {
         st.ps.ratio = 2 ** ((semis + vibrato * 0.8 * Math.sin(this.vibPhase)) / 12)
         st.ps.formant = 2 ** (fmt / 12)

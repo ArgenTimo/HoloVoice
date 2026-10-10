@@ -1,6 +1,7 @@
 // Виджет рабочего стола: без регуляторов — только эффект на вход/выход из списка и мгновенное вкл/выкл.
 // Пульт движка, как и панель; закреплённый виджет запускается вместе с системой (main.js).
-import { EFFECTS, type EffectId } from './effects'
+import { EFFECTS, fxLabel, type EffectId } from './effects'
+import { applyStatic, setLang } from './i18n'
 import { $, holo, type EngineState, type LaneId } from './shared'
 
 const rows = {} as Record<LaneId, HTMLElement>
@@ -18,6 +19,9 @@ function render(st: EngineState): void {
 }
 
 async function main(): Promise<void> {
+  setLang((await holo.getUi()).lang)
+  applyStatic()
+  holo.onLang(() => location.reload())
   $('btn-panel').onclick = () => holo.showPanel()
   $('btn-unpin').onclick = () => holo.widget(false)
   for (const id of ['mic', 'sys'] as LaneId[]) {
@@ -26,7 +30,7 @@ async function main(): Promise<void> {
     for (const e of EFFECTS) {
       const o = document.createElement('option')
       o.value = e.id
-      o.textContent = `${e.emoji} ${e.label}`
+      o.textContent = `${e.emoji} ${fxLabel(e.id)}`
       sel.appendChild(o)
     }
     sel.onchange = () => holo.cmd({ type: 'effect', lane: id, effect: sel.value as EffectId })

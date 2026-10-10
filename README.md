@@ -28,6 +28,12 @@
 Перехват звука на Linux — механизм re-traductor (`src/routing-linux.js`: временные модули pipewire-pulse,
 файл состояния, откат при выходе, сторож на случай падения).
 
+## Языки
+Интерфейс на 23 языках: English, 中文, हिन्दी, Español, Français, العربية, বাংলা, Português, Русский, اردو,
+Bahasa Indonesia, Deutsch, 日本語, मराठी, తెలుగు, Türkçe, தமிழ், Tiếng Việt, 한국어, Italiano, Українська,
+Беларуская, Polski — кнопка с флагом в заголовке окна (по умолчанию — язык системы; арабский и урду — справа
+налево). Словари — `src/locales/*.json`; флаги — свои SVG (`src/renderer/i18n.ts`).
+
 ## Как пользоваться
 - Linux: в программе звонка выбрать микрофон **HoloVoice-Microphone**.
 - Windows: поставить бесплатный [VB-Audio Virtual Cable](https://vb-audio.com/Cable/), перезапустить HoloVoice,

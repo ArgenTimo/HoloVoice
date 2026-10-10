@@ -13,6 +13,19 @@ const { LinuxRouter } = require('./routing-linux')
 const updater = require('./updater')
 const { Hotkeys } = require('./hotkeys')
 
+// ---------------------------------------------------------------- язык (словари общие с окнами: src/locales)
+const LANG_CODES = ['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja', 'mr', 'te', 'tr', 'ta', 'vi', 'ko', 'it', 'uk', 'be', 'pl']
+const dicts = {}
+const dict = (code) => (dicts[code] ??= (() => { try { return require(`./locales/${code}.json`) } catch { return {} } })())
+function tr(key, vars) {
+  const s = dict(ui.lang)[key] ?? dict('en')[key] ?? key
+  return vars ? s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? '')) : s
+}
+function systemLang() {
+  const code = (app.getLocale() || 'en').slice(0, 2).toLowerCase()
+  return LANG_CODES.includes(code) ? code : 'en'
+}
+
 // Звук в реальном времени не должен засыпать, когда окна свёрнуты или скрыты
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-background-timer-throttling')
@@ -38,11 +51,12 @@ const hotkeys = new Hotkeys(onHotkey)
 
 // ---------------------------------------------------------------- настройки окон
 
-const UI_DEFAULTS = { pinned: true, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top' }
+const UI_DEFAULTS = { pinned: true, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top', lang: null }
 let ui = { ...UI_DEFAULTS }
 const uiPath = () => path.join(app.getPath('userData'), 'ui.json')
 function loadUi() {
   try { ui = { ...UI_DEFAULTS, ...JSON.parse(fs.readFileSync(uiPath(), 'utf8')) } } catch { /* по умолчанию */ }
+  if (!LANG_CODES.includes(ui.lang)) ui.lang = systemLang()
 }
 function saveUi() {
   try { fs.mkdirSync(path.dirname(uiPath()), { recursive: true }); fs.writeFileSync(uiPath(), JSON.stringify(ui)) } catch { /* не страшно */ }
@@ -269,13 +283,13 @@ function updateTray() {
   if (!tray) return
   const L = state?.S.lanes
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Открыть HoloVoice', click: showPanel },
+    { label: tr('tray.open'), click: showPanel },
     { type: 'separator' },
-    { label: 'Эффект на мой голос', type: 'checkbox', checked: !!L?.mic.enabled, click: () => toEngine({ type: 'toggle', lane: 'mic' }) },
-    { label: 'Эффект на звук компьютера', type: 'checkbox', checked: !!L?.sys.enabled, click: () => toEngine({ type: 'toggle', lane: 'sys' }) },
-    { label: 'Виджет на рабочем столе', type: 'checkbox', checked: ui.widget, click: () => setWidget(!ui.widget) },
+    { label: tr('tray.mic'), type: 'checkbox', checked: !!L?.mic.enabled, click: () => toEngine({ type: 'toggle', lane: 'mic' }) },
+    { label: tr('tray.sys'), type: 'checkbox', checked: !!L?.sys.enabled, click: () => toEngine({ type: 'toggle', lane: 'sys' }) },
+    { label: tr('tray.widget'), type: 'checkbox', checked: ui.widget, click: () => setWidget(!ui.widget) },
     { type: 'separator' },
-    { label: 'Выход', click: quit },
+    { label: tr('tray.quit'), click: quit },
   ]))
 }
 
@@ -303,6 +317,12 @@ ipcMain.handle('ui:set', (_e, patch) => {
   ui = { ...ui, ...patch }
   saveUi()
   if ('pinned' in patch && panel) panel.setAlwaysOnTop(!!ui.pinned, 'screen-saver')
+  if ('lang' in patch) {
+    if (!LANG_CODES.includes(ui.lang)) ui.lang = 'en'
+    saveUi()
+    for (const w of [engine, panel, widget, osd]) if (w && !w.isDestroyed()) w.webContents.send('lang', ui.lang)
+    updateTray()
+  }
   return ui
 })
 ipcMain.handle('widget', (_e, on) => setWidget(!!on))
@@ -326,10 +346,10 @@ ipcMain.handle('panel:show', () => showPanel())
 ipcMain.handle('app:version', () => app.getVersion())
 let updating = false
 ipcMain.handle('app:update', async (e) => {
-  if (updating) return 'Обновление уже идёт…'
+  if (updating) return tr('upd.busy')
   updating = true
   const progress = (t) => { if (!e.sender.isDestroyed()) e.sender.send('update:progress', t) }
-  try { return await updater.update(progress) } catch (err) { return `Не удалось обновить: ${err.message || err}` } finally { updating = false }
+  try { return await updater.update(progress, tr) } catch (err) { return tr('upd.fail', { err: err.message || err }) } finally { updating = false }
 })
 
 ipcMain.handle('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())

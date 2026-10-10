@@ -1,6 +1,7 @@
 // Подсказка поверх экрана: какая дорожка и эффект (при горячей клавише) и полоса нарастания/затухания —
 // заполняется ровно за время перехода, на пике окно прячет main.
-import { EFFECT } from './effects'
+import { EFFECT, fxLabel } from './effects'
+import { setLang, t } from './i18n'
 import { $, holo, type EngineState, type OsdMsg } from './shared'
 
 let st: EngineState | null = null
@@ -11,14 +12,16 @@ function renderText(): void {
   if (!st || !cur) return
   const cfg = st.S.lanes[cur.lane]
   const fx = EFFECT[cfg.effect]
-  $('lane').textContent = cur.lane === 'mic' ? '🎙️ Мой голос' : '🔊 Звук компьютера'
+  $('lane').textContent = `${cur.lane === 'mic' ? '🎙️' : '🔊'} ${t(`lane.${cur.lane}`)}`
   $('ico').textContent = cfg.enabled ? (fx?.emoji ?? '') : '⏻'
-  $('text').textContent = cfg.enabled ? (fx?.label ?? '') : 'эффект выключен'
+  $('text').textContent = cfg.enabled ? fxLabel(cfg.effect) : t('osd.off')
   const root = $('root')
   root.classList.toggle('off', !cfg.enabled && !cur.ramp)
   root.classList.toggle('sys', cur.lane === 'sys')
 }
 
+holo.getUi().then((u) => setLang(u.lang))
+holo.onLang(() => location.reload())
 holo.onState((s) => { st = s; renderText() })
 
 holo.onOsd(async (msg) => {

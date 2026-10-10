@@ -23,51 +23,51 @@ const repoDir = () => app.getAppPath()
 const isGitCheckout = () => !app.isPackaged && fs.existsSync(path.join(repoDir(), '.git'))
 
 /** progress(text) — для строки состояния в панели. Возвращает итоговый текст; при успехе перезапускает приложение. */
-async function update(progress) {
-  return isGitCheckout() ? updateFromGit(progress) : updateFromReleases(progress)
+async function update(progress, tr) {
+  return isGitCheckout() ? updateFromGit(progress, tr) : updateFromReleases(progress, tr)
 }
 
-async function updateFromGit(progress) {
+async function updateFromGit(progress, tr) {
   const cwd = repoDir()
   const remote = await run('git', ['remote'], cwd).catch(() => '')
-  if (!remote) return 'Git-репозиторий ещё не подключён (нет remote)'
-  progress('Получаю изменения…')
+  if (!remote) return tr('upd.noRemote')
+  progress(tr('upd.fetching'))
   await run('git', ['fetch', 'origin'], cwd, 60000)
   const branch = (await run('git', ['rev-parse', '--verify', '--quiet', 'origin/master'], cwd).then(() => 'master', () => 'main'))
   const before = await run('git', ['rev-parse', 'HEAD'], cwd)
   const target = await run('git', ['rev-parse', `origin/${branch}`], cwd)
-  if (before === target) return 'Уже последняя версия'
+  if (before === target) return tr('upd.latest')
   const dirty = await run('git', ['status', '--porcelain', '--untracked-files=no'], cwd)
-  if (dirty) return 'В папке есть незакоммиченные изменения — обновление пропущено'
-  progress(`Обновляю из ${branch}…`)
+  if (dirty) return tr('upd.dirty')
+  progress(tr('upd.from', { b: branch }))
   await run('git', ['merge', '--ff-only', `origin/${branch}`], cwd, 60000)
   const changed = await run('git', ['diff', '--name-only', before, 'HEAD'], cwd)
   if (/^package(-lock)?\.json$/m.test(changed)) {
-    progress('Ставлю зависимости…')
+    progress(tr('upd.deps'))
     await run('npm', ['install', '--no-audit', '--no-fund'], cwd, 600000)
   }
-  progress('Собираю…')
+  progress(tr('upd.build'))
   await run('npm', ['run', 'build:renderer'], cwd)
-  progress('Перезапуск…')
+  progress(tr('upd.restart'))
   app.relaunch()
   app.quit()
-  return 'Обновлено'
+  return tr('upd.done')
 }
 
-async function updateFromReleases(progress) {
+async function updateFromReleases(progress, tr) {
   if (!fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'))) {
-    return 'Эта сборка без автообновления — поставьте версию из GitHub Releases'
+    return tr('upd.noAuto')
   }
   const { autoUpdater } = require('electron-updater')
   autoUpdater.autoDownload = false
-  progress('Проверяю обновления…')
+  progress(tr('upd.check'))
   const r = await autoUpdater.checkForUpdates()
   // в electron-updater 6.3 у результата нет флага «доступно»: токен отмены появляется, только если версия новее
-  if (!r || !r.cancellationToken) return `Уже последняя версия (${app.getVersion()})`
-  progress(`Скачиваю ${r.updateInfo.version}…`)
-  autoUpdater.on('download-progress', (p) => progress(`Скачиваю ${r.updateInfo.version}… ${Math.round(p.percent)}%`))
+  if (!r || !r.cancellationToken) return tr('upd.latestV', { v: app.getVersion() })
+  progress(tr('upd.dl', { v: r.updateInfo.version }))
+  autoUpdater.on('download-progress', (p) => progress(tr('upd.dlp', { v: r.updateInfo.version, p: Math.round(p.percent) })))
   await autoUpdater.downloadUpdate()
-  progress('Устанавливаю…')
+  progress(tr('upd.installing'))
   setImmediate(() => {
     // AppImage: апдейтер запускает новый файл без аргументов, а на Ubuntu 24+ (AppArmor) Electron без --no-sandbox
     // не стартует — поэтому перезапускаем сами, с флагом. Установка происходит прямо внутри quitAndInstall,
@@ -82,7 +82,7 @@ async function updateFromReleases(progress) {
         String(process.pid), appImage], { detached: true, stdio: 'ignore' }).unref()
     }
   })
-  return 'Устанавливаю обновление'
+  return tr('upd.installingUpd')
 }
 
 module.exports = { update }

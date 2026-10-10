@@ -11,11 +11,12 @@
     <header class="titlebar">
       <div class="brand"><span class="dot"></span>HoloVoice</div>
       <div class="win-btns">
-        <button id="btn-widget" title="Виджет на рабочий стол: выбор эффектов и вкл/выкл, остаётся после перезагрузки">🧩</button>
-        <button id="btn-compact" title="Компактно / полностью">▭</button>
-        <button id="btn-pin" class="on" title="Поверх всех окон">📌</button>
-        <button id="btn-min" title="Свернуть">—</button>
-        <button id="btn-close" title="Закрыть">✕</button>
+        <button id="btn-lang" class="lang-btn" data-i18n-title="lang.title"></button>
+        <button id="btn-widget" data-i18n-title="win.widget">🧩</button>
+        <button id="btn-compact" data-i18n-title="win.compact">▭</button>
+        <button id="btn-pin" class="on" data-i18n-title="win.pin">📌</button>
+        <button id="btn-min" data-i18n-title="win.min">—</button>
+        <button id="btn-close" data-i18n-title="win.close">✕</button>
       </div>
     </header>
 
@@ -24,9 +25,9 @@
 
       <section class="catalog">
         <div class="cat-head">
-          <span>Эффекты для</span>
+          <span data-i18n="cat.for"></span>
           <b id="cat-lane"></b>
-          <span class="muted">— дорожка выбирается слева</span>
+          <span class="muted" data-i18n="cat.hint"></span>
         </div>
         <div class="groups" id="groups"></div>
       </section>
@@ -35,46 +36,45 @@
     </main>
 
     <footer class="bar">
-      <label class="dev" title="Мой микрофон">🎙️ <select id="mic"></select></label>
+      <label class="dev" data-i18n-title="dev.mic">🎙️ <select id="mic"></select></label>
       <span class="arrow">→</span>
-      <label class="dev" title="Куда отправлять голос с эффектом"><select id="out"></select></label>
-      <label class="check" title="Слышать свой голос с эффектом в наушниках"><input type="checkbox" id="monitor"> Слышать себя</label>
-      <input type="range" id="monitor-vol" min="0" max="100" step="1" title="Громкость самопрослушки">
+      <label class="dev" data-i18n-title="dev.out"><select id="out"></select></label>
+      <label class="check" data-i18n-title="dev.monitorTip"><input type="checkbox" id="monitor"> <span data-i18n="dev.monitor"></span></label>
+      <input type="range" id="monitor-vol" min="0" max="100" step="1" data-i18n-title="dev.monitorVol">
       <span class="spacer"></span>
-      <button class="ghost" id="open-hk">⌨️ Горячие клавиши</button>
-      <button class="ghost" id="open-osd">🖥️ Подсказка</button>
+      <button class="ghost" id="open-hk" data-i18n="btn.hotkeys"></button>
+      <button class="ghost" id="open-osd" data-i18n="btn.osd"></button>
       <span class="ver" id="version"></span>
-      <button class="ghost" id="btn-update" title="Подтянуть новую версию">⟳ Обновить</button>
+      <button class="ghost" id="btn-update" data-i18n-title="btn.updateTip" data-i18n="btn.update"></button>
       <span class="upd" id="update-status"></span>
     </footer>
 
+    <div class="lang-menu" id="lang-menu" hidden></div>
+
     <div class="modal" id="modal-hk" hidden>
       <div class="sheet wide">
-        <header><b>⌨️ Горячие клавиши</b><button class="x" data-close>✕</button></header>
-        <p class="note">Работают в любой программе и в играх. Повторное нажатие сочетания включённого эффекта выключает его.
-          Нажмите на сочетание, чтобы назначить своё: Esc — отмена, Delete — убрать.</p>
+        <header><b data-i18n="hk.title"></b><button class="x" data-close>✕</button></header>
+        <p class="note" data-i18n="hk.note"></p>
         <div class="hk-cols">
-          <div><h4>🎙️ Мой голос</h4><div class="hk-list" id="hk-mic"></div></div>
-          <div><h4>🔊 Звук компьютера</h4><div class="hk-list" id="hk-sys"></div></div>
+          <div><h4>🎙️ <span data-i18n="lane.mic"></span></h4><div class="hk-list" id="hk-mic"></div></div>
+          <div><h4>🔊 <span data-i18n="lane.sys"></span></h4><div class="hk-list" id="hk-sys"></div></div>
         </div>
-        <footer><button class="ghost" id="hk-reset">Сбросить все</button></footer>
+        <footer><button class="ghost" id="hk-reset" data-i18n="hk.resetAll"></button></footer>
       </div>
     </div>
 
     <div class="modal" id="modal-osd" hidden>
       <div class="sheet">
-        <header><b>🖥️ Подсказка на экране</b><button class="x" data-close>✕</button></header>
-        <label class="check"><input type="checkbox" id="osd-toast"> Показывать эффект при горячей клавише</label>
-        <label class="check"><input type="checkbox" id="osd-bar"> Полоса нарастания / затухания</label>
-        <div class="pos-label">Где на экране</div>
+        <header><b data-i18n="osd.title"></b><button class="x" data-close>✕</button></header>
+        <label class="check"><input type="checkbox" id="osd-toast"> <span data-i18n="osd.toast"></span></label>
+        <label class="check"><input type="checkbox" id="osd-bar"> <span data-i18n="osd.bar"></span></label>
+        <div class="pos-label" data-i18n="osd.where"></div>
         <div class="pos-grid" id="osd-pos">
           <button data-pos="top-left">↖</button><button data-pos="top">↑</button><button data-pos="top-right">↗</button>
           <button data-pos="bottom-left">↙</button><button data-pos="bottom">↓</button><button data-pos="bottom-right">↘</button>
         </div>
-        <p class="note">Поверх всех окон, не забирает фокус и не ловит мышь — игре не мешает. Полоса появляется, когда у эффекта
-          задано нарастание или затухание, и исчезает на пике. Над играми в монопольном полноэкранном режиме система
-          подсказки не показывает — переключение при этом работает.</p>
-        <footer><button class="ghost" id="osd-test">Показать пример</button></footer>
+        <p class="note" data-i18n="osd.note"></p>
+        <footer><button class="ghost" id="osd-test" data-i18n="osd.test"></button></footer>
       </div>
     </div>
   </div>

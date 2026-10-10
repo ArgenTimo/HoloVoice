@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('holo', {
   getOsd: () => ipcRenderer.invoke('osd:get'),
   setOsd: (patch) => ipcRenderer.invoke('osd:set', patch),
   testOsd: () => ipcRenderer.invoke('osd:test'),
+  onLang: (cb) => ipcRenderer.on('lang', (_e, code) => cb(code)),
   onOsd: (cb) => ipcRenderer.on('osd', (_e, msg) => cb(msg)),
   version: () => ipcRenderer.invoke('app:version'),
   update: () => ipcRenderer.invoke('app:update'),

@@ -7,6 +7,7 @@
 //         (Linux: перехват через временный null sink; Windows: системный loopback с заглушением оригинала)
 // У каждой дорожки свой AudioContext: у них разные устройства вывода.
 import { VoiceRig } from './dsp/rig'
+import { setLang, t } from './i18n'
 import { EFFECT, EFFECTS, NEUTRAL, effectTarget, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings } from './shared'
 
@@ -44,7 +45,7 @@ let ready = false
 
 function publish(): void {
   try { localStorage.setItem(KEY, JSON.stringify(S)) } catch { /* не страшно */ }
-  const dev = (d: MediaDeviceInfo) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? 'По умолчанию' : d.deviceId.slice(0, 8)) })
+  const dev = (d: MediaDeviceInfo) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? t('dev.default') : d.deviceId.slice(0, 8)) })
   const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview }
   holo.pushState(st)
 }
@@ -315,26 +316,22 @@ function updateMicHint(): void {
   const outLabel = outs.find((d) => d.deviceId === S.out)?.label ?? ''
   if (isVirtualOut(outLabel)) {
     const mic = /HoloVoice/.test(outLabel) ? 'HoloVoice-Microphone'
-      : /CABLE/.test(outLabel) ? 'CABLE Output (VB-Audio Virtual Cable)' : 'выход виртуального кабеля'
-    hint.mic = { warn: false, html: `В Discord / Telegram / Zoom выберите микрофон <b>${mic}</b>.<br>Вкл/выкл эффект — <b>Ctrl+Alt+V</b>.` }
+      : /CABLE/.test(outLabel) ? 'CABLE Output (VB-Audio Virtual Cable)' : t('hint.cableOut')
+    hint.mic = { warn: false, html: t('hint.micOk', { mic }) }
   } else if (isWin && !outs.some((d) => /CABLE Input/i.test(d.label))) {
-    hint.mic = { warn: true, html: 'Чтобы голос с эффектом шёл в Discord/игры, поставьте бесплатный ' +
-      '<a data-href="https://vb-audio.com/Cable/">VB-Audio Virtual Cable</a>, перезапустите HoloVoice и выберите в программе звонка ' +
-      'микрофон <b>CABLE Output</b>. Сейчас голос идёт в колонки — можно проверить, как звучит.' }
+    hint.mic = { warn: true, html: t('hint.noCable') }
   } else if (holo.platform === 'linux' && !micRoute.ok) {
-    hint.mic = { warn: true, html: `Не удалось создать виртуальный микрофон: ${esc(micRoute.error ?? '')}. Голос идёт в «${esc(outLabel)}».` }
+    hint.mic = { warn: true, html: t('hint.routeFail', { err: esc(micRoute.error ?? ''), out: esc(outLabel) }) }
   } else {
-    hint.mic = { warn: true, html: `Голос идёт в «<b>${esc(outLabel || 'по умолчанию')}</b>» — это проверка на слух, в звонок он не попадёт.` }
+    hint.mic = { warn: true, html: t('hint.local', { out: esc(outLabel || t('dev.default')) }) }
   }
 }
 
 function updateSysHint(err = ''): void {
-  if (err) { hint.sys = { warn: true, html: `Не удалось перехватить звук: ${esc(err)}` }; return }
+  if (err) { hint.sys = { warn: true, html: t('hint.sysFail', { err: esc(err) }) }; return }
   hint.sys = { warn: false, html: S.lanes.sys.enabled
-    ? 'Всё, что играет на компьютере (ролики, собеседник в звонке), идёт через эффект. ' +
-      'Вкл/выкл — <b>Ctrl+Alt+B</b>. При выключении звук возвращается как было.' +
-      (isWin ? '<br><i>На Windows эта функция экспериментальная.</i>' : '')
-    : 'Выключено — звук компьютера идёт как обычно. Включите, чтобы наложить эффект на ролики и собеседника.' }
+    ? t('hint.sysOn') + (isWin ? `<br><i>${t('hint.sysWin')}</i>` : '')
+    : t('hint.sysOff') }
 }
 
 // ---------------------------------------------------------------- звук компьютера
@@ -505,6 +502,8 @@ async function handle(c: Cmd): Promise<void> {
 // ---------------------------------------------------------------- запуск
 
 async function main(): Promise<void> {
+  setLang((await holo.getUi()).lang)
+  holo.onLang((code) => { setLang(code); updateMicHint(); updateSysHint(); publish() })
   holo.onCmd((c) => { handle(c).catch((e) => console.error(e)) })
   updateSysHint()
   // мой голос: микрофон (заодно даёт право видеть названия устройств), виртуальный выход, цепочка
@@ -550,7 +549,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  hint.mic = { warn: true, html: `Ошибка запуска звука: ${esc(String(e?.message ?? e))}` }
+  hint.mic = { warn: true, html: t('err.start', { err: esc(String(e?.message ?? e)) }) }
   ready = true
   publish()
   console.error(e)

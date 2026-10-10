@@ -48,7 +48,7 @@ export type Cmd =
 /** уровни вход/выход, %, и тон голоса: текущий и средний, Гц (0 — нет голоса) */
 export interface Levels { mic: [number, number]; sys: [number, number]; f0: Record<LaneId, [number, number]> }
 
-export interface UiConfig { pinned: boolean; compact: boolean; tab: LaneId; widget: boolean; widgetPinned: boolean }
+export interface UiConfig { pinned: boolean; compact: boolean; tab: LaneId; widget: boolean; widgetPinned: boolean; lang: string }
 
 export interface HotkeyInfo { map: Record<string, string>; failed: string[] }
 export type OsdPos = 'top' | 'top-left' | 'top-right' | 'bottom' | 'bottom-left' | 'bottom-right'
@@ -84,6 +84,7 @@ export interface HoloApi {
   setOsd(patch: Partial<OsdInfo>): Promise<OsdInfo>
   testOsd(): Promise<void>
   onOsd(cb: (msg: OsdMsg) => void): void
+  onLang(cb: (code: string) => void): void
   version(): Promise<string>
   update(): Promise<string>
   onUpdateProgress(cb: (text: string) => void): void

@@ -2,20 +2,21 @@
 // по центру каталог эффектов для выбранной дорожки, справа настройки выбранного эффекта и «Проверить на записи»,
 // снизу — устройства. Горячие клавиши и подсказка на экране — в окнах поверх панели.
 // Звук здесь не обрабатывается (см. engine.ts).
-import { EFFECT, PARAM, PARAMS, effectFull, type EffectId, type ParamDef, type ParamKey } from './effects'
+import { EFFECT, PARAM, PARAMS, effectFull, fxLabel, groupLabel, paramLabel, type EffectId, type ParamDef, type ParamKey } from './effects'
+import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type UiConfig } from './shared'
 
 let st: EngineState | null = null
 let ui: UiConfig
 let hk: HotkeyInfo = { map: {}, failed: [] }
 const LANES: LaneId[] = ['mic', 'sys']
-const LANE_NAME: Record<LaneId, string> = { mic: 'Мой голос', sys: 'Звук компьютера' }
+const laneName = (id: LaneId) => t(`lane.${id}`)
 const LANE_ICO: Record<LaneId, string> = { mic: '🎙️', sys: '🔊' }
 
 const GROUPS: [string, EffectId[]][] = [
-  ['Голоса', ['clean', 'male', 'female', 'child', 'autotune', 'giant', 'chipmunk', 'whisper']],
-  ['Персонажи', ['demon', 'ghost', 'digital', 'smolder']],
-  ['Атмосфера', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'vhs', 'radio', 'cave']],
+  ['grp.voices', ['clean', 'male', 'female', 'child', 'autotune', 'giant', 'chipmunk', 'whisper']],
+  ['grp.characters', ['demon', 'ghost', 'digital', 'smolder']],
+  ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'vhs', 'radio', 'cave']],
 ]
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => {
@@ -27,13 +28,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
 
 // ---------------------------------------------------------------- карточки дорожек
 
-const LANE_SLIDERS: { key: 'amount' | 'gain' | 'gate'; label: string; min: number; max: number; fmt: (v: number) => string
-  lanes: LaneId[]; title: string }[] = [
-  { key: 'amount', label: 'Сила', min: 0, max: 100, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'],
-    title: 'Доля пути от обычного звука к эффекту — все параметры эффекта сразу' },
-  { key: 'gain', label: 'Громкость', min: 0, max: 200, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'], title: 'Громкость на выходе дорожки' },
-  { key: 'gate', label: 'Шумодав', min: -80, max: -20, fmt: (v) => (v <= -80 ? 'выкл' : `${v}`), lanes: ['mic'],
-    title: 'Порог шумового гейта, дБ: тише порога — тишина (паузы без шума). Влево до упора — выключен' },
+const LANE_SLIDERS: { key: 'amount' | 'gain' | 'gate'; min: number; max: number; fmt: (v: number) => string; lanes: LaneId[] }[] = [
+  { key: 'amount', min: 0, max: 100, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'] },
+  { key: 'gain', min: 0, max: 200, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'] },
+  { key: 'gate', min: -80, max: -20, fmt: (v) => (v <= -80 ? t('u.off') : `${v}`), lanes: ['mic'] },
 ]
 const laneInputs: { lane: LaneId; key: 'amount' | 'gain' | 'gate'; input: HTMLInputElement; val: HTMLElement; fmt: (v: number) => string }[] = []
 
@@ -46,13 +44,13 @@ function buildLanes(): void {
     card.innerHTML = `
       <div class="lc-head">
         <div class="lc-ico">${LANE_ICO[id]}</div>
-        <div class="lc-title"><div class="lc-name">${LANE_NAME[id]}</div><div class="lc-fx" id="fx-${id}"></div></div>
+        <div class="lc-title"><div class="lc-name">${laneName(id)}</div><div class="lc-fx" id="fx-${id}"></div></div>
         <button class="switch" id="sw-${id}" title="${id === 'mic' ? 'Ctrl+Alt+V' : 'Ctrl+Alt+B'}"><i></i></button>
       </div>
       <select class="lc-fxsel" id="fxsel-${id}"></select>
       <div class="meters">
-        <span>вход</span><div class="bar-m"><i id="mi-${id}"></i></div>
-        <span>выход</span><div class="bar-m"><i id="mo-${id}"></i></div>
+        <span>${t('lane.in')}</span><div class="bar-m"><i id="mi-${id}"></i></div>
+        <span>${t('lane.out')}</span><div class="bar-m"><i id="mo-${id}"></i></div>
       </div>
       <div class="voice" id="voice-${id}"></div>
       <div class="lc-ctrls" id="ctrls-${id}"></div>
@@ -65,7 +63,7 @@ function buildLanes(): void {
     $(`sw-${id}`).onclick = () => holo.cmd({ type: 'toggle', lane: id })
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
     for (const [, ids] of GROUPS) for (const fx of ids) {
-      const o = el('option', '', `${EFFECT[fx].emoji} ${EFFECT[fx].label}`)
+      const o = el('option', '', `${EFFECT[fx].emoji} ${fxLabel(fx)}`)
       o.value = fx
       sel.appendChild(o)
     }
@@ -73,7 +71,7 @@ function buildLanes(): void {
     const ctrls = $(`ctrls-${id}`)
     for (const d of LANE_SLIDERS.filter((x) => x.lanes.includes(id))) {
       const row = el('label', 'mini')
-      row.title = d.title
+      row.title = t(`lane.${d.key}Tip`)
       const input = el('input')
       input.type = 'range'; input.min = String(d.min); input.max = String(d.max); input.step = '1'
       const val = el('b')
@@ -81,13 +79,13 @@ function buildLanes(): void {
         val.textContent = d.fmt(Number(input.value))
         holo.cmd({ type: 'set', lane: id, key: d.key, value: Number(input.value) })
       }
-      row.append(el('span', '', d.label), input, val)
+      row.append(el('span', '', t(`lane.${d.key}`)), input, val)
       ctrls.appendChild(row)
       laneInputs.push({ lane: id, key: d.key, input, val, fmt: d.fmt })
     }
     const q = el('label', 'mini')
-    q.title = 'Качество — чище звук (задержка ~40 мс); быстро — задержка ~20 мс, для игр'
-    q.innerHTML = `<span>Обработка</span><select id="q-${id}"><option value="hq">Качество · 40 мс</option><option value="fast">Быстро · 20 мс</option></select>`
+    q.title = t('lane.qualityTip')
+    q.innerHTML = `<span>${t('lane.quality')}</span><select id="q-${id}"><option value="hq">${t('lane.qHq')}</option><option value="fast">${t('lane.qFast')}</option></select>`
     ctrls.appendChild(q)
     const qs = $<HTMLSelectElement>(`q-${id}`)
     qs.onchange = () => holo.cmd({ type: 'quality', lane: id, value: qs.value as Quality })
@@ -102,7 +100,7 @@ function renderLanes(): void {
     $(`card-${id}`).classList.toggle('on', cfg.enabled)
     $(`card-${id}`).classList.toggle('sel', ui.tab === id)
     $(`sw-${id}`).classList.toggle('on', cfg.enabled)
-    $(`fx-${id}`).textContent = cfg.enabled ? `${fx.emoji} ${fx.label}` : id === 'mic' ? 'выключено — чистый голос' : 'выключено — звук как обычно'
+    $(`fx-${id}`).textContent = cfg.enabled ? `${fx.emoji} ${fxLabel(fx.id)}` : t(id === 'mic' ? 'lane.offMic' : 'lane.offSys')
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
     if (document.activeElement !== sel) sel.value = cfg.effect
     const q = $<HTMLSelectElement>(`q-${id}`)
@@ -123,7 +121,7 @@ function selectLane(id: LaneId): void {
   ui.tab = id
   holo.setUi({ tab: id })
   document.body.classList.toggle('lane-sys', id === 'sys')
-  $('cat-lane').textContent = `${LANE_ICO[id]} ${LANE_NAME[id]}`
+  $('cat-lane').textContent = `${LANE_ICO[id]} ${laneName(id)}`
   renderLanes()
   renderCatalog()
   renderInspector()
@@ -135,15 +133,15 @@ function buildCatalog(): void {
   const box = $('groups')
   for (const [title, ids] of GROUPS) {
     const g = el('div', 'group')
-    g.appendChild(el('h3', '', title))
+    g.appendChild(el('h3', '', t(title)))
     const tiles = el('div', 'tiles')
     for (const id of ids) {
       const fx = EFFECT[id]
-      const t = el('button', 'tile')
-      t.dataset.effect = id
-      t.append(el('span', 't-emoji', fx.emoji), el('span', 't-name', fx.label), el('span', 't-key'))
-      t.onclick = () => holo.cmd({ type: 'effect', lane: ui.tab, effect: id })
-      tiles.appendChild(t)
+      const tile = el('button', 'tile')
+      tile.dataset.effect = id
+      tile.append(el('span', 't-emoji', fx.emoji), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
+      tile.onclick = () => holo.cmd({ type: 'effect', lane: ui.tab, effect: id })
+      tiles.appendChild(tile)
     }
     g.appendChild(tiles)
     box.appendChild(g)
@@ -153,17 +151,17 @@ function buildCatalog(): void {
 function renderCatalog(): void {
   if (!st) return
   const cfg = st.S.lanes[ui.tab]
-  document.querySelectorAll<HTMLElement>('.tile').forEach((t) => {
-    const id = t.dataset.effect as EffectId
-    t.classList.toggle('sel', id === cfg.effect)
-    t.classList.toggle('live', id === cfg.effect && cfg.enabled)
+  document.querySelectorAll<HTMLElement>('.tile').forEach((tile) => {
+    const id = tile.dataset.effect as EffectId
+    tile.classList.toggle('sel', id === cfg.effect)
+    tile.classList.toggle('live', id === cfg.effect && cfg.enabled)
     const modified = !!cfg.fx[id]?.p && Object.keys(cfg.fx[id]!.p!).length > 0
-    let dot = t.querySelector('.mod-dot')
-    if (modified && !dot) { dot = el('i', 'mod-dot'); (dot as HTMLElement).title = 'Настроен вами'; t.appendChild(dot) }
+    let dot = tile.querySelector('.mod-dot')
+    if (modified && !dot) { dot = el('i', 'mod-dot'); (dot as HTMLElement).title = t('ins.custom'); tile.appendChild(dot) }
     if (!modified && dot) dot.remove()
     const key = hk.map[`${ui.tab}:${id}`]
-    t.querySelector('.t-key')!.textContent = key || ''
-    t.title = `${EFFECT[id].label}${key ? ` — ${key}` : ''}`
+    tile.querySelector('.t-key')!.textContent = key || ''
+    tile.title = `${fxLabel(id)}${key ? ` — ${key}` : ''}`
   })
 }
 
@@ -180,7 +178,7 @@ const fromSlider = (d: ParamDef, x: number) => (d.log ? d.min * (d.max / d.min) 
 
 function paramSlider(lane: LaneId, effect: EffectId, d: ParamDef, parent: HTMLElement): void {
   const row = el('label', 'slider')
-  const head = el('span', '', d.label)
+  const head = el('span', '', paramLabel(d.key))
   const val = el('b')
   head.appendChild(val)
   const input = el('input')
@@ -200,15 +198,13 @@ function paramSlider(lane: LaneId, effect: EffectId, d: ParamDef, parent: HTMLEl
 
 function rampSlider(lane: LaneId, effect: EffectId, which: 'rampIn' | 'rampOut', label: string, parent: HTMLElement): void {
   const row = el('label', 'slider')
-  row.title = which === 'rampIn'
-    ? 'За сколько голос плавно переходит от обычного к эффекту (и от другого эффекта к этому)'
-    : 'За сколько эффект плавно сходит на нет при выключении'
+  row.title = t(which === 'rampIn' ? 'ins.rampInTip' : 'ins.rampOutTip')
   const head = el('span', '', label)
   const val = el('b')
   head.appendChild(val)
   const input = el('input')
   input.type = 'range'; input.min = '0'; input.max = '10'; input.step = '0.1'
-  const fmt = (v: number) => (v <= 0 ? 'сразу' : `${v.toFixed(1)} с`)
+  const fmt = (v: number) => (v <= 0 ? t('ins.now') : `${v.toFixed(1)} ${t('u.s')}`)
   input.oninput = () => {
     val.textContent = fmt(Number(input.value))
     holo.cmd({ type: 'fxRamp', lane, effect, which, value: Number(input.value) })
@@ -226,7 +222,7 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
 
   const head = el('div', 'ins-head')
   const titles = el('div')
-  titles.append(el('div', 'ins-title', info.label), el('div', 'ins-sub', `${LANE_ICO[lane]} ${LANE_NAME[lane]}`))
+  titles.append(el('div', 'ins-title', fxLabel(effect)), el('div', 'ins-sub', `${LANE_ICO[lane]} ${laneName(lane)}`))
   head.append(el('span', 'ins-emoji', info.emoji), titles)
   box.appendChild(head)
 
@@ -236,26 +232,26 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   box.appendChild(status)
 
   const ramp = el('div', 'box')
-  ramp.appendChild(el('div', 'box-title', 'Переход'))
+  ramp.appendChild(el('div', 'box-title', t('ins.transition')))
   const ramps = el('div', 'ramps')
-  rampSlider(lane, effect, 'rampIn', 'Нарастание', ramps)
-  rampSlider(lane, effect, 'rampOut', 'Затухание', ramps)
+  rampSlider(lane, effect, 'rampIn', t('ins.rampIn'), ramps)
+  rampSlider(lane, effect, 'rampOut', t('ins.rampOut'), ramps)
   ramp.appendChild(ramps)
   box.appendChild(ramp)
 
   const main = el('div', 'box')
-  main.appendChild(el('div', 'box-title', 'Главное'))
+  main.appendChild(el('div', 'box-title', t('ins.main')))
   for (const k of info.main) paramSlider(lane, effect, PARAM[k], main)
   const all = el('details', 'all')
-  all.appendChild(el('summary', '', 'Все параметры'))
+  all.appendChild(el('summary', '', t('ins.all')))
   let group = ''
   for (const d of PARAMS.filter((p) => !info.main.includes(p.key))) {
-    if (d.group !== group) { group = d.group; all.appendChild(el('div', 'pgroup', group)) }
+    if (d.group !== group) { group = d.group; all.appendChild(el('div', 'pgroup', groupLabel(group))) }
     paramSlider(lane, effect, d, all)
   }
   main.appendChild(all)
   const btns = el('div', 'row-btns')
-  const reset = el('button', 'btn', 'Сбросить настройки эффекта')
+  const reset = el('button', 'btn', t('ins.reset'))
   reset.onclick = () => holo.cmd({ type: 'fxReset', lane, effect })
   btns.appendChild(reset)
   main.appendChild(btns)
@@ -263,13 +259,13 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
 
   if (lane === 'mic') {
     const p = el('div', 'box')
-    p.appendChild(el('div', 'box-title', '🎧 Проверить на записи'))
-    p.appendChild(el('div', 'prev-status', 'Запишите несколько секунд своего голоса и слушайте его через этот эффект, двигая ручки.'))
+    p.appendChild(el('div', 'box-title', t('pv.title')))
+    p.appendChild(el('div', 'prev-status', t('pv.desc')))
     const row = el('div', 'row-btns')
-    const rec = el('button', 'btn rec', '● Записать 6 с')
+    const rec = el('button', 'btn rec', t('pv.rec'))
     rec.id = 'pv-rec'
     rec.onclick = () => holo.cmd({ type: 'record' })
-    const play = el('button', 'btn primary', '▶ Послушать')
+    const play = el('button', 'btn primary', t('pv.play'))
     play.id = 'pv-play'
     play.onclick = () => holo.cmd({ type: 'play' })
     const stop = el('button', 'btn', '■')
@@ -303,13 +299,13 @@ function renderInspector(): void {
   const pv = st.preview
   const rec = document.getElementById('pv-rec') as HTMLButtonElement | null
   if (rec) {
-    rec.textContent = pv.recording ? '● Идёт запись…' : '● Записать 6 с'
+    rec.textContent = t(pv.recording ? 'pv.recording' : 'pv.rec')
     rec.disabled = pv.recording
     ;($('pv-play') as HTMLButtonElement).disabled = !pv.ready || pv.recording
     ;($('pv-stop') as HTMLButtonElement).disabled = !pv.playing && !pv.recording
-    $('pv-status').textContent = pv.recording ? 'Говорите…'
-      : pv.playing ? `Звучит запись (${pv.seconds.toFixed(1)} с) — можно двигать ручки`
-      : pv.ready ? 'Запись готова — «Послушать» ещё раз или выберите другой эффект' : ''
+    $('pv-status').textContent = pv.recording ? t('pv.speak')
+      : pv.playing ? t('pv.playing', { s: pv.seconds.toFixed(1) })
+      : pv.ready ? t('pv.ready') : ''
   }
 }
 
@@ -318,8 +314,8 @@ function renderVoiceInfo(l: Levels): void {
   for (const id of LANES) {
     const [f0, avg] = l.f0[id]
     $(`voice-${id}`).innerHTML = avg > 0
-      ? `Тон голоса: <b>${f0 > 0 ? Math.round(f0) : '—'}</b> Гц · средний <b>${Math.round(avg)}</b> Гц`
-      : id === 'mic' ? 'Тон голоса: скажите что-нибудь' : ''
+      ? t('voice.tone', { f0: f0 > 0 ? Math.round(f0) : '—', avg: Math.round(avg) })
+      : id === 'mic' ? t('voice.say') : ''
   }
   const info = document.getElementById('ins-info')
   if (!info) return
@@ -329,11 +325,12 @@ function renderVoiceInfo(l: Levels): void {
   if (p.autoTarget > 0) {
     info.hidden = false
     info.innerHTML = avg > 0
-      ? `Ваш голос ≈ <b>${Math.round(avg)} Гц</b> → цель <b>${Math.round(p.targetHz)} Гц</b>: подстраивается под любого говорящего`
-      : `Цель — <b>${Math.round(p.targetHz)} Гц</b>. Скажите что-нибудь — голос подстроится под говорящего`
+      ? t('info.target', { avg: Math.round(avg), t: Math.round(p.targetHz) })
+      : t('info.targetWait', { t: Math.round(p.targetHz) })
   } else if (p.tune > 0 || p.mono > 0) {
     info.hidden = false
-    info.innerHTML = `Тон сейчас: <b>${f0 > 0 ? `${Math.round(f0)} Гц` : '—'}</b>${p.mono > 0 ? ` → нота <b>${Math.round(p.monoHz)} Гц</b>` : ' → ближайшая нота'}`
+    const now = f0 > 0 ? `${Math.round(f0)} ${t('u.hz')}` : '—'
+    info.innerHTML = p.mono > 0 ? t('info.toneNote', { f0: now, n: Math.round(p.monoHz) }) : t('info.toneNearest', { f0: now })
   } else info.hidden = true
 }
 
@@ -396,8 +393,8 @@ function buildHotkeys(): void {
     const list = $(`hk-${lane}`)
     list.innerHTML = ''
     const actions: [string, string][] = [
-      ['toggle', 'Вкл / выкл эффект'], ['next', 'Следующий эффект'], ['prev', 'Предыдущий эффект'],
-      ...GROUPS.flatMap(([, ids]) => ids.map((id): [string, string] => [id, `${EFFECT[id].emoji} ${EFFECT[id].label}`])),
+      ['toggle', t('hk.toggle')], ['next', t('hk.next')], ['prev', t('hk.prev')],
+      ...GROUPS.flatMap(([, ids]) => ids.map((id): [string, string] => [id, `${EFFECT[id].emoji} ${fxLabel(id)}`])),
     ]
     for (const [what, label] of actions) {
       const row = el('div', 'hk-row')
@@ -419,7 +416,7 @@ function renderHotkeys(): void {
     b.textContent = k || '—'
     b.classList.toggle('empty', !k)
     b.classList.toggle('busy', !!k && hk.failed.includes(a))
-    b.title = k && hk.failed.includes(a) ? 'Сочетание занято другой программой — назначьте другое' : ''
+    b.title = k && hk.failed.includes(a) ? t('hk.busy') : ''
   })
   renderCatalog()
 }
@@ -429,7 +426,7 @@ async function record(btn: HTMLButtonElement): Promise<void> {
   recording?.()
   await holo.pauseHotkeys(true) // иначе нажатие перехватит само глобальное сочетание
   btn.classList.add('rec')
-  btn.textContent = 'нажмите сочетание…'
+  btn.textContent = t('hk.press')
   const finish = async (accel: string | null) => {
     window.removeEventListener('keydown', onKey, true)
     window.removeEventListener('blur', onBlur)
@@ -447,7 +444,7 @@ async function record(btn: HTMLButtonElement): Promise<void> {
     const accel = accelerator(e)
     // X11: Shift с цифрой/знаком даёт другой символ, и глобальное сочетание срабатывает как без Shift
     if (accel && holo.platform === 'linux' && e.shiftKey && /\+[0-9\-=[\];',./\\`]$/.test(accel)) {
-      btn.textContent = 'Shift+цифра не работает в Linux'
+      btn.textContent = t('hk.shiftLinux')
       return
     }
     if (accel) finish(accel)
@@ -493,8 +490,31 @@ async function setCompact(on: boolean): Promise<void> {
   await holo.compact(on, $('card-sys').getBoundingClientRect().bottom + 14)
 }
 
+// ---------------------------------------------------------------- язык
+
+function buildLangMenu(): void {
+  const cur = LANGS.find((l) => l.code === lang()) ?? LANGS[0]
+  const btn = $('btn-lang')
+  btn.innerHTML = flagSvg(cur.flag) // свои SVG: на Windows эмодзи-флаги не отображаются
+  const menu = $('lang-menu')
+  for (const l of LANGS) {
+    const b = el('button')
+    if (l.code === cur.code) b.className = 'sel'
+    b.innerHTML = flagSvg(l.flag)
+    b.appendChild(el('span', '', l.name))
+    b.onclick = () => { menu.hidden = true; if (l.code !== lang()) holo.setUi({ lang: l.code }) }
+    menu.appendChild(b)
+  }
+  btn.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden }
+  document.addEventListener('click', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('#lang-menu')) menu.hidden = true })
+  holo.onLang(() => location.reload()) // окно перестраивается целиком на новом языке; звук в движке не прерывается
+}
+
 async function main(): Promise<void> {
   ui = await holo.getUi()
+  setLang(ui.lang)
+  applyStatic()
+  buildLangMenu()
   $('btn-close').onclick = () => holo.close()
   $('btn-min').onclick = () => holo.minimize()
   const pin = $('btn-pin')
@@ -516,10 +536,10 @@ async function main(): Promise<void> {
   // обновление
   $('version').textContent = `v${await holo.version()}`
   const upd = $<HTMLButtonElement>('btn-update'), updStatus = $('update-status')
-  holo.onUpdateProgress((t) => { updStatus.textContent = t })
+  holo.onUpdateProgress((text) => { updStatus.textContent = text })
   upd.onclick = async () => {
     upd.disabled = true
-    updStatus.textContent = 'Проверяю…'
+    updStatus.textContent = t('upd.checking')
     updStatus.textContent = await holo.update()
     upd.disabled = false
   }

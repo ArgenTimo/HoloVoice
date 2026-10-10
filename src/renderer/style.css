@@ -203,3 +203,15 @@ body.widget .brand { font-size: 12px; }
 ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 ::-webkit-scrollbar-corner { background: transparent; }
+
+/* ---------------------------------------------------------------- язык */
+.flag { display: block; border-radius: 2px; box-shadow: 0 0 0 1px #ffffff26; }
+.win-btns .lang-btn { display: grid; place-items: center; }
+.lang-menu { position: fixed; top: 40px; right: 120px; z-index: 20; background: var(--bg2); border: 1px solid var(--line2);
+  border-radius: 12px; padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; box-shadow: 0 16px 40px #000a;
+  max-height: 70vh; overflow-y: auto; }
+[dir=rtl] .lang-menu { right: auto; left: 120px; }
+.lang-menu button { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 6px 10px; border-radius: 8px;
+  text-align: start; white-space: nowrap; }
+.lang-menu button:hover { background: var(--panel); }
+.lang-menu button.sel { background: #251f45; }

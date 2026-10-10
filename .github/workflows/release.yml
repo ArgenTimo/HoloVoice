@@ -1,0 +1,32 @@
+# Каждый пуш в main (или master) → сборка Windows-установщика и Linux AppImage → GitHub Release.
+# Кнопка «Обновить» в установленном HoloVoice берёт новую версию отсюда (electron-updater).
+name: release
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win nsis
+          - os: ubuntu-latest
+            target: --linux AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm version --no-git-tag-version 1.0.${{ github.run_number }}
+      - run: npm run typecheck
+      - run: npm run build:renderer
+      - run: npx electron-builder ${{ matrix.target }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

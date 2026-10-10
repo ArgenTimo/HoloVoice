@@ -1,0 +1,74 @@
+{
+  "name": "holovoice",
+  "productName": "HoloVoice",
+  "version": "1.0.0",
+  "description": "Эффекты на голос в реальном времени — виртуальный микрофон для Discord, Telegram, Zoom",
+  "main": "src/main.js",
+  "author": "skotwind",
+  "license": "MIT",
+  "scripts": {
+    "build:renderer": "esbuild src/renderer/engine.ts src/renderer/panel.ts src/renderer/widget.ts src/renderer/osd.ts src/renderer/dsp/worklet.ts --bundle --format=iife --target=chrome120 --outdir=dist",
+    "start": "npm run build:renderer && electron . --no-sandbox",
+    "dist:linux": "npm run build:renderer && electron-builder --linux AppImage --publish never",
+    "dist:win": "npm run build:renderer && electron-builder --win nsis --publish never",
+    "dist": "npm run build:renderer && electron-builder --linux AppImage --win nsis --publish never",
+    "typecheck": "tsc -p ."
+  },
+  "build": {
+    "appId": "work.skotwind.holovoice",
+    "productName": "HoloVoice",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "!src/**/*.ts",
+      "dist/**/*.js",
+      "build/icon.png",
+      "package.json"
+    ],
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png",
+      "category": "Audio"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "appImage": {
+      "artifactName": "HoloVoice-${version}.AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "HoloVoice",
+      "runAfterFinish": true,
+      "artifactName": "HoloVoice-Setup-${version}.exe"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ArgenTimo",
+        "repo": "HoloVoice",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "33.2.0",
+    "electron-builder": "25.1.8",
+    "esbuild": "0.24.0",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ArgenTimo/HoloVoice.git"
+  }
+}

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob: mediastream:">
+  <title>HoloVoice</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="titlebar">
+      <div class="brand"><span class="dot"></span>HoloVoice</div>
+      <div class="win-btns">
+        <button id="btn-widget" title="Виджет на рабочий стол: выбор эффектов и вкл/выкл, остаётся после перезагрузки">🧩</button>
+        <button id="btn-compact" title="Компактно / полностью">▭</button>
+        <button id="btn-pin" class="on" title="Поверх всех окон">📌</button>
+        <button id="btn-min" title="Свернуть">—</button>
+        <button id="btn-close" title="Закрыть">✕</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button data-tab="mic">🎙️ Мой голос <i class="led" id="led-mic"></i></button>
+      <button data-tab="sys">🔊 Звук компьютера <i class="led" id="led-sys"></i></button>
+    </nav>
+
+    <div id="lane-mic" class="lane"></div>
+    <div id="lane-sys" class="lane"></div>
+
+    <section class="full devices" data-for="mic">
+      <label>Мой микрофон
+        <select id="mic"></select>
+      </label>
+      <label>Куда отправлять голос
+        <select id="out"></select>
+      </label>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="monitor"> Слышать себя</label>
+        <input type="range" id="monitor-vol" min="0" max="100" step="1" title="Громкость самопрослушки">
+      </div>
+    </section>
+
+    <details class="full hk" id="hk-mic" data-for="mic"><summary>⌨️ Горячие клавиши</summary><div class="hk-list"></div></details>
+    <details class="full hk" id="hk-sys" data-for="sys"><summary>⌨️ Горячие клавиши</summary><div class="hk-list"></div></details>
+
+    <details class="full osdset" id="osdset"><summary>🖥️ Подсказка на экране</summary>
+      <div class="osd-body">
+        <label class="check"><input type="checkbox" id="osd-toast"> Показывать эффект при горячей клавише</label>
+        <label class="check"><input type="checkbox" id="osd-bar"> Полоса нарастания / затухания</label>
+        <label class="select-row"><span>Где</span>
+          <select id="osd-pos">
+            <option value="top">Сверху по центру</option><option value="top-left">Сверху слева</option>
+            <option value="top-right">Сверху справа</option><option value="bottom">Снизу по центру</option>
+            <option value="bottom-left">Снизу слева</option><option value="bottom-right">Снизу справа</option>
+          </select>
+        </label>
+        <div class="hk-note">Поверх всех окон, не забирает фокус и не ловит мышь — игре не мешает.
+          Полоса появляется, когда у эффекта задано нарастание или затухание, и исчезает на пике.</div>
+        <button id="osd-test" class="fxreset">Показать пример</button>
+      </div>
+    </details>
+
+    <div class="hint full" id="hint-mic" data-for="mic"></div>
+    <div class="hint full" id="hint-sys" data-for="sys"></div>
+
+    <footer class="full footer">
+      <span id="version"></span>
+      <span id="update-status"></span>
+      <button id="btn-update" title="Подтянуть изменения из master">⟳ Обновить</button>
+    </footer>
+  </div>
+  <script src="../../dist/panel.js"></script>
+</body>
+</html>

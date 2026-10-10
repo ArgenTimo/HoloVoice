@@ -1,0 +1,38 @@
+'use strict'
+// Один preload для движка и пультов: main пересылает команды пультов движку, состояние движка — пультам.
+const { contextBridge, ipcRenderer } = require('electron')
+
+contextBridge.exposeInMainWorld('holo', {
+  platform: process.platform,
+  // пульты
+  cmd: (c) => ipcRenderer.send('cmd', c),
+  getState: () => ipcRenderer.invoke('state:get'),
+  onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
+  onLevels: (cb) => ipcRenderer.on('levels', (_e, l) => cb(l)),
+  getUi: () => ipcRenderer.invoke('ui:get'),
+  setUi: (patch) => ipcRenderer.invoke('ui:set', patch),
+  widget: (on) => ipcRenderer.invoke('widget', on),
+  showPanel: () => ipcRenderer.invoke('panel:show'),
+  minimize: () => ipcRenderer.invoke('win:minimize'),
+  close: () => ipcRenderer.invoke('win:close'),
+  setHeight: (h) => ipcRenderer.invoke('win:height', h),
+  open: (url) => ipcRenderer.invoke('open', url),
+  getHotkeys: () => ipcRenderer.invoke('hotkeys:get'),
+  setHotkey: (action, accel) => ipcRenderer.invoke('hotkeys:set', action, accel),
+  resetHotkeys: () => ipcRenderer.invoke('hotkeys:reset'),
+  pauseHotkeys: (on) => ipcRenderer.invoke('hotkeys:pause', on),
+  getOsd: () => ipcRenderer.invoke('osd:get'),
+  setOsd: (patch) => ipcRenderer.invoke('osd:set', patch),
+  testOsd: () => ipcRenderer.invoke('osd:test'),
+  onOsd: (cb) => ipcRenderer.on('osd', (_e, msg) => cb(msg)),
+  version: () => ipcRenderer.invoke('app:version'),
+  update: () => ipcRenderer.invoke('app:update'),
+  onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, t) => cb(t)),
+  // движок
+  routeMic: () => ipcRenderer.invoke('routing:mic'),
+  routeSys: (on) => ipcRenderer.invoke('routing:sys', on),
+  pushState: (s) => ipcRenderer.send('state', s),
+  pushLevels: (l) => ipcRenderer.send('levels', l),
+  pushRamp: (r) => ipcRenderer.send('ramp', r),
+  onCmd: (cb) => ipcRenderer.on('cmd', (_e, c) => cb(c)),
+})

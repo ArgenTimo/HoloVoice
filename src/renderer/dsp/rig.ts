@@ -57,7 +57,7 @@ export class VoiceRig {
     // голос
     this.input.connect(voice)
     for (const k of ['pitch', 'formant', 'robot', 'whisper', 'crush', 'decimate', 'denoise', 'vibrato', 'vibratoHz',
-      'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz'] as const) {
+      'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola'] as const) {
       bind(k, voice.parameters.get(k)!)
     }
 

@@ -23,6 +23,10 @@ export class PitchTracker {
   private readonly maxLag: number
   private readonly d: Float32Array
   private readonly frame: Float32Array
+  private readonly hist = new Float32Array(400) // последние тона голоса (~2 с при кадре 256 отсчётов)
+  private hi = 0
+  private hn = 0
+  private since2 = 0
 
   constructor(sampleRate: number, private readonly every = 256) {
     this.decim = Math.max(1, Math.round(sampleRate / 12000))
@@ -82,6 +86,13 @@ export class PitchTracker {
       if (d[m] < 0.3) best = m
     }
     if (best < 0) { this.unvoiced(); return }
+    // у низких голосов сильная вторая гармоника даёт ложный провал на половине периода (тон «на октаву выше»):
+    // если на удвоенном периоде провал заметно глубже — настоящий период там
+    if (2 * best + 2 <= maxLag) {
+      let b2 = 2 * best - 2
+      for (let tau = 2 * best - 2; tau <= 2 * best + 2; tau++) if (d[tau] < d[b2]) b2 = tau
+      if (d[b2] < d[best] - 0.04) best = b2 // абсолютный запас: у чистого периодического сигнала оба провала ≈ 0
+    }
     // параболическое уточнение
     const y0 = d[best - 1] ?? d[best], y1 = d[best], y2 = d[best + 1] ?? d[best]
     const den = y0 - 2 * y1 + y2
@@ -89,12 +100,16 @@ export class PitchTracker {
     const f = this.rate / lag
     this.clarity = 1 - y1
     this.f0 = f
-    // средний тон — в логарифме, постоянная времени ~1.5 с; сначала — сразу первое значение
-    if (this.avg <= 0) this.avg = f
-    else {
-      const k = 1 - Math.exp(-dt / 1.5)
-      this.avg = Math.exp(Math.log(this.avg) + (Math.log(f) - Math.log(this.avg)) * k)
+    // средний тон — медиана последних ~2 с голоса: устойчива к октавным выбросам; первые 0.2 с — копим
+    this.hist[this.hi] = f
+    this.hi = (this.hi + 1) % this.hist.length
+    if (this.hn < this.hist.length) this.hn++
+    if (this.hn >= 40 && (++this.since2 >= 8 || this.avg <= 0)) {
+      this.since2 = 0
+      const v = Array.from(this.hist.subarray(0, this.hn)).sort((p, q) => p - q)
+      this.avg = v[v.length >> 1]
     }
+    void dt
   }
 
   private unvoiced(): void {

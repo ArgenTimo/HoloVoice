@@ -2,7 +2,7 @@
 // по центру каталог эффектов для выбранной дорожки, справа настройки выбранного эффекта и «Проверить на записи»,
 // снизу — устройства. Горячие клавиши и подсказка на экране — в окнах поверх панели.
 // Звук здесь не обрабатывается (см. engine.ts).
-import { PARAM, PARAMS, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
+import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type UiConfig } from './shared'
 
@@ -261,11 +261,13 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
 
   const main = el('div', 'box')
   main.appendChild(el('div', 'box-title', t('ins.main')))
-  for (const k of info.main) paramSlider(lane, effect, PARAM[k], main)
+  // computer-sound track: voice-only parameters do nothing there, so they are not shown
+  const visible = (k: ParamKey) => lane === 'mic' || !VOICE_ONLY.includes(k)
+  for (const k of info.main.filter(visible)) paramSlider(lane, effect, PARAM[k], main)
   const all = el('details', 'all')
   all.appendChild(el('summary', '', t('ins.all')))
   let group = ''
-  for (const d of PARAMS.filter((p) => !info.main.includes(p.key))) {
+  for (const d of PARAMS.filter((p) => !info.main.includes(p.key) && visible(p.key))) {
     if (d.group !== group) { group = d.group; all.appendChild(el('div', 'pgroup', groupLabel(group))) }
     paramSlider(lane, effect, d, all)
   }

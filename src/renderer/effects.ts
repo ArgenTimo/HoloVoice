@@ -192,6 +192,25 @@ export function interpolate(a: FxParams, b: FxParams, t: number): FxParams {
   return out
 }
 
+/** Parameters that only make sense for a single live voice: on the computer-sound track (videos, music,
+ *  several speakers) they misbehave — denoise slowly eats sustained notes, the compressor pumps the level. */
+export const VOICE_ONLY: ParamKey[] = ['denoise', 'comp', 'deess', 'psola', 'autoTarget', 'targetHz', 'formantFollow']
+
+/** Computer-sound track: PSOLA and speaker tracking need one voice, so gender voices become a fixed pitch/formant
+ *  shift through the vocoder (it copes with polyphonic sound); voice-only tools are off. */
+export function forSystemSound(p: FxParams): FxParams {
+  const out = { ...p, denoise: 0, comp: 0, deess: 0, psola: 0 }
+  if (p.autoTarget > 0) {
+    // shift as if the speaker were an average voice (~150 Hz)
+    const semis = p.autoTarget * 12 * Math.log2(p.targetHz / 150)
+    out.pitch = p.pitch + semis
+    out.formant = Math.max(-12, Math.min(12, p.formant + p.formantFollow * 0.27 * semis))
+    out.autoTarget = 0
+    out.formantFollow = 0
+  }
+  return out
+}
+
 /** Что звучит: эффект с силой amount (0..1) — доля пути от нейтрального звука к эффекту */
 export function effectTarget(id: EffectId, user: EffectUser | undefined, amount: number): FxParams {
   return interpolate(NEUTRAL, effectFull(id, user), Math.max(0, Math.min(1, amount)))

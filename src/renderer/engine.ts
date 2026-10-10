@@ -8,7 +8,7 @@
 // У каждой дорожки свой AudioContext: у них разные устройства вывода.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, isCustom, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
+import { NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings } from './shared'
 
 const isWin = holo.platform === 'win32'
@@ -139,7 +139,13 @@ class Lane {
   /** Что должно звучать по настройкам: эффект с силой amount, а выключенная дорожка — обычный звук */
   target(): FxParams {
     const c = this.cfg
-    return c.enabled ? effectTarget(c.effect, c.fx[c.effect], c.amount / 100) : NEUTRAL
+    if (!c.enabled) return NEUTRAL
+    if (this.id !== 'sys') return effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
+    // computer sound: "Clean" means untouched (its preset is voice EQ/enhancement) plus only the user's own edits
+    const p = c.effect === 'clean'
+      ? interpolate(NEUTRAL, { ...NEUTRAL, ...(c.fx.clean?.p ?? {}) }, c.amount / 100)
+      : effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
+    return forSystemSound(p)
   }
 
   /** Плавно перейти к настройкам за seconds: нарастание, затухание, переход между эффектами */

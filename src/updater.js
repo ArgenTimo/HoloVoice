@@ -4,7 +4,7 @@
 //   установленная сборка (exe / AppImage) — новая версия из GitHub Releases (их собирает CI на каждый пуш в main/master,
 //   .github/workflows/release.yml), скачать и поставить через electron-updater.
 const { app } = require('electron')
-const { execFile } = require('node:child_process')
+const { execFile, spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -62,12 +62,26 @@ async function updateFromReleases(progress) {
   autoUpdater.autoDownload = false
   progress('Проверяю обновления…')
   const r = await autoUpdater.checkForUpdates()
-  if (!r || !r.isUpdateAvailable) return `Уже последняя версия (${app.getVersion()})`
+  // в electron-updater 6.3 у результата нет флага «доступно»: токен отмены появляется, только если версия новее
+  if (!r || !r.cancellationToken) return `Уже последняя версия (${app.getVersion()})`
   progress(`Скачиваю ${r.updateInfo.version}…`)
   autoUpdater.on('download-progress', (p) => progress(`Скачиваю ${r.updateInfo.version}… ${Math.round(p.percent)}%`))
   await autoUpdater.downloadUpdate()
   progress('Устанавливаю…')
-  setImmediate(() => autoUpdater.quitAndInstall(true, true))
+  setImmediate(() => {
+    // AppImage: апдейтер запускает новый файл без аргументов, а на Ubuntu 24+ (AppArmor) Electron без --no-sandbox
+    // не стартует — поэтому перезапускаем сами, с флагом. Установка происходит прямо внутри quitAndInstall,
+    // так что к этому моменту новый файл уже на месте (имя могло смениться — ловим событие).
+    let appImage = process.env.APPIMAGE
+    if (appImage) autoUpdater.once('appimage-filename-updated', (p) => { appImage = p })
+    autoUpdater.quitAndInstall(true, true)
+    // app.relaunch не годится: его помощник запускается из образа старой AppImage, который размонтируется при выходе.
+    // Системный sh дождётся выхода приложения и запустит новый файл.
+    if (appImage) {
+      spawn('/bin/sh', ['-c', 'while kill -0 "$1" 2>/dev/null; do sleep 0.3; done; exec "$2" --no-sandbox', 'holovoice-relaunch',
+        String(process.pid), appImage], { detached: true, stdio: 'ignore' }).unref()
+    }
+  })
   return 'Устанавливаю обновление'
 }
 

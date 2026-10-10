@@ -20,6 +20,10 @@ export class Psola {
   private x = new Float32Array(RING) // вход
   private lp = new Float32Array(RING) // вход после НЧ-фильтра — для поиска голосовых импульсов
   private y = new Float32Array(RING) // накопление выхода
+  private env = new Float32Array(RING) // огибающая энергии — для привязки меток к импульсам
+  private envS = 0
+  private readonly envA: number
+  private voicedRun = false
   private w = new Float32Array(RING) // сумма окон
   private t = 0 // сколько отсчётов пришло (абсолютное время входа)
   private l1 = 0
@@ -34,10 +38,19 @@ export class Psola {
   private lastMark = 0
   private nextSyn = 0
   private readonly tu: number
+  private floor = 1
+  private pSmooth = 0
+  private wasVoiced = false
+  /** сглаживание периода синтеза: доля нового значения (1 — без сглаживания) */
+  smoothK = 0.12
+  /** подтяжка метки к пику энергии, доля периода (0 — выкл) */
+  refine = 0
   private readonly maxHalf: number
 
   constructor(private readonly sampleRate: number, readonly latency: number) {
-    this.lpA = Math.exp((-2 * Math.PI * 900) / sampleRate)
+    // ниже первой форманты: один пик на период, метки не прыгают между двумя пиками внутри периода
+    this.lpA = Math.exp((-2 * Math.PI * 600) / sampleRate)
+    this.envA = Math.exp(-1 / (0.001 * sampleRate))
     this.tu = Math.round(sampleRate * 0.008) // глухие участки — зёрна каждые 8 мс
     // зерну нужно смотреть вперёд на полпериода: при заданной задержке самый длинный период ограничен
     this.maxHalf = Math.floor(latency * 0.45)
@@ -55,18 +68,22 @@ export class Psola {
       const k = (this.t + i) & MASK
       this.x[k] = v
       this.lp[k] = this.l2
+      // огибающая энергии (|x| сглаженный ~1 мс): максимумы — голосовые импульсы
+      this.envS = Math.abs(v) + (this.envS - Math.abs(v)) * this.envA
+      this.env[k] = this.envS
     }
     this.t += n
     this.analyze(f0)
     this.synthesize(this.t - this.latency)
-    // выдача: где зёрна перекрываются (выше тон) — делим на сумму окон, чтобы громкость не росла; где между ними
-    // щели (ниже тон) — не тянем: щель и есть новый, более длинный период
+    // выдача — делим на сумму окон: иначе громкость пульсирует с частотой тона («жужжание»). При понижении между
+    // зёрнами щели (новый, более длинный период) — их не вытягиваем: деление не меньше чем на долю ratio
+    this.floor = Math.min(1, Math.max(0.05, this.ratio)) * 0.999
     const start = this.t - n - this.latency
     for (let i = 0; i < n; i++) {
       const at = start + i
       if (at < 0) { output[i] = 0; continue }
       const k = at & MASK
-      output[i] = this.y[k] / Math.max(1, this.w[k])
+      output[i] = this.y[k] / Math.max(this.w[k], this.floor)
       this.y[k] = 0
       this.w[k] = 0
     }
@@ -75,15 +92,56 @@ export class Psola {
   /** Метки: в голосе — максимум сглаженного сигнала около «прошлая метка + период», в глухом — равный шаг */
   private analyze(f0: number): void {
     const period = f0 > 0 ? Math.min(this.sampleRate / f0, this.maxHalf) : 0
-    const horizon = this.t - Math.ceil((period || this.tu) * 1.3) - 2
+    const horizon = this.t - 2
     while (true) {
       if (period > 0) {
-        const lo = this.lastMark + Math.round(period * 0.75), hi = this.lastMark + Math.round(period * 1.25)
-        if (hi > horizon) break
-        let best = lo, bv = -Infinity
-        for (let p = lo; p <= hi; p++) { const v = this.lp[p & MASK]; if (v > bv) { bv = v; best = p } }
+        if (!this.voicedRun) {
+          // начало голосового участка: первая метка — на голосовой импульс (пик энергии в пределах периода после
+          // прошлой метки). Дальше метки по корреляции наследуют эту фазу: окно зерна центрировано на импульсе.
+          // Без этого метка могла встать между импульсами, зерно захватывало два импульса — при повышении тона
+          // в каждом периоде выхода выходило по два импульса, отсюда хрип
+          const from = this.lastMark + Math.round(this.tu * 0.5), to = from + Math.round(period)
+          if (to + Math.round(period) > horizon) break
+          let pk = from, pv = -1
+          for (let p = from; p <= to; p++) { const e = this.env[p & MASK]; if (e > pv) { pv = e; pk = p } }
+          this.voicedRun = true
+          this.pushMark(pk, Math.round(period))
+          continue
+        }
+        const lo = this.lastMark + Math.round(period * 0.7), hi = this.lastMark + Math.round(period * 1.3)
+        if (hi + Math.round(period / 2) > horizon) break
+        // следующая метка — где отрезок сигнала лучше всего повторяет отрезок у предыдущей (взаимная корреляция):
+        // метки встают в одну и ту же точку каждого периода, зёрна согласованы (поиск пика давал разнобой)
+        const m0 = this.lastMark, hw = Math.round(period / 2)
+        let best = Math.round(m0 + period), bv = -Infinity
+        for (let p = lo; p <= hi; p += 2) {
+          let c = 0, e = 0
+          for (let k = -hw; k <= hw; k += 3) {
+            const v = this.x[(p + k) & MASK]
+            c += v * this.x[(m0 + k) & MASK]
+            e += v * v
+          }
+          const sc = e > 0 ? c / Math.sqrt(e) : 0
+          if (sc > bv) { bv = sc; best = p }
+        }
+        // уточнение до отсчёта
+        for (let p = best - 1; p <= best + 1; p += 2) {
+          let c = 0, e = 0
+          for (let k = -hw; k <= hw; k += 3) { const v = this.x[(p + k) & MASK]; c += v * this.x[(m0 + k) & MASK]; e += v * v }
+          const sc = e > 0 ? c / Math.sqrt(e) : 0
+          if (sc > bv) { bv = sc; best = p }
+        }
+        // удержание на импульсе: цепочка корреляций может понемногу уводить фазу — подтягиваем метку к пику
+        // энергии рядом (±refine периода), если он там явно есть
+        if (this.refine > 0) {
+          const r = Math.round(period * this.refine)
+          let pk = best, pv = this.env[best & MASK]
+          for (let p = best - r; p <= best + r; p++) { const e = this.env[p & MASK]; if (e > pv) { pv = e; pk = p } }
+          if (pv > this.env[best & MASK] * 1.15) best = pk
+        }
         this.pushMark(best, best - this.lastMark)
       } else {
+        this.voicedRun = false
         const m = this.lastMark + this.tu
         if (m > horizon) break
         this.pushMark(m, 0)
@@ -107,21 +165,63 @@ export class Psola {
     const n = this.mCount
     if (!n) return
     const pos = this.markPos
-    if (this.nextSyn < outEnd - this.latency) this.nextSyn = outEnd - this.latency // после паузы/старта
     let j = 0
+    if (this.nextSyn < outEnd - this.latency) {
+      // старт или сбой: точку синтеза ставим на ближайшую метку анализа — иначе при сдвиге ~½ периода «ближайшая
+      // метка» скачет туда-сюда и периоды то дублируются, то пропадают
+      const want = outEnd - this.latency
+      while (j < n - 1 && Math.abs(pos[this.mi(j + 1)] - want) <= Math.abs(pos[this.mi(j)] - want)) j++
+      this.nextSyn = pos[this.mi(j)]
+      j = 0
+    }
     while (this.nextSyn <= outEnd + this.maxHalf) {
       const s = this.nextSyn
       // ближайшая к s метка анализа
       while (j < n - 1 && Math.abs(pos[this.mi(j + 1)] - s) <= Math.abs(pos[this.mi(j)] - s)) j++
       const a = pos[this.mi(j)]
-      const T = this.markT[this.mi(j)]
+      let T = this.markT[this.mi(j)]
+      // шаг — точно до следующей метки (если она уже есть): при неизменной высоте зёрна встают ровно на свои места
+      const fwd = j + 1 < n && this.markT[this.mi(j + 1)] > 0 ? this.markT[this.mi(j + 1)] : 0
+      if (T > 0 && fwd > 0) T = fwd
       const voiced = T > 0
       const half = voiced ? T : this.tu
       // зерну нужен вход до a + half: если ещё не пришёл — ждём следующего блока
       if (a + half * Math.max(1, this.formant) >= this.t) break
-      this.grain(a, s, half)
-      this.nextSyn = s + Math.max(16, Math.round(voiced ? T / this.ratio : this.tu))
+      // подстройка по волне — только для глухих зёрен: у голосовых метки и так стоят в одной точке периода,
+      // а подстройка подтягивала бы зерно к старому периоду и съедала сдвиг высоты
+      this.grain(voiced ? a : a + this.align(a, s, half), s, half)
+      // шаг синтеза — по сглаженному периоду: неровность меток (дрожание голоса + ошибки разметки) иначе копируется
+      // в выход, а дрожание и есть акустическая основа хрипоты; так же делает Praat (новые периоды по гладкой кривой)
+      if (voiced) this.pSmooth = this.wasVoiced ? this.pSmooth + (T - this.pSmooth) * this.smoothK : T
+      this.wasVoiced = voiced
+      this.nextSyn = s + Math.max(16, Math.round(voiced ? this.pSmooth / this.ratio : this.tu))
     }
+  }
+
+  /** Подстройка по форме волны (как в WSOLA): сдвиг зерна в пределах ±30 % периода, при котором его начало лучше
+   *  всего совпадает с уже собранным выходом — соседние зёрна стыкуются в фазе, даже если метка стоит неточно
+   *  (без этого голос «дробился» и терял связность даже без смены высоты). */
+  private align(a: number, s: number, half: number): number {
+    const R = Math.round(half * 0.3)
+    const f = this.formant
+    const oh = Math.max(8, Math.min(this.maxHalf, Math.round(half / f)))
+    const { x, y } = this
+    // сравниваем первую половину зерна с тем, что уже накоплено на этом месте (хвосты предыдущих зёрен)
+    let acc = 0
+    for (let k = -oh; k < 0; k += 2) acc += Math.abs(y[(s + k) & MASK])
+    if (acc < 1e-6) return 0 // перед зерном пусто (начало, после паузы) — сдвигать не к чему
+    let best = 0, bestC = -Infinity
+    for (let d = -R; d <= R; d += 2) {
+      let c = 0, e = 0
+      for (let k = -oh; k < 0; k += 2) {
+        const v = x[Math.round(a + d + k * f) & MASK]
+        c += v * y[(s + k) & MASK]
+        e += v * v
+      }
+      const score = e > 0 ? c / Math.sqrt(e) : 0
+      if (score > bestC) { bestC = score; best = d }
+    }
+    return best
   }
 
   private grain(a: number, s: number, half: number): void {

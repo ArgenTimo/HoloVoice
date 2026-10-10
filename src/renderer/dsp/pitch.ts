@@ -26,6 +26,11 @@ export class PitchTracker {
   private readonly hist = new Float32Array(400) // последние тона голоса (~2 с при кадре 256 отсчётов)
   private readonly sorted = new Float32Array(400)
   private hi = 0
+  private lastF = 0
+  private holdLeft = 0
+  thrV = 0.3 // порог «точно голос» для глобального минимума
+  thrHold = 0.5 // порог при гистерезисе
+  hold = 8 // сколько анализов подряд (по ~5 мс) держится гистерезис
   private hn = 0
   private since2 = 0
 
@@ -81,10 +86,13 @@ export class PitchTracker {
       if (d[tau] < 0.15 && d[tau] <= d[tau + 1]) { best = tau; break }
     }
     if (best < 0) {
-      // нет уверенного провала — берём глобальный минимум, если он достаточно глубокий
+      // нет уверенного провала — берём глобальный минимум, если он достаточно глубокий; если голос только что был,
+      // а минимум рядом с прошлым тоном — верим и менее уверенному (гистерезис): иначе посреди слова голос
+      // на миг «пропадал» и высота прыгала к исходной
       let m = minLag
       for (let tau = minLag; tau <= maxLag; tau++) if (d[tau] < d[m]) m = tau
-      if (d[m] < 0.3) best = m
+      const near = this.lastF > 0 && Math.abs(Math.log((this.rate / m) / this.lastF)) < 0.22
+      if (d[m] < this.thrV || (near && this.holdLeft > 0 && d[m] < this.thrHold)) best = m
     }
     if (best < 0) { this.unvoiced(); return }
     // у низких голосов сильная вторая гармоника даёт ложный провал на половине периода (тон «на октаву выше»):
@@ -101,6 +109,8 @@ export class PitchTracker {
     const f = this.rate / lag
     this.clarity = 1 - y1
     this.f0 = f
+    this.lastF = f
+    this.holdLeft = this.hold
     // средний тон — медиана последних ~2 с голоса: устойчива к октавным выбросам; первые 0.2 с — копим
     this.hist[this.hi] = f
     this.hi = (this.hi + 1) % this.hist.length
@@ -119,5 +129,6 @@ export class PitchTracker {
   private unvoiced(): void {
     this.f0 = 0
     this.clarity = 0
+    if (this.holdLeft > 0) this.holdLeft--
   }
 }

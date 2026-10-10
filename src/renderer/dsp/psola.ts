@@ -45,6 +45,13 @@ export class Psola {
   smoothK = 0.12
   /** подтяжка метки к пику энергии, доля периода (0 — выкл) */
   refine = 0
+  /** асимметричное окно голосового зерна (до соседних импульсов) */
+  asym = true
+  /** голос/не голос по сходству соседних периодов (поверх детектора тона) */
+  selfVoicing = true
+  rVoiced = 0.3 // минимальная корреляция, когда детектор говорит «голос»
+  rHold = 0.7 // когда детектор потерял голос, а мы продолжаем
+  private lastPeriod = 0
   private readonly maxHalf: number
 
   constructor(private readonly sampleRate: number, readonly latency: number) {
@@ -91,7 +98,10 @@ export class Psola {
 
   /** Метки: в голосе — максимум сглаженного сигнала около «прошлая метка + период», в глухом — равный шаг */
   private analyze(f0: number): void {
-    const period = f0 > 0 ? Math.min(this.sampleRate / f0, this.maxHalf) : 0
+    // детектор тона пропускает часть голосовых кадров (~14 %): если голос только что был — продолжаем с прошлым
+    // периодом, а решает сходство соседних периодов (ниже)
+    const tracked = f0 > 0 ? Math.min(this.sampleRate / f0, this.maxHalf) : 0
+    const period = tracked || (this.voicedRun && this.selfVoicing ? this.lastPeriod : 0)
     const horizon = this.t - 2
     while (true) {
       if (period > 0) {
@@ -131,6 +141,21 @@ export class Psola {
           const sc = e > 0 ? c / Math.sqrt(e) : 0
           if (sc > bv) { bv = sc; best = p }
         }
+        if (this.selfVoicing) {
+          // голос ли это: нормированная корреляция соседних периодов. Нет повторения — глухой участок
+          let e0 = 0, e1 = 0, c = 0
+          for (let k = -hw; k <= hw; k += 3) {
+            const u = this.x[(m0 + k) & MASK], v = this.x[(best + k) & MASK]
+            c += u * v; e0 += u * u; e1 += v * v
+          }
+          const r = e0 > 0 && e1 > 0 ? c / Math.sqrt(e0 * e1) : 0
+          if (r < (tracked ? this.rVoiced : this.rHold)) {
+            this.voicedRun = false
+            this.pushMark(this.lastMark + this.tu, 0)
+            continue
+          }
+        }
+        this.lastPeriod = best - this.lastMark
         // удержание на импульсе: цепочка корреляций может понемногу уводить фазу — подтягиваем метку к пику
         // энергии рядом (±refine периода), если он там явно есть
         if (this.refine > 0) {
@@ -180,6 +205,7 @@ export class Psola {
       while (j < n - 1 && Math.abs(pos[this.mi(j + 1)] - s) <= Math.abs(pos[this.mi(j)] - s)) j++
       const a = pos[this.mi(j)]
       let T = this.markT[this.mi(j)]
+      const back = T
       // шаг — точно до следующей метки (если она уже есть): при неизменной высоте зёрна встают ровно на свои места
       const fwd = j + 1 < n && this.markT[this.mi(j + 1)] > 0 ? this.markT[this.mi(j + 1)] : 0
       if (T > 0 && fwd > 0) T = fwd
@@ -189,7 +215,10 @@ export class Psola {
       if (a + half * Math.max(1, this.formant) >= this.t) break
       // подстройка по волне — только для глухих зёрен: у голосовых метки и так стоят в одной точке периода,
       // а подстройка подтягивала бы зерно к старому периоду и съедала сдвиг высоты
-      this.grain(voiced ? a : a + this.align(a, s, half), s, half)
+      // окно зерна (как в Praat): влево — до предыдущего импульса, вправо — до следующего; при неровных периодах
+      // симметричное окно захватывало куски соседних импульсов
+      if (voiced && this.asym) this.grain(a, s, back, fwd || T)
+      else this.grain(voiced ? a : a + this.align(a, s, half), s, half, half)
       // шаг синтеза — по сглаженному периоду: неровность меток (дрожание голоса + ошибки разметки) иначе копируется
       // в выход, а дрожание и есть акустическая основа хрипоты; так же делает Praat (новые периоды по гладкой кривой)
       if (voiced) this.pSmooth = this.wasVoiced ? this.pSmooth + (T - this.pSmooth) * this.smoothK : T
@@ -224,12 +253,13 @@ export class Psola {
     return best
   }
 
-  private grain(a: number, s: number, half: number): void {
+  private grain(a: number, s: number, left: number, right: number): void {
     const f = this.formant
-    const oh = Math.max(8, Math.min(this.maxHalf, Math.round(half / f)))
+    const ol = Math.max(8, Math.min(this.maxHalf, Math.round(left / f)))
+    const or = Math.max(8, Math.min(this.maxHalf, Math.round(right / f)))
     const { x, y, w } = this
-    for (let k = -oh; k <= oh; k++) {
-      const win = 0.5 + 0.5 * Math.cos((Math.PI * k) / (oh + 1))
+    for (let k = -ol; k <= or; k++) {
+      const win = 0.5 + 0.5 * Math.cos((Math.PI * k) / ((k < 0 ? ol : or) + 1))
       const src = a + k * f
       const i0 = Math.floor(src)
       const fr = src - i0

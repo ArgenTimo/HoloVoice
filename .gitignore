@@ -7,3 +7,4 @@ native/win-sysaudio/*.exe
 native/win-sysaudio/*.obj
 native/win-sysaudio/tone.wav
 native/win-sysaudio/*.res
+native/neural-vc/__pycache__/

@@ -22,7 +22,8 @@ The process exits when stdin closes.
 
 How it works (same windowing as Seed-VC's real-time-gui.py): every --block-ms of input, the model
 converts a window of [2.5 s context | crossfade | block | 20 ms lookahead], and SOLA splices the
-result onto the previous block. An energy gate skips the model in silence.
+result onto the previous block. An energy gate skips the model in silence. The reference is normalized to
+--prompt-db and the output is held at --target-db (slow AGC + soft limiter), so every voice is equally loud.
 """
 from __future__ import annotations
 
@@ -242,6 +243,19 @@ def patch_for_graphs(seed_dir: str, device) -> None:
     gen.HiFTGenerator._istft = istft
 
 
+def active_level_db(x, rate: int) -> float:
+    """Speech level of a numpy signal, dBFS: mean power of the 20 ms frames within 30 dB of the loudest."""
+    import numpy as np
+    n = rate // 50
+    fr = np.asarray(x[: len(x) // n * n], dtype=np.float64).reshape(-1, n)
+    if not len(fr):
+        return -100.0
+    e = 10 * np.log10((fr ** 2).mean(axis=1) + 1e-12)
+    act = e[e > max(e.max() - 30, -70)]
+    return float(10 * np.log10(np.mean(10 ** (act / 10)))) if len(act) else -100.0
+
+
+PROMPT_DB = [-20.0]  # level the reference is brought to before it becomes the prompt (None: as recorded)
 STATIC_LEN = [0]  # sequence length for the patched sequence_mask (DiT tokens: time + style + frames)
 
 
@@ -377,14 +391,28 @@ class SeedVC:
     def make_prompt(self, path: str, prompt_sec: float) -> dict:
         """The target voice: the first prompt_sec seconds of the reference (silence trimmed)."""
         import librosa
+        import numpy as np
         import torchaudio
         import torchaudio.compliance.kaldi as kaldi
         torch = self.torch
         ref, _ = librosa.load(path, sr=self.sr, mono=True)
         ref, _ = librosa.effects.trim(ref, top_db=40)
-        ref = ref[: int(self.sr * prompt_sec)]
         if len(ref) < self.sr // 2:
             raise ValueError(f"voice reference too short: {path}")
+        n = int(self.sr * prompt_sec)
+        if len(ref) < n:
+            # a short reference is repeated: every prompt has the same length, so the CUDA graphs captured
+            # for the first voice are reused (a new shape would be captured mid-stream, a long stall)
+            gap = np.zeros(self.sr // 5, dtype=ref.dtype)
+            ref = np.concatenate([ref, gap] * (n // (len(ref) + len(gap)) + 1))
+        ref = ref[:n]
+        # the output's loudness follows the prompt's: every reference is brought to the same level
+        if PROMPT_DB[0] is not None:
+            level = active_level_db(ref, self.sr)
+            ref = ref * float(10 ** ((PROMPT_DB[0] - level) / 20))
+            peak = float(np.abs(ref).max())
+            if peak > 0.98:
+                ref = ref * (0.98 / peak)
         with torch.no_grad():
             r = torch.from_numpy(ref).to(self.device)
             r16 = torchaudio.functional.resample(r, self.sr, 16000)
@@ -427,11 +455,12 @@ class SeedVC:
 class Streamer:
     def __init__(self, vc: SeedVC, rate: int, block_ms: float, steps: int, prompt_sec: float,
                  extra_ce: float = 2.5, extra_dit: float = 0.5, right_ms: float = 20, xfade_ms: float = 40,
-                 gate_db: float = -50.0, hang_ms: float = 400, cfg_rate: float = 0.7):
+                 gate_db: float = -50.0, hang_ms: float = 400, cfg_rate: float = 0.7, target_db: float | None = -20.0):
         import torch
         import torchaudio.transforms as tat
         self.torch, self.vc = torch, vc
         self.rate, self.steps, self.prompt_sec = rate, steps, prompt_sec
+        self.want_steps = steps  # what was asked for; the adaptation goes below it and back
         self.gate_db, self.cfg_rate, self.hang_ms = gate_db, cfg_rate, hang_ms
         self.extra_ce, self.extra_dit = extra_ce, extra_dit
         zc = self.zc = rate // 50  # 20 ms, one content-feature frame
@@ -457,6 +486,14 @@ class Streamer:
         self.res_out = tat.Resample(vc.sr, rate).to(dev) if vc.sr != rate else None
         self.open_left = 0
         self.prompt: dict | None = None
+        # output level: a slow speech-level AGC towards target_db (None: off) and a soft limiter
+        self.target_db = target_db
+        # [speech level of the output before the gain (dB), level known (0/1), gain (dB)]
+        self.agc = torch.zeros(3, device=dev)
+        bs = self.block / rate
+        self.agc_up = torch.tensor(1 - math.exp(-bs / 0.5), device=dev)    # level rises: tau 0.5 s
+        self.agc_down = torch.tensor(1 - math.exp(-bs / 2.0), device=dev)  # level falls: tau 2 s
+        self.ramp = torch.linspace(0.0, 1.0, self.block, device=dev)
 
     @property
     def lookback(self) -> int:
@@ -468,6 +505,36 @@ class Streamer:
         self.input_16k.zero_()
         self.sola_buffer.zero_()
         self.open_left = 0
+        self.agc.zero_()
+
+    def _level(self, out):
+        """AGC: follow the output's speech level (20 ms frames that aren't pauses) and ramp the gain
+        towards target_db across the block; louder speech is followed faster than quieter. Then a soft
+        limiter above -1 dBFS. All on the GPU, no host syncs."""
+        torch = self.torch
+        if self.target_db is None:
+            return out
+        fr = out[: out.numel() // self.zc * self.zc].view(-1, self.zc)
+        p = fr.pow(2).mean(dim=1)
+        e = 10 * torch.log10(p + 1e-12)
+        lvl, have = self.agc[0], self.agc[1] > 0
+        floor = torch.where(have, torch.clamp(lvl - 20, min=-55.0), torch.full_like(lvl, -55.0))
+        act = (e > floor).float()
+        n = act.sum()
+        blk = 10 * torch.log10((p * act).sum() / n.clamp(min=1) + 1e-12)
+        a = torch.where(blk > lvl, self.agc_up, self.agc_down)
+        new = torch.where(have, lvl + a * (blk - lvl), blk)
+        upd = n >= 2
+        lvl = torch.where(upd, new, lvl)
+        have = have | upd
+        g_old = self.agc[2]
+        g_new = torch.where(have, torch.clamp(self.target_db - lvl, -12.0, 12.0), g_old)
+        self.agc = torch.stack([lvl, have.float(), g_new])
+        g0, g1 = 10 ** (g_old / 20), 10 ** (g_new / 20)
+        out = out * (g0 + (g1 - g0) * self.ramp[: out.numel()])
+        th = 0.89
+        mag = out.abs()
+        return torch.where(mag > th, out.sign() * (th + (1 - th) * torch.tanh((mag - th) / (1 - th))), out)
 
     def _push(self, x) -> None:
         """Shift one block into the window and its 16 kHz copy (resampled incrementally, like the GUI)."""
@@ -526,7 +593,7 @@ class Streamer:
                 y = torch.nn.functional.pad(y, (0, need - y.numel()))
             infer_wav = y
             state = "ran"
-        out = self._sola(infer_wav)
+        out = self._level(self._sola(infer_wav))
         return out.clamp(-1, 1).cpu().numpy().astype("<f4"), state
 
 
@@ -694,7 +761,7 @@ class Control(threading.Thread):
         try:
             msg = json.loads(line)
             if "steps" in msg:
-                self.st.steps = max(1, min(30, int(msg["steps"])))
+                self.st.steps = self.st.want_steps = max(1, min(30, int(msg["steps"])))
                 emit({"event": "steps", "steps": self.st.steps})
             if "gate_db" in msg:
                 self.st.gate_db = float(msg["gate_db"])
@@ -719,7 +786,7 @@ def main() -> int:
     ap.add_argument("--voice", type=str, help="target voice reference (wav)")
     ap.add_argument("--block-ms", type=float, default=180)
     ap.add_argument("--steps", type=int, default=6, help="diffusion steps")
-    ap.add_argument("--prompt-sec", type=float, default=3.0, help="seconds of the reference used as the prompt")
+    ap.add_argument("--prompt-sec", type=float, default=6.0, help="seconds of the reference used as the prompt")
     ap.add_argument("--gate-db", type=float, default=-50.0, help="energy gate threshold, dBFS per 20 ms")
     ap.add_argument("--hang-ms", type=float, default=400, help="gate hold time")
     ap.add_argument("--xfade-ms", type=float, default=40)
@@ -731,6 +798,10 @@ def main() -> int:
     ap.add_argument("--max-extra-ms", type=float, default=100, help="how much the latency may grow when "
                     "blocks come late, before late audio is dropped")
     ap.add_argument("--min-steps", type=int, default=3, help="steps are lowered down to this when the GPU can't keep up")
+    ap.add_argument("--target-db", type=float, default=-20.0, help="output speech level, dBFS (AGC + soft "
+                    "limiter); 0 turns the AGC off")
+    ap.add_argument("--prompt-db", type=float, default=-20.0, help="level the reference is normalized to "
+                    "before it becomes the prompt; 0 keeps it as recorded")
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--no-fp16", action="store_true")
     ap.add_argument("--no-graphs", action="store_true", help="don't use CUDA graphs")
@@ -762,8 +833,10 @@ def main() -> int:
             torch.set_num_interop_threads(1)
         except RuntimeError:
             pass
+        PROMPT_DB[0] = a.prompt_db if a.prompt_db < 0 else None
         st = Streamer(vc, a.rate, a.block_ms, a.steps, a.prompt_sec, extra_ce=a.extra_ce, extra_dit=a.extra_dit,
-                      right_ms=a.right_ms, xfade_ms=a.xfade_ms, gate_db=a.gate_db, hang_ms=a.hang_ms)
+                      right_ms=a.right_ms, xfade_ms=a.xfade_ms, gate_db=a.gate_db, hang_ms=a.hang_ms,
+                      target_db=a.target_db if a.target_db < 0 else None)
         st.prompt = vc.make_prompt(a.voice, a.prompt_sec)
         # warm-up: kernels, cuDNN/cuBLAS handles, the allocator. Speech-like noise passes the gate.
         rng = np.random.default_rng(0)
@@ -796,6 +869,7 @@ def main() -> int:
     times: list = []
     overruns = gated = skipped = blocks = 0
     win_overruns = 0
+    calm = 0  # stats windows in a row without overruns while the steps are lowered
     last_stats = time.perf_counter()
     est = float(np.median(warm[3:]))  # recent inference time, ms
     try:
@@ -819,6 +893,9 @@ def main() -> int:
                     gated += 1
                 else:
                     skipped += 1
+                    # est only learns from blocks that ran: without this, one long stall (another program
+                    # on the GPU) could inflate it so far that every later block is skipped, for good
+                    est *= 0.7
                 if not pipe.put(idx, y) or state == "skipped":
                     overruns += 1
                     win_overruns += 1
@@ -830,7 +907,20 @@ def main() -> int:
                 # GPU too slow (a game?): fewer steps
                 if win_overruns >= 2 and st.steps > a.min_steps:
                     st.steps -= 1
+                    calm = 0
                     emit({"event": "steps", "steps": st.steps, "reason": "overruns"})
+                elif win_overruns == 0 and st.steps < st.want_steps:
+                    # GPU free again: one step back up after ~20 s of speech without overruns (pauses don't
+                    # count), if the slowest recent block would still fit the budget with the extra step
+                    if len(times) >= 3:
+                        calm += 1
+                        budget = 1000 * (delay - st.block) / a.rate
+                        if calm >= 10 and float(arr.max()) * (st.steps + 1) / st.steps < 0.85 * budget:
+                            st.steps += 1
+                            calm = 0
+                            emit({"event": "steps", "steps": st.steps, "reason": "recovered"})
+                else:
+                    calm = 0
                 emit({"event": "stats", "block_ms": round(float(arr.mean()), 1),
                       "p95_ms": round(float(np.percentile(arr, 95)), 1), "max_ms": round(float(arr.max()), 1),
                       "overruns": overruns, "skipped": skipped, "gated": gated, "blocks": blocks,

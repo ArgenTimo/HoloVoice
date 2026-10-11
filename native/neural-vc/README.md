@@ -18,6 +18,12 @@ block. On top of that:
   `--max-extra-ms` (default 100 ms; `stats.latency_ms` shows the current value). Past that limit, the
   part of a late block that's past due is replaced with silence, so the latency stays bounded. Late blocks count as `overruns`. When they keep happening (for
   example, a game is using the GPU), the number of diffusion steps goes down, but never below `--min-steps`.
+  After about 20 s of speech without overruns, it goes back up one step at a time, as long as the slowest
+  recent block would still fit the budget.
+- **The same loudness for every voice.** The reference is brought to −20 dBFS before it becomes the
+  prompt (the output's level follows the prompt's), and a slow speech-level AGC with a soft limiter keeps
+  the output at about −20 dBFS (`--target-db`). Measured over 6 voices × 2 speakers: −20.1 dB ± 0.4 dB,
+  versus −14 dB ± 1.8 dB without it.
 - Torch is capped to 2 CPU threads. Library output goes to /dev/null so it can't corrupt the pipes.
 
 The app (`src/neural-vc.js`) runs it from its own install in `~/.local/share/holovoice`
@@ -42,8 +48,9 @@ native/neural-vc/install.sh --check  # {"ok":true,"cuda":true,"gpu":"...",...}
 ```
 
 The script uses `uv` to create a Python 3.10 venv (`venvs/seedvc`) with PyTorch 2.4.0+cu121. It clones
-Seed-VC at a pinned commit (`src/seed-vc`), downloads the checkpoints, and copies `voices/female.wav`,
-`voices/male.wav` and `ATTRIBUTION.txt`. Anything that's already there is kept.
+Seed-VC at a pinned commit (`src/seed-vc`), downloads the checkpoints, and copies the voices from `voices/`
+(`female*.wav`, `male*.wav`). Voice files that are already there are kept; `voices.json` and
+`ATTRIBUTION.txt` are always updated.
 **Run the venv's Python with `LD_LIBRARY_PATH` unset.** A system CUDA on that path breaks pip's CUDA
 libraries. Both the app and the script unset it.
 
@@ -64,11 +71,50 @@ python holovoice_vc.py --check
 It exits with code 0 when stdin closes. `latency_ms` covers the sidecar only: block + inference margin +
 SOLA/lookahead. The app's playback buffer comes on top of that.
 
-Useful options: `--block-ms 180`, `--steps 6`, `--prompt-sec 3` (how much of the reference is used),
+Useful options: `--block-ms 180`, `--steps 6`, `--prompt-sec 6` (how much of the reference is used),
+`--target-db -20` (output level, 0 = AGC off), `--prompt-db -20` (reference level, 0 = as recorded),
 `--gate-db -50`, `--margin-ms 0` (0 = measured), `--min-steps 3`, `--no-graphs`,
 `--log file` (library output, for debugging).
 
 ## Voices
 
-Any clean, single-speaker wav of 3 s or more works as a target. The first `--prompt-sec` seconds after the
-leading silence are used. Name it `female*.wav` or `male*.wav` in the voices folder.
+Three timbres per gender ship in `voices/`; `voices/voices.json` gives each an id (the file name), its
+gender and English/Russian labels and descriptions for the app:
+
+| file | label | output pitch (median) | source |
+|---|---|---|---|
+| `female.wav` (default) | Calm / Спокойный | ~205 Hz | Hi-Fi TTS 92 |
+| `female2.wav` | Warm / Тёплый | ~175 Hz | LibriTTS-R 3570 |
+| `female3.wav` | Bright / Звонкий | ~215 Hz | LibriTTS-R 1284 |
+| `male.wav` (default) | Baritone / Баритон | ~105 Hz | LibriTTS-R 1089 |
+| `male2.wav` | Deep / Низкий | ~80 Hz | VCTK p326 |
+| `male3.wav` | Young / Молодой | ~125 Hz | LibriTTS-R 7127 |
+
+Any clean, single-speaker wav of a few seconds works as a target. The first `--prompt-sec` seconds after
+the leading silence are used; a shorter reference is repeated to that length, so every voice gives the
+prompt the same shape and a switch never needs new CUDA graphs. Name it `female*.wav` or `male*.wav` in
+the voices folder.
+
+## Defaults and what they cost (RTX 3070 Laptop)
+
+Measured through the real streaming path (paced 10 ms writes, fd 3 voice switches), on 6 voices × the
+Russian male and female test recordings. UTMOS is low in absolute terms because the speech is Russian;
+compare rows, not to the usual English scale. Differences under about 0.1 are within run-to-run noise.
+
+| block / steps / prompt | ms per block (median, p95) | sidecar latency | UTMOS | similarity to target |
+|---|---|---|---|---|
+| 180 ms / 6 / 3 s (old default, no level control) | ~50, ~85 | 350 ms | 2.36 | 0.41 |
+| 180 ms / 6 / 3 s | ~55, ~90 | 350 ms | 2.45 | 0.41 |
+| **180 ms / 6 / 6 s (default)** | ~65, ~100 | 370–410 ms | 2.43–2.55 | 0.44 |
+| 180 ms / 7 / 3 s | ~67, ~100 | 360–390 ms | 2.46 | 0.40 |
+| 180 ms / 8 / 3 s | ~64, ~95 | 370–420 ms | 2.42 | 0.42 |
+| 180 ms / 8 / 6 s | ~90, ~130 | 390 ms | 2.51 | 0.42 |
+| 180 ms / 6 / 10 s | ~95, ~150 | 400–440 ms | 2.44 | 0.44 |
+| 120 ms / 6 / 3 s | ~51, ~95 | 290–340 ms | 2.31 | 0.41 |
+| 120 ms / 8 / 3 s | ~58, ~97 | 340 ms | 2.43 | 0.41 |
+
+More diffusion steps (7, 8) didn't measurably improve quality and cost more time. A 6 s prompt raises the
+similarity to the target voice at little cost, and it's the default. 120 ms blocks are about 60 ms faster
+but need 8 steps to keep the quality, which leaves little headroom on a busy GPU (`--block-ms 120 --steps 8`
+for low latency). The latency depends on the inference time measured at warm-up, so it's higher while
+other programs load the CPU or GPU.

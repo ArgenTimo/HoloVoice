@@ -1,25 +1,59 @@
 HoloVoice neural voices: target voice references
 =================================================
 
-female.wav  (22.05 kHz mono, 14.0 s; the sidecar uses the first 3 s after leading silence)
+Each file is a short recording of one real speaker from a public speech dataset. The sidecar uses the first
+--prompt-sec seconds (default 6) after the leading silence, brought to a fixed level. voices.json names
+them for the app (the timbre "styles" of the neural female / male voices).
+
+All files: 22.05 kHz mono 16-bit PCM. Changes to every file: resampled to 22.05 kHz, silence trimmed,
+clips concatenated, cut to at most 14 s, peak-normalized.
+
+female.wav  (14.0 s)  default female voice, "Calm"
   Speaker:  Hi-Fi TTS speaker 92 (a LibriVox volunteer reader), "clean" subset
   Source:   Hi-Fi Multi-Speaker English TTS Dataset (Hi-Fi TTS), Bakhturina et al., NVIDIA, 2021
             https://www.openslr.org/109/
   Clips:    audio/92_clean/10425/secretagent_05_conrad_0442.flac
             audio/92_clean/10425/secretagent_06_conrad_0514.flac
-            (J. Conrad, "The Secret Agent"; LibriVox public-domain recording), trimmed and concatenated
+            (J. Conrad, "The Secret Agent"; LibriVox public-domain recording)
   License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
-  Changes:  resampled to 22.05 kHz, concatenated, cut to 14 s
 
-male.wav  (22.05 kHz mono, 14.0 s)
-  Speaker:  LibriTTS-R speaker 1089 (a LibriVox volunteer reader), test-clean subset
+female2.wav  (10.9 s)  "Warm"
+  Speaker:  LibriTTS-R speaker 3570 (a LibriVox volunteer reader), test-clean subset
   Source:   LibriTTS-R, Koizumi et al., Google, 2023 (restored LibriTTS, derived from LibriSpeech/LibriVox)
             https://www.openslr.org/141/
+  Clips:    3570_5695_000001_000003, 3570_5695_000008_000007 (LibriVox public-domain recording)
+  License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
+female3.wav  (11.8 s)  "Bright"
+  Speaker:  LibriTTS-R speaker 1284 (a LibriVox volunteer reader), test-clean subset
+  Source:   LibriTTS-R, Koizumi et al., Google, 2023, https://www.openslr.org/141/
+  Clips:    1284_1180_000020_000000, 1284_1180_000027_000000 (LibriVox public-domain recording)
+  License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
+male.wav  (14.0 s)  default male voice, "Baritone"
+  Speaker:  LibriTTS-R speaker 1089 (a LibriVox volunteer reader), test-clean subset
+  Source:   LibriTTS-R, Koizumi et al., Google, 2023, https://www.openslr.org/141/
   Clip:     1089_134691_000005_000005
             (J. Joyce, "A Portrait of the Artist as a Young Man"; LibriVox public-domain recording)
   License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
-  Changes:  resampled to 22.05 kHz, cut to 14 s
 
-Chosen from 41 candidates: LJSpeech (public domain), LibriTTS-R and Hi-Fi TTS (CC BY 4.0).
-Selection was done by converting HoloVoice's Russian test recordings with the streaming sidecar in both
-directions and scoring UTMOS, speaker similarity to the reference, and Whisper CER.
+male2.wav  (14.0 s)  "Deep"
+  Speaker:  VCTK speaker p326 (male, 26, Australian English)
+  Source:   CSTR VCTK Corpus: English Multi-speaker Corpus for CSTR Voice Cloning Toolkit, version 0.92,
+            Yamagishi, Veaux, MacDonald, University of Edinburgh, Centre for Speech Technology Research, 2019
+            https://doi.org/10.7488/ds/2645
+  Clips:    wav48_silence_trimmed/p326/p326_025_mic1.flac, p326_072_mic1.flac, p326_140_mic1.flac,
+            p326_156_mic1.flac
+  License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
+male3.wav  (14.0 s)  "Young"
+  Speaker:  LibriTTS-R speaker 7127 (a LibriVox volunteer reader), test-clean subset
+  Source:   LibriTTS-R, Koizumi et al., Google, 2023, https://www.openslr.org/141/
+  Clips:    7127_75946_000029_000000, 7127_75946_000022_000001 (LibriVox public-domain recording)
+  License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+
+Chosen from 90 candidates: LJSpeech (public domain), LibriTTS-R, Hi-Fi TTS and VCTK (CC BY 4.0). Each
+candidate converted HoloVoice's Russian test recordings (one male and one female speaker) through the
+streaming sidecar. The scores were UTMOS, speaker similarity to the reference (WavLM-ECAPA), Whisper CER and
+pitch. The three voices per gender were picked to sound clearly different (median output pitch about 205 / 175 / 215 Hz
+female, 105 / 80 / 125 Hz male).

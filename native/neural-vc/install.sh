@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs the optional neural voices for HoloVoice (Linux, NVIDIA GPU) into ~/.local/share/holovoice
 # (or $HOLOVOICE_HOME): a Python venv with CUDA PyTorch, Seed-VC at a pinned commit, its checkpoints and the
-# two target voices. Idempotent: anything already in place is kept — run it again to finish an install that
+# target voices. Idempotent: anything already in place is kept — run it again to finish an install that
 # was interrupted. Nothing outside that folder is touched (uv may cache downloads in ~/.cache/uv).
 #
 #   native/neural-vc/install.sh            install / complete the install
@@ -101,11 +101,16 @@ for fn in ("config.json", "preprocessor_config.json", "pytorch_model.bin"):
 EOF
 
 # --- target voices ------------------------------------------------------------------------------------
-# female.wav / male.wav (+ ATTRIBUTION.txt) ship next to this script. Existing files are kept, so a
-# voice the user replaced stays.
+# female*.wav / male*.wav, voices.json (their labels) and ATTRIBUTION.txt ship next to this script.
+# Existing voice files are kept, so a voice the user replaced stays; the two text files are always updated.
 if [[ -d "$HERE/voices" ]]; then
   for f in "$HERE"/voices/*; do
-    [[ -e "$HV/voices/$(basename "$f")" ]] || { say "Adding voice $(basename "$f")"; cp "$f" "$HV/voices/"; }
+    b="$(basename "$f")"
+    if [[ "$b" == "voices.json" || "$b" == "ATTRIBUTION.txt" ]]; then
+      cp "$f" "$HV/voices/"
+    elif [[ ! -e "$HV/voices/$b" ]]; then
+      say "Adding voice $b"; cp "$f" "$HV/voices/"
+    fi
   done
 fi
 [[ -f "$HV/voices/female.wav" && -f "$HV/voices/male.wav" ]] \

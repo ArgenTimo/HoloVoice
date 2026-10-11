@@ -769,7 +769,14 @@ function buildSetup(): void {
       <li id="st-app"><div class="st-mark"></div><div class="st-body"><b>${t('setup.appT')}</b><div class="st-text"></div><div class="st-ctl"></div></div></li>
       <li id="st-try"><div class="st-mark"></div><div class="st-body"><b>${t('setup.tryT')}</b><div class="st-text"></div><div class="st-ctl"></div></div></li>
     </ol>
-    <footer><button class="btn primary" id="setup-done">${t('setup.done')}</button></footer>`
+    <footer><span class="spacer"></span><button class="btn primary" id="setup-done">${t('setup.done')}</button></footer>`
+  // AppImage: offer the applications menu entry (and the `holovoice` command)
+  holo.linuxCanInstall?.().then((can) => {
+    if (!can) return
+    const b = el('button', 'btn', t('setup.menuAdd'))
+    b.onclick = async () => { if (await holo.linuxInstall()) { b.remove(); toast(t('setup.menuDone')) } }
+    box.querySelector('footer')!.prepend(b)
+  }).catch(() => {})
   $('setup-done').onclick = async () => {
     ui = await holo.setUi({ onboarded: true })
     closeModal($('modal-setup'))

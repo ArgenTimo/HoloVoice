@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('holo', {
   minimize: () => ipcRenderer.invoke('win:minimize'),
   close: () => ipcRenderer.invoke('win:close'),
   quit: () => ipcRenderer.invoke('app:quit'),
+  linuxCanInstall: () => ipcRenderer.invoke('linux:canInstall'),
+  linuxInstall: () => ipcRenderer.invoke('linux:install'),
   setHeight: (h) => ipcRenderer.invoke('win:height', h),
   compact: (on, h) => ipcRenderer.invoke('win:compact', on, h),
   open: (url) => ipcRenderer.invoke('open', url),

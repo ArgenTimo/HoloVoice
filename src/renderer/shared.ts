@@ -124,6 +124,8 @@ export interface HoloApi {
   onResume(cb: () => void): void
   // neural voices (optional GPU mode)
   quit(): Promise<void>
+  linuxCanInstall(): Promise<boolean>
+  linuxInstall(): Promise<boolean>
   updateAvailable(): Promise<string | null>
   onUpdateAvailable(cb: (version: string) => void): void
   openLogs(): Promise<string>

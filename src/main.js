@@ -547,6 +547,28 @@ ipcMain.handle('routing:sys', async (_e, on, rate) => {
   }
 })
 
+// ---------------------------------------------------------------- Linux AppImage: applications menu + command
+
+const desktopEntry = () => path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'applications', 'holovoice.desktop')
+/** Is there something to offer: an AppImage that isn't in the applications menu yet */
+ipcMain.handle('linux:canInstall', () => !!process.env.APPIMAGE && !fs.existsSync(desktopEntry()))
+ipcMain.handle('linux:install', () => {
+  const exe = process.env.APPIMAGE
+  if (!exe) return false
+  const icon = path.join(app.getPath('userData'), 'icon.png')
+  try { fs.copyFileSync(ICON, icon) } catch { /* no icon */ }
+  fs.mkdirSync(path.dirname(desktopEntry()), { recursive: true })
+  fs.writeFileSync(desktopEntry(), [
+    '[Desktop Entry]', 'Type=Application', 'Name=HoloVoice', 'Comment=Real-time effects for your voice and computer sound',
+    `Exec="${exe}" --no-sandbox %U`, `Icon=${icon}`, 'Categories=Audio;AudioVideo;', 'StartupWMClass=HoloVoice', 'Terminal=false', '',
+  ].join('\n'))
+  // the `holovoice` command for system shortcuts (Wayland) and scripts
+  const bin = path.join(os.homedir(), '.local', 'bin', 'holovoice')
+  fs.mkdirSync(path.dirname(bin), { recursive: true })
+  fs.writeFileSync(bin, `#!/bin/sh\nexec "${exe}" --no-sandbox "$@"\n`, { mode: 0o755 })
+  return true
+})
+
 // ---------------------------------------------------------------- diagnostics
 
 ipcMain.handle('app:quit', () => quit())

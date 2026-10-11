@@ -78,7 +78,10 @@ base = probe(); check('tone audible before capture', base > 0.02, '%.4f' % base)
 
 h = Helper(dummy.pid, '--no-mute'); time.sleep(1.0)
 mark = len(h.data); time.sleep(1.5)
-plain = h.rms(mark); h.stop()
+plain = h.rms(mark)
+both = probe(2000) # does a running process-loopback capture disturb the endpoint probe?
+check('probe undisturbed by a running capture', abs(both - base) < base * 0.1, '%.4f' % both)
+h.stop()
 check('captures without attenuation', plain > 0.02, 'rms %.4f' % plain)
 
 h = Helper(dummy.pid); time.sleep(1.5)

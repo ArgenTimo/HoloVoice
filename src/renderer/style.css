@@ -479,3 +479,8 @@ li.wait > .st-mark { border-color: var(--line2); }
 .hk-mode { width: 100% !important; }
 .hk-mode[hidden] { display: block !important; visibility: hidden; }
 .hk-busy { grid-column: 1 / -1; }
+/* compact: the select already names the effect */
+body.compact .lc-fx { display: none; }
+/* window buttons: app toggles | minimize, close */
+#btn-min { margin-left: 6px; position: relative; }
+#btn-min::before { content: ''; position: absolute; left: -5px; top: 7px; bottom: 7px; width: 1px; background: var(--line2); }

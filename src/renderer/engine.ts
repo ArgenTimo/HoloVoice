@@ -128,9 +128,14 @@ class Lane {
     this.inGain.connect(this.hpIn).connect(this.direct).connect(this.gate)
     this.hpIn.connect(this.anIn)
     this.outGain.connect(this.hpOut).connect(L)
-    L.connect(this.ctx.destination)
-    L.connect(this.anOut)
-    L.connect(this.tap)
+    // Chromium's compressor adds automatic make-up gain ((1/fullRangeGain)^0.6 → +1.71 dB at -3 dB, 20:1):
+    // take it back so "Clean" stays at the original level
+    const makeup = c.createGain()
+    makeup.gain.value = 10 ** (-0.6 * 3 * (1 - 1 / 20) / 20)
+    L.connect(makeup)
+    makeup.connect(this.ctx.destination)
+    makeup.connect(this.anOut)
+    makeup.connect(this.tap)
     this.outGain.gain.value = this.cfg.gain / 100
     this.runGate()
   }

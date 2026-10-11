@@ -1,11 +1,24 @@
 // Voice fundamental pitch tracking (YIN), for steering the voice to a target pitch, autotune and the monotone robot.
 // Runs on a signal decimated to ~12 kHz: enough for voice, and tens of times cheaper.
 
+// speaker reference: a pitch histogram in quarter-semitone bins from 50 Hz, with exponentially fading counts
+const REF_BINS = 200 // 50 Hz … ~900 Hz
+const REF_TAU = 1500 // voiced analyses (~5.3 ms each): the histogram remembers ~8 s of voice
+
 export class PitchTracker {
   /** current pitch, Hz (0 = unvoiced: pause, sibilants) */
   f0 = 0
   /** speaker's average pitch over the last seconds, Hz (0 = no voice heard yet) */
   avg = 0
+  /** long-term speaker reference, Hz (0 = not yet): the median pitch of the last ~8 s of voice (a fading
+   *  histogram). Steering to a target pitch divides by this, not by avg: avg follows phrase-level intonation within
+   *  ~2 s, so the shift itself wobbled with the melody (measured: female → male UTMOS +0.12 with a stable reference).
+   *  A median, not a mean, so the high start of a phrase or octave errors don't pull it for seconds */
+  ref = 0
+  private readonly refHist = new Float32Array(REF_BINS)
+  private refW = 1 // weight of the next count (grows instead of decaying every bin; renormalized when large)
+  private refSum = 0
+  private refSince = 0
   /** confidence of the last decision, 0..1 */
   clarity = 0
 
@@ -127,7 +140,32 @@ export class PitchTracker {
       v.sort()
       this.avg = v[hn >> 1]
     }
+    // reference histogram (allocation-free; the median is re-read every 8 analyses, ~43 ms). Detections at the
+    // very bottom of the range are mostly rumble before speech starts, not a voice: they are left out
+    if (f >= 70) this.addRef(f)
     void dt
+  }
+
+  private addRef(f: number): void {
+    const bin = Math.max(0, Math.min(REF_BINS - 1, Math.round(48 * Math.log2(f / 50))))
+    this.refHist[bin] += this.refW
+    this.refSum += this.refW
+    this.refW *= 1 + 1 / REF_TAU
+    if (this.refW > 1e6) {
+      for (let i = 0; i < REF_BINS; i++) this.refHist[i] /= this.refW
+      this.refSum /= this.refW
+      this.refW = 1
+    }
+    if (++this.refSince >= 8 || (this.ref <= 0 && this.refSum >= 10)) {
+      this.refSince = 0
+      const half = this.refSum / 2
+      let acc = 0, i = 0
+      while (i < REF_BINS - 1 && acc + this.refHist[i] < half) acc += this.refHist[i++]
+      // interpolate inside the bin, then smooth: a reference that steps by quarter tones would step the shift too
+      const fr = this.refHist[i] > 0 ? (half - acc) / this.refHist[i] : 0.5
+      const r = 50 * 2 ** ((i - 0.5 + fr) / 48)
+      this.ref = this.ref > 0 ? this.ref * (r / this.ref) ** 0.3 : r
+    }
   }
 
   private unvoiced(): void {

@@ -41,8 +41,15 @@ export class Psola {
   private floor = 1
   private pSmooth = 0
   private wasVoiced = false
-  /** synthesis period smoothing: weight of the new value (1 = no smoothing) */
-  smoothK = 0.12
+  /** synthesis period smoothing: weight of the new value (1 = no smoothing). 0.12 removed marking errors but also the
+   *  voice's natural period-to-period variation, and grains drifted off their analysis marks: even an unshifted voice
+   *  lost ~0.4 UTMOS. 0.5 keeps most of the natural variation while still damping single misplaced marks */
+  smoothK = 0.5
+  /** the same when raising pitch noticeably: a male voice's period-to-period irregularity, copied into a female
+   *  or child voice, reads as male/hoarse (gender classifier on a rough 98 Hz voice: 0.96 female at 0.12, 0.12 at 0.3) */
+  smoothUp = 0.15
+  /** grain shortening when raising pitch: half-length × ratio^-shrink */
+  shrink = 0.6
   /** snapping marks to the energy peak, fraction of a period (0 = off) */
   refine = 0
   /** asymmetric window for voiced grains (up to the neighbouring pulses) */
@@ -51,8 +58,15 @@ export class Psola {
   selfVoicing = true
   rVoiced = 0.3 // minimum correlation when the detector says "voiced"
   rHold = 0.7 // when the detector has lost the voice but we carry on
+  rStart = 0.8 // a voiced onset found by PSOLA itself, before the detector reports it
+  /** onsets are searched for only when the pitch ratio is below this */
+  startBelow = 0.97
+  /** the speaker's typical pitch, Hz (0 = unknown): where to look for the period of a voice onset */
+  priorHz = 0
+  private lastVoiced = -1e9 // position of the last voiced mark
   private lastPeriod = 0
   private readonly maxHalf: number
+  private readonly minP: number
 
   constructor(private readonly sampleRate: number, readonly latency: number) {
     // below the first formant: one peak per period, so marks don't jump between two peaks within a period
@@ -61,6 +75,7 @@ export class Psola {
     this.tu = Math.round(sampleRate * 0.008) // unvoiced segments: a grain every 8 ms
     // a grain needs half a period of lookahead: the given latency caps the longest period
     this.maxHalf = Math.floor(latency * 0.45)
+    this.minP = Math.round(sampleRate / 600)
     this.lastMark = 0
     this.nextSyn = 0
   }
@@ -84,6 +99,7 @@ export class Psola {
     this.voicedRun = false
     this.wasVoiced = false
     this.lastPeriod = 0
+    this.lastVoiced = -1e9
     this.lastMark = Math.max(0, this.t - this.latency - this.tu)
     this.nextSyn = 0
   }
@@ -130,9 +146,30 @@ export class Psola {
     // the pitch detector misses some voiced frames (~14%): if we were just voiced, continue with the last
     // period and let the similarity of adjacent periods decide (below)
     const tracked = f0 > 0 ? Math.min(this.sampleRate / f0, this.maxHalf) : 0
-    const period = tracked || (this.voicedRun && this.selfVoicing ? this.lastPeriod : 0)
+    // (periods shorter than ~1.7 ms are not a voice: a correlation chain on rumble or DC can shrink the period
+    // step by step, and a zero step would never advance the marks)
+    const minP = this.minP
+    let period = tracked || (this.voicedRun && this.selfVoicing && this.lastPeriod >= minP ? this.lastPeriod : 0)
     const horizon = this.t - 2
     while (true) {
+      if (period <= 0 && this.selfVoicing && this.ratio < this.startBelow) {
+        // the pitch detector reports a voice onset only after its 30 ms window fills with it: until then the
+        // first syllable's start played at the original pitch (a female "blip" before each male syllable). Look
+        // for periodicity ourselves around the expected period (the last one heard or the speaker's average).
+        // Only when lowering the pitch: measured on 5 + 5 speakers it helps female → male (UTMOS +0.04) but hurts
+        // male → female (−0.11): onsets of low male voices are often creaky, and an octave-up creak sounds worse
+        // than a few unshifted milliseconds
+        const recent = this.lastPeriod > 0 && this.lastMark - this.lastVoiced < this.sampleRate * 0.3
+        const P = recent ? this.lastPeriod : this.priorHz > 0 ? this.sampleRate / this.priorHz : 0
+        // lookahead it needs: unvoiced marks then trail the input by up to ~1.6 periods (synthesis needs them
+        // only up to latency·0.55 behind the input, so there is room for voices down to ~85 Hz)
+        const need = Math.round(P * 1.3) + Math.round(P / 4) + this.tu
+        if (P >= minP && P < this.maxHalf && need < this.latency * 0.5) {
+          if (this.lastMark + need > horizon) break
+          const found = this.periodAt(this.lastMark + this.tu, P)
+          if (found > 0) period = found
+        }
+      }
       if (period > 0) {
         if (!this.voicedRun) {
           // start of a voiced segment: the first mark goes on a glottal pulse (energy peak within one period after
@@ -181,8 +218,15 @@ export class Psola {
           if (r < (tracked ? this.rVoiced : this.rHold)) {
             this.voicedRun = false
             this.pushMark(this.lastMark + this.tu, 0)
+            if (!tracked) period = 0
             continue
           }
+        }
+        if (best - this.lastMark < minP) {
+          this.voicedRun = false
+          this.pushMark(this.lastMark + this.tu, 0)
+          period = 0
+          continue
         }
         this.lastPeriod = best - this.lastMark
         // stay locked on the pulse: the correlation chain can slowly drift in phase, so snap the mark to a nearby
@@ -194,6 +238,7 @@ export class Psola {
           if (pv > this.env[best & MASK] * 1.15) best = pk
         }
         this.pushMark(best, best - this.lastMark)
+        this.lastVoiced = best
       } else {
         this.voicedRun = false
         const m = this.lastMark + this.tu
@@ -201,6 +246,32 @@ export class Psola {
         this.pushMark(m, 0)
       }
     }
+  }
+
+  /** Period near P (±30%) at position m if the signal clearly repeats there (normalized correlation ≥ rStart), else 0 */
+  private periodAt(m: number, P: number): number {
+    const x = this.x, hw = Math.round(P / 4)
+    const lo = Math.round(P * 0.7), hi = Math.round(P * 1.3)
+    let e0 = 0
+    for (let k = -hw; k <= hw; k += 3) { const u = x[(m + k) & MASK]; e0 += u * u }
+    if (e0 < 1e-7) return 0 // silence
+    let best = 0, bv = this.rStart
+    for (let L = lo; L <= hi; L += 2) {
+      let c = 0, e1 = 0
+      for (let k = -hw; k <= hw; k += 3) { const v = x[(m + L + k) & MASK]; c += x[(m + k) & MASK] * v; e1 += v * v }
+      const r = e1 > 0 ? c / Math.sqrt(e0 * e1) : 0
+      if (r > bv) { bv = r; best = L }
+    }
+    // a double period repeats too: prefer the true one if the signal repeats nearly as well at half the lag
+    const h = Math.round(best / 2)
+    if (best > 0 && h >= this.minP) {
+      for (let L = h - 3; L <= h + 3; L++) {
+        let c = 0, e1 = 0
+        for (let k = -hw; k <= hw; k += 3) { const v = x[(m + L + k) & MASK]; c += x[(m + k) & MASK] * v; e1 += v * v }
+        if (e1 > 0 && c / Math.sqrt(e0 * e1) > this.rStart - 0.1) return L
+      }
+    }
+    return best
   }
 
   private pushMark(pos: number, T: number): void {
@@ -246,11 +317,20 @@ export class Psola {
       // and alignment would pull the grain toward the old period and eat the pitch shift
       // grain window (as in Praat): left up to the previous pulse, right up to the next; with uneven periods
       // a symmetric window caught pieces of neighbouring pulses
-      if (voiced && this.asym) this.grain(a, s, back, fwd || T)
+      if (voiced && this.asym) {
+        // raising pitch packs the two-period grains several deep (4× at an octave up): neighbouring grains, never
+        // quite identical, then interfere into a rough, phasey tone. Shorter grains (ratio^-0.6: ~1.3 output periods
+        // at an octave up) overlap less; the formants widen only slightly. Measured: HNR +1 dB, shimmer −2 points
+        const g = this.ratio > 1 ? this.ratio ** -this.shrink : 1
+        this.grain(a, s, back * g, (fwd || T) * g)
+      }
       else this.grain(voiced ? a : a + this.align(a, s, half), s, half, half)
       // synthesis step follows the smoothed period: otherwise mark irregularity (vocal jitter + marking errors) is copied
       // to the output, and jitter is the acoustic basis of hoarseness; Praat does the same (new periods along a smooth curve)
-      if (voiced) this.pSmooth = this.wasVoiced ? this.pSmooth + (T - this.pSmooth) * this.smoothK : T
+      if (voiced) {
+        const k = this.ratio > 1.06 ? this.smoothUp : this.smoothK
+        this.pSmooth = this.wasVoiced ? this.pSmooth + (T - this.pSmooth) * k : T
+      }
       this.wasVoiced = voiced
       this.nextSyn = s + Math.max(16, Math.round(voiced ? this.pSmooth / this.ratio : this.tu))
     }

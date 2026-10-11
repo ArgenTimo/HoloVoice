@@ -251,6 +251,10 @@ class Halo {
   }
 }
 
+/** Intonation range scaling under autoTarget, per octave of shift up / down (see process) */
+const INTONATION_UP = 0.2
+const INTONATION_DOWN = 0.15
+
 /** Pitch levels for "steps", semitones around the flattened pitch (mostly small moves, sometimes a big jump) */
 const STEP_LEVELS = [-3, -2, -1, 0, 1, 2, 3, 5]
 
@@ -315,6 +319,8 @@ class HoloVoice extends AudioWorkletProcessor {
   private ch: Channel[] = []
   private tracker = new PitchTracker(sampleRate)
   private corr = 0 // autotune/monotone correction, semitones (smoothed; held during pauses)
+  private dev = 0 // current pitch relative to the speaker's reference, octaves (smoothed; held during pauses)
+  private readonly devK = 1 - Math.exp(-128 / (0.02 * sampleRate))
   private report = 0
   private vibPhase = 0
   // "steps" (old concatenative text-to-speech): the pitch holds a level for a syllable-sized segment, then jumps
@@ -380,12 +386,27 @@ class HoloVoice extends AudioWorkletProcessor {
     tr.every = needF0 ? 256 : 2048
     if (input[0]) tr.push(input[0])
     // shift: manual + toward the target pitch (based on average pitch, so intonation is kept)
+    // (the long-term reference, not the 2 s median: that one follows phrase-level intonation and flattened it)
     let semis = pitch
-    if (autoTarget > 0.001 && tr.avg > 0) semis += autoTarget * 12 * Math.log2(targetHz / tr.avg)
+    const ref = tr.ref || tr.avg // (a voice entirely below 70 Hz never fills the reference)
+    const toTarget = autoTarget > 0.001 && ref > 0 ? Math.log2(targetHz / ref) : 0
+    semis += autoTarget * 12 * toTarget
     semis = Math.max(-24, Math.min(24, semis))
     // timbre follows the shift: in people, formants rise with the voice but less (~0.4 of the pitch shift)
     // (in real voices formants are higher by about 0.27 of the pitch difference: male → female ≈ +18%)
     const fmt = Math.max(-12, Math.min(12, formant + follow * 0.27 * (semis - pitch)))
+    // intonation range follows the target too: higher voices move more in pitch (female speech has wider excursions
+    // than male, children wider still). Deviations of the current pitch from the speaker's reference are scaled by
+    // `range` (×1.2 for male → female, ×0.85 for female → male); the deviation is clamped (octave errors of the
+    // tracker must not swing the pitch) and smoothed, and held through unvoiced stretches
+    if (toTarget !== 0) {
+      const range = toTarget > 0 ? 1 + INTONATION_UP * Math.min(1, toTarget) : 1 + INTONATION_DOWN * Math.max(-1, toTarget)
+      if (tr.f0 > 0) {
+        const dev = Math.max(-0.7, Math.min(0.7, Math.log2(tr.f0 / ref)))
+        this.dev += (dev - this.dev) * this.devK
+      }
+      semis = Math.max(-24, Math.min(24, semis + autoTarget * 12 * (range - 1) * this.dev))
+    }
     // steps: a new pitch level at each voiced onset or after 120–220 ms
     if (steps > 0.001) {
       const voiced = tr.f0 > 0
@@ -463,6 +484,7 @@ class HoloVoice extends AudioWorkletProcessor {
       if (psola > 0.001 || st.psMix > 0.001) {
         st.ps.ratio = 2 ** ((semis + vibrato * 0.8 * Math.sin(this.vibPhase)) / 12)
         st.ps.formant = 2 ** (fmt / 12)
+        st.ps.priorHz = ref
         st.ps.process(x, st.psBuf, tr.f0)
       } else st.ps.feed(x)
       const target = active ? 1 : 0

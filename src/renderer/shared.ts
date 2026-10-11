@@ -14,8 +14,11 @@ export interface LaneSettings {
 export interface Settings {
   lanes: Record<LaneId, LaneSettings>
   mic: string; out: string; monitor: boolean; monitorVol: number
+  /** the user's own voice: effects with a fixed pitch/formant shift adjust to it (neutral — as designed) */
+  speaker: Speaker
   custom: CustomEffect[] // custom effects
 }
+export type Speaker = 'neutral' | 'male' | 'female'
 export interface Hint { html: string; warn: boolean }
 export interface Device { id: string; label: string }
 
@@ -45,6 +48,7 @@ export type Cmd =
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }
+  | { type: 'speaker'; value: Speaker }
   /** hotkey: toggle / next / prev / effect id */
   | { type: 'hotkey'; lane: LaneId; action: string }
   /** held hotkey: down — apply the action, up — return to the state before it */

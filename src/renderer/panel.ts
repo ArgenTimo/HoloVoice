@@ -5,7 +5,7 @@
 import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { CUSTOM_ICONS, DEFAULT_CUSTOM_ICON, applyIcons, icon, iconEl } from './icons'
-import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type UiConfig } from './shared'
+import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type Speaker, type UiConfig } from './shared'
 
 let st: EngineState | null = null
 let ui: UiConfig
@@ -16,7 +16,7 @@ const LANE_ICO: Record<LaneId, string> = { mic: 'mic', sys: 'speaker' }
 
 const BUILTIN_GROUPS: [string, EffectId[]][] = [
   ['grp.voices', ['clean', 'male', 'female', 'child', 'autotune', 'giant', 'chipmunk', 'whisper']],
-  ['grp.characters', ['demon', 'ghost', 'digital', 'smolder']],
+  ['grp.characters', ['demon', 'divine', 'tts', 'ghost', 'digital', 'smolder']],
   ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'vhs', 'radio', 'cave']],
 ]
 /** Catalog groups: built-in + "My effects", if any */
@@ -415,6 +415,7 @@ function renderDevices(): void {
   fillSelect($('out'), st.outs, st.S.out)
   $<HTMLInputElement>('monitor').checked = st.S.monitor
   $<HTMLInputElement>('monitor-vol').value = String(st.S.monitorVol)
+  $<HTMLSelectElement>('speaker').value = st.S.speaker ?? 'neutral'
 }
 
 function render(): void {
@@ -432,6 +433,18 @@ function render(): void {
   renderCatalog()
   renderInspector()
   renderDevices()
+}
+
+// ---------------------------------------------------------------- the user's own voice
+
+/** "My voice: neutral / male / female" — effects with a fixed shift adjust to it */
+function buildSpeaker(): void {
+  const sel = $<HTMLSelectElement>('speaker')
+  const value = sel.value || 'neutral'
+  sel.innerHTML = ''
+  for (const v of ['neutral', 'male', 'female'] as Speaker[]) sel.add(new Option(t(`speaker.${v}`), v))
+  sel.value = value
+  sel.onchange = () => holo.cmd({ type: 'speaker', value: sel.value as Speaker })
 }
 
 // ---------------------------------------------------------------- hotkeys
@@ -702,6 +715,7 @@ async function main(): Promise<void> {
   const mon = $<HTMLInputElement>('monitor'), monVol = $<HTMLInputElement>('monitor-vol')
   mon.onchange = () => holo.cmd({ type: 'monitor', on: mon.checked })
   monVol.oninput = () => holo.cmd({ type: 'monitorVol', value: Number(monVol.value) })
+  buildSpeaker()
   $<HTMLSelectElement>('mic').onchange = (e) => holo.cmd({ type: 'mic', id: (e.target as HTMLSelectElement).value })
   $<HTMLSelectElement>('out').onchange = (e) => holo.cmd({ type: 'out', id: (e.target as HTMLSelectElement).value })
 

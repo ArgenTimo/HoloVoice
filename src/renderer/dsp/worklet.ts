@@ -1,6 +1,7 @@
 // AudioWorklet "holo-voice": pitch, timbre, robot, whisper, noise reduction, vibrato (phase vocoder, pv.ts)
-// + growl (rattle, rasp, undertone) + degradation (bits, sample rate). Tracks voice pitch (pitch.ts): steering to a
-// target pitch (any speaker's voice to ~110 Hz male, ~210 female…), timbre following the shift, autotune, monotone (robot).
+// + growl (rattle, rasp, undertone) + halo (choir, shimmer) + degradation (bits, sample rate). Tracks voice pitch
+// (pitch.ts): steering to a target pitch (any speaker's voice to ~110 Hz male, ~210 female…), timbre following the
+// shift, autotune, monotone (robot).
 // Every 200 ms posts { f0, avg } to the port; the panel shows "your voice ≈ … Hz".
 // Pitch and timbre come from either the vocoder or PSOLA (psola.ts, psola parameter): PSOLA sounds more natural for
 // voice changing (male/female/child); the vocoder is needed for whisper, noise reduction and the buzzing robot.
@@ -18,13 +19,51 @@ declare class AudioWorkletProcessor {
 }
 
 const PARAMS = ['pitch', 'formant', 'robot', 'whisper', 'crush', 'decimate', 'denoise', 'vibrato', 'vibratoHz',
-  'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola', 'growl', 'sub'] as const
+  'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola', 'growl', 'sub', 'fry', 'rasp', 'octave', 'halo', 'steps'] as const
 
-/** Growl ("false-chord" / death-metal texture), applied to the shifted voice. Two independent amounts:
+/** Delay-line pitch shifter ("rotating tape heads"): two read taps sweep through a window of recent input and
+ *  are crossfaded with complementary sin² windows. Cheap, works on any sound (chords too), slightly grainy — fine
+ *  for layers mixed under the main voice. */
+class Shifter {
+  private buf: Float32Array
+  private w = 0
+  private ph = 0
+  private readonly mask: number
+  constructor(private readonly win: number, readonly ratio: number) {
+    let n = 1
+    while (n < win + 4) n <<= 1
+    this.buf = new Float32Array(n)
+    this.mask = n - 1
+  }
+  private tap(d: number): number {
+    const r = this.w - 1 - d
+    const i = Math.floor(r), f = r - i
+    const a = this.buf[i & this.mask], b = this.buf[(i + 1) & this.mask]
+    return a + (b - a) * f
+  }
+  next(x: number): number {
+    this.buf[this.w & this.mask] = x
+    this.w = (this.w + 1) & 0x3fffffff
+    // the delay changes by (1 - ratio) per sample: shrinking delay = higher pitch
+    this.ph -= (this.ratio - 1) / this.win
+    this.ph -= Math.floor(this.ph)
+    const p2 = this.ph + 0.5 >= 1 ? this.ph - 0.5 : this.ph + 0.5
+    const g1 = Math.sin(Math.PI * this.ph), g2 = Math.sin(Math.PI * p2)
+    return g1 * g1 * this.tap(this.ph * this.win) + g2 * g2 * this.tap(p2 * this.win)
+  }
+}
+
+/** Growl ("false-chord" / death-metal texture), applied to the shifted voice. Independent amounts:
  *  - growl: a rattle — jittery amplitude modulation at ~35–75 Hz like loosely flapping false vocal folds — plus raspy
  *    noise that follows the voice envelope and pulses with the rattle (silent in pauses);
  *  - sub: an undertone an octave below the voice — every other period is louder (period doubling) and an
- *    octave-divided copy of the fundamental is mixed in (flip-flop divider, like an analog octaver).
+ *    octave-divided copy of the fundamental is mixed in (flip-flop divider, like an analog octaver);
+ *  - fry: period-synchronous subharmonics, the way false vocal folds vibrate: the loudness of each glottal period
+ *    follows a pattern (f0/2: loud-soft, f0/3: loud-soft-mid) that switches irregularly, with per-period jitter.
+ *    Crisp and tonal — no noise added;
+ *  - rasp: roughness that keeps the vowels: the voice is multiplied by low-band noise (< ~300 Hz), which smears every
+ *    harmonic by less than the formant spacing — the vowel envelope stays, the clean tone turns hoarse;
+ *  - octave: a parallel copy an octave lower (delay-line shifter), formants lowered with it — a second, bigger throat.
  *  All amounts are smoothed per sample, so presets crossfade without clicks; nothing allocates. */
 class Growl {
   private g = 0 // smoothed amounts
@@ -42,6 +81,19 @@ class Growl {
   private flip = 1
   private sq = 0
   private sl = 0 // sub layer low-pass
+  // fry: period counter, current pattern (2 or 3 periods), smoothed per-period gain
+  private f = 0
+  private r = 0
+  private o = 0
+  private per = 0
+  private mode = 2
+  private fTarget = 1
+  private fGain = 1
+  private q1 = 0 // rasp: low-band noise
+  private q2 = 0
+  private readonly qA: number
+  private readonly fA: number
+  private readonly oct: Shifter
   // raspy noise: band-limited white noise, voice envelope
   private n1 = 0
   private n2 = 0
@@ -67,6 +119,9 @@ class Growl {
     this.vAtt = Math.exp(-1 / (0.003 * sr))
     this.vRel = Math.exp(-1 / (0.03 * sr))
     this.rInc = (2 * Math.PI * 50) / sr
+    this.qA = Math.exp((-2 * Math.PI * 280) / sr)
+    this.fA = Math.exp(-1 / (0.0015 * sr))
+    this.oct = new Shifter(Math.round(sr * 0.045), 0.5)
   }
 
   private rnd(): number { // xorshift32, 0..1
@@ -76,15 +131,18 @@ class Growl {
     return (x >>> 0) / 4294967296
   }
 
-  get busy(): boolean { return this.g > 1e-4 || this.s > 1e-4 }
+  get busy(): boolean { return this.g > 1e-4 || this.s > 1e-4 || this.f > 1e-4 || this.r > 1e-4 || this.o > 1e-4 }
 
   /** f is the current (shifted) voice pitch, 0 if unknown: the divider's low-pass sits just above it */
-  process(y: Float32Array, growl: number, sub: number, f: number): void {
+  process(y: Float32Array, growl: number, sub: number, fry: number, hoarse: number, octave: number, f: number): void {
     if (f > 0) this.lpA = Math.exp((-2 * Math.PI * Math.max(45, Math.min(320, f * 1.25))) / this.sr)
     const a = this.smooth, lpA = this.lpA
     for (let i = 0; i < y.length; i++) {
       this.g = growl + (this.g - growl) * a
       this.s = sub + (this.s - sub) * a
+      this.f = fry + (this.f - fry) * a
+      this.r = hoarse + (this.r - hoarse) * a
+      this.o = octave + (this.o - octave) * a
       const g = this.g, s = this.s
       const v = y[i]
       // voice envelope (fast attack, slower release)
@@ -105,14 +163,26 @@ class Growl {
       this.lEnv = al > this.lEnv ? al : this.lEnv * this.envDecay
       const th = 0.3 * this.lEnv
       if (!this.armed) { if (l < -th) this.armed = true }
-      else if (l > th) { this.armed = false; this.flip = -this.flip }
+      else if (l > th) {
+        this.armed = false
+        this.flip = -this.flip
+        // a new period: next step of the fry pattern; now and then switch between f0/2 and f0/3
+        if (++this.per >= this.mode) {
+          this.per = 0
+          if (this.rnd() < 0.12) this.mode = this.mode === 2 ? 3 : 2
+        }
+        const step = this.per === 0 ? 1 : this.per === 1 ? 0.2 : 0.55
+        this.fTarget = step * (0.75 + 0.25 * this.rnd())
+      }
       this.sq = this.flip + (this.sq - this.flip) * this.sqA
+      this.fGain = this.fTarget + (this.fGain - this.fTarget) * this.fA
       // octave-down copy of the fundamental, smoothed
       const lo = l * this.sq
       this.sl = lo + (this.sl - lo) * this.subA
       // amplitude: period doubling (sub) and rattle (growl); never below zero
       let m = 1 + 0.55 * s * this.sq + 0.75 * g * rattle
       if (m < 0) m = 0
+      m *= 1 - 0.85 * this.f * (1 - this.fGain) * Math.min(1, this.lEnv * 40)
       // raspy noise: band-limited white noise shaped by the voice envelope, pulsing with the rattle
       const w = this.rnd() * 2 - 1
       this.n1 = w + (this.n1 - w) * this.nHp
@@ -120,10 +190,69 @@ class Growl {
       this.n2 = hp + (this.n2 - hp) * this.nLp
       this.n3 = this.n2 + (this.n3 - this.n2) * this.nLp // 0.7–3.5 kHz: raspy, not fizzy
       const rasp = this.n3 * this.vEnv * (0.6 + 0.4 * rattle)
-      y[i] = v * m + 2.2 * s * this.sl + 2.4 * g * rasp
+      // rasp: voice × low-band noise (normalized to ~unit level)
+      const u = this.rnd() * 2 - 1
+      this.q1 = u + (this.q1 - u) * this.qA
+      this.q2 = this.q1 + (this.q2 - this.q1) * this.qA
+      let q = 18 * this.q2
+      q = q > 2 ? 2 : q < -2 ? -2 : q
+      const vm = v * m
+      y[i] = vm * (1 - 0.5 * this.r) + 2.2 * s * this.sl + 2.4 * g * rasp + this.r * q * vm +
+        0.8 * this.o * this.oct.next(vm)
     }
   }
 }
+
+/** Halo (divine / angelic): a quiet choir around the voice — copies an octave up, an octave down and a fifth up —
+ *  plus shimmer: a feedback delay with an octave-up shifter in the loop, so the tail keeps rising and glowing
+ *  (high-cut in the loop, so it fades into a soft shine instead of fizz). The rig's reverb then smears it into a
+ *  cathedral. The amount is smoothed per sample; nothing allocates. */
+class Halo {
+  private h = 0
+  private readonly up: Shifter
+  private readonly down: Shifter
+  private readonly fifth: Shifter
+  private readonly shim: Shifter
+  private readonly fb: Float32Array
+  private fw = 0
+  private lp = 0
+  private hp = 0
+  private readonly smooth: number
+  private readonly lpA: number
+  private readonly hpA: number
+  constructor(sr: number) {
+    const win = Math.round(sr * 0.05)
+    this.up = new Shifter(win, 2)
+    this.down = new Shifter(Math.round(sr * 0.07), 0.5)
+    this.fifth = new Shifter(win, 1.5)
+    this.shim = new Shifter(Math.round(sr * 0.08), 2)
+    this.fb = new Float32Array(Math.round(sr * 0.17))
+    this.smooth = Math.exp(-1 / (0.03 * sr))
+    this.lpA = Math.exp((-2 * Math.PI * 5500) / sr)
+    this.hpA = Math.exp((-2 * Math.PI * 250) / sr)
+  }
+  get busy(): boolean { return this.h > 1e-4 }
+  process(y: Float32Array, halo: number): void {
+    const a = this.smooth, fb = this.fb, n = fb.length
+    for (let i = 0; i < y.length; i++) {
+      this.h = halo + (this.h - halo) * a
+      const h = this.h, v = y[i]
+      const choir = 0.42 * this.up.next(v) + 0.38 * this.down.next(v) + 0.22 * this.fifth.next(v)
+      // shimmer loop: voice + 0.6 × the delayed loop output, shifted an octave up, low-passed, low end removed
+      const back = fb[this.fw]
+      let z = this.shim.next(0.5 * v + 0.6 * back)
+      this.lp = z + (this.lp - z) * this.lpA
+      this.hp = this.lp + (this.hp - this.lp) * this.hpA
+      z = this.lp - this.hp
+      fb[this.fw] = z
+      this.fw = this.fw + 1 === n ? 0 : this.fw + 1
+      y[i] = v + h * (choir + 0.9 * z)
+    }
+  }
+}
+
+/** Pitch levels for "steps", semitones around the flattened pitch (mostly small moves, sometimes a big jump) */
+const STEP_LEVELS = [-3, -2, -1, 0, 1, 2, 3, 5]
 
 class Channel {
   pv: PhaseVocoder
@@ -137,6 +266,7 @@ class Channel {
   hold = 0
   held = 0
   growl = new Growl(sampleRate)
+  halo = new Halo(sampleRate)
   constructor(n: number) {
     this.pv = new PhaseVocoder(n, 8, sampleRate)
     this.delay = new Float32Array(this.pv.latency)
@@ -166,6 +296,11 @@ class HoloVoice extends AudioWorkletProcessor {
       { name: 'psola', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
       { name: 'growl', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
       { name: 'sub', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'fry', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'rasp', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'octave', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'halo', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'steps', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
     ]
   }
 
@@ -175,6 +310,22 @@ class HoloVoice extends AudioWorkletProcessor {
   private corr = 0 // autotune/monotone correction, semitones (smoothed; held during pauses)
   private report = 0
   private vibPhase = 0
+  // "steps" (old concatenative text-to-speech): the pitch holds a level for a syllable-sized segment, then jumps
+  // to another one; each join gets a short loudness dip, like units glued together
+  private stepSemis = 0
+  private stepLeft = 0
+  private stepVoiced = false
+  private stepSeed = 0x6d2b79f5
+  private dipWait = -1 // samples until the next dip starts (the voice comes out with the processing latency)
+  private dipPos = -1 // position inside the current dip, -1 = none
+  private readonly dipLen = Math.round(0.018 * sampleRate)
+  private readonly dipGain = new Float32Array(128)
+  private stepRnd(): number {
+    let x = this.stepSeed
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5
+    this.stepSeed = x
+    return (x >>> 0) / 4294967296
+  }
   private readonly smooth = Math.exp(-1 / (0.03 * sampleRate))
 
   constructor(options: { processorOptions?: { fftSize?: number } }) {
@@ -209,7 +360,8 @@ class HoloVoice extends AudioWorkletProcessor {
     const denoise = params.denoise[0], vibrato = params.vibrato[0], vibratoHz = params.vibratoHz[0]
     const autoTarget = params.autoTarget[0], targetHz = params.targetHz[0], follow = params.formantFollow[0]
     const tune = params.tune[0], mono = params.mono[0], monoHz = params.monoHz[0], psola = params.psola[0]
-    const growl = params.growl[0], sub = params.sub[0]
+    const growl = params.growl[0], sub = params.sub[0], halo = params.halo[0]
+    const fry = params.fry[0], rasp = params.rasp[0], octave = params.octave[0], steps = params.steps[0]
 
     // speaker pitch from the first channel
     const tr = this.tracker
@@ -221,16 +373,30 @@ class HoloVoice extends AudioWorkletProcessor {
     // timbre follows the shift: in people, formants rise with the voice but less (~0.4 of the pitch shift)
     // (in real voices formants are higher by about 0.27 of the pitch difference: male → female ≈ +18%)
     const fmt = Math.max(-12, Math.min(12, formant + follow * 0.27 * (semis - pitch)))
+    // steps: a new pitch level at each voiced onset or after 120–220 ms
+    if (steps > 0.001) {
+      const voiced = tr.f0 > 0
+      this.stepLeft -= 128
+      if (voiced && (!this.stepVoiced || this.stepLeft <= 0)) {
+        const prev = this.stepSemis
+        do this.stepSemis = STEP_LEVELS[Math.floor(this.stepRnd() * STEP_LEVELS.length)]
+        while (this.stepSemis === prev)
+        this.stepLeft = Math.round(sampleRate * (0.12 + 0.1 * this.stepRnd()))
+        this.dipWait = this.ch[0]?.ps.latency ?? 0
+      }
+      this.stepVoiced = voiced
+    }
     // autotune and monotone use the current pitch after shifting
-    if ((tune > 0.001 || mono > 0.001) && tr.f0 > 0) {
+    if ((tune > 0.001 || mono > 0.001 || steps > 0.001) && tr.f0 > 0) {
       const f1 = tr.f0 * 2 ** (semis / 12)
       const note = 12 * Math.log2(f1 / 440)
       let want = tune * (Math.round(note) - note)
       const f2 = f1 * 2 ** (want / 12)
       if (mono > 0.001) want += mono * 12 * Math.log2(monoHz / f2)
+      want += steps * this.stepSemis
       const k = 1 - Math.exp(-128 / (0.012 * sampleRate)) // ~12 ms: fast correction without clicks
       this.corr += (want - this.corr) * k
-    } else if (tune <= 0.001 && mono <= 0.001) this.corr = 0
+    } else if (tune <= 0.001 && mono <= 0.001 && steps <= 0.001) this.corr = 0
     semis = Math.max(-24, Math.min(24, semis + this.corr))
     this.vibPhase = (this.vibPhase + (2 * Math.PI * params.vibratoHz[0] * 128) / sampleRate) % (2 * Math.PI)
     if ((this.report += 128) >= sampleRate * 0.2) {
@@ -240,6 +406,20 @@ class HoloVoice extends AudioWorkletProcessor {
 
     const active = Math.abs(semis) > 0.01 || Math.abs(fmt) > 0.01 || robot > 0.001 || whisper > 0.001 ||
       denoise > 0.001 || vibrato > 0.001
+    // join dips (same for all channels): a smooth 18 ms half-sine notch, deeper with more steps
+    const dips = steps > 0.001 && (this.dipWait >= 0 || this.dipPos >= 0)
+    if (dips) {
+      const n = output[0]?.length ?? 128, depth = 0.65 * Math.min(1, steps)
+      for (let i = 0; i < n; i++) {
+        if (this.dipWait >= 0 && this.dipWait-- === 0) this.dipPos = 0
+        let g = 1
+        if (this.dipPos >= 0) {
+          g = 1 - depth * Math.sin((Math.PI * this.dipPos) / this.dipLen)
+          if (++this.dipPos >= this.dipLen) this.dipPos = -1
+        }
+        this.dipGain[i] = g
+      }
+    } else if (steps <= 0.001) { this.dipWait = -1; this.dipPos = -1 }
     const levels = crush > 0.001 ? 2 ** (15 - crush * 12) : 0 // 16 bits → 4 bits
     const holdN = 1 + Math.round(decimate * 15) // down to 1/16 of the sample rate
     for (let c = 0; c < output.length; c++) {
@@ -275,9 +455,11 @@ class HoloVoice extends AudioWorkletProcessor {
         if (st.psMix > 0.0005) v += (st.psBuf[i] - v) * st.psMix
         y[i] = v
       }
-      if (growl > 0.001 || sub > 0.001 || st.growl.busy) {
-        st.growl.process(y, growl, sub, tr.f0 > 0 ? tr.f0 * 2 ** (semis / 12) : 0)
+      if (growl > 0.001 || sub > 0.001 || fry > 0.001 || rasp > 0.001 || octave > 0.001 || st.growl.busy) {
+        st.growl.process(y, growl, sub, fry, rasp, octave, tr.f0 > 0 ? tr.f0 * 2 ** (semis / 12) : 0)
       }
+      if (halo > 0.001 || st.halo.busy) st.halo.process(y, halo)
+      if (dips) for (let i = 0; i < y.length; i++) y[i] *= this.dipGain[i]
       if (holdN > 1 || levels) {
         for (let i = 0; i < y.length; i++) {
           let v = y[i]

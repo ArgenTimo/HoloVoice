@@ -9,7 +9,7 @@
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
 import { NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
-import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings } from './shared'
+import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings, type Speaker } from './shared'
 
 const isWin = holo.platform === 'win32'
 
@@ -21,7 +21,7 @@ const DEFAULTS: Settings = {
     // computer audio isn't captured by default — until it is turned on
     sys: { enabled: false, effect: 'hologram_classic', amount: 100, gate: -80, gain: 100, quality: 'hq', fx: {} },
   },
-  mic: 'default', out: '', monitor: false, monitorVol: 70, custom: [],
+  mic: 'default', out: '', monitor: false, monitorVol: 70, speaker: 'neutral', custom: [],
 }
 const KEY = 'holovoice.settings.v2'
 function loadSettings(): Settings {
@@ -35,7 +35,8 @@ function loadSettings(): Settings {
       l.fx ??= {}
       return l
     }
-    return { ...DEFAULTS, ...raw, lanes: { mic: lane('mic'), sys: lane('sys') } }
+    const speaker = (['neutral', 'male', 'female'] as const).includes(raw.speaker as Speaker) ? raw.speaker! : 'neutral'
+    return { ...DEFAULTS, ...raw, speaker, lanes: { mic: lane('mic'), sys: lane('sys') } }
   } catch { return structuredClone(DEFAULTS) }
 }
 const S = loadSettings()
@@ -81,8 +82,10 @@ class Lane {
   private loaded = false
 
   constructor(readonly id: LaneId) {
-    // buffer: in "quality" 25 ms — headroom against clicks when the system is loaded; in "fast" — minimal (for games)
-    const c = (this.ctx = new AudioContext({ latencyHint: S.lanes[id].quality === 'fast' ? 'interactive' : 0.025 }) as SinkCtx)
+    // buffer: in "quality" 25 ms — headroom against clicks when the system is loaded; in "fast" — minimal (for games).
+    // Windows computer sound: a playback-size buffer — on Windows the 25 ms one dropped out under load, and video doesn't need low latency
+    const hint: AudioContextLatencyCategory | number = id === 'sys' && isWin ? 'playback' : S.lanes[id].quality === 'fast' ? 'interactive' : 0.025
+    const c = (this.ctx = new AudioContext({ latencyHint: hint }) as SinkCtx)
     this.inGain = c.createGain()
     this.gate = c.createGain()
     this.outGain = c.createGain()
@@ -155,7 +158,7 @@ class Lane {
   target(): FxParams {
     const c = this.cfg
     if (!c.enabled) return NEUTRAL
-    if (this.id !== 'sys') return effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
+    if (this.id !== 'sys') return effectTarget(c.effect, c.fx[c.effect], c.amount / 100, S.speaker)
     // computer sound: "Clean" means untouched (its preset is voice EQ/enhancement) plus only the user's own edits
     const p = c.effect === 'clean'
       ? interpolate(NEUTRAL, { ...NEUTRAL, ...(c.fx.clean?.p ?? {}) }, c.amount / 100)
@@ -222,7 +225,7 @@ let pv: { ctx: SinkCtx; rig: VoiceRig; src: AudioBufferSourceNode | null } | nul
 /** The "My voice" lane effect — the selected one, even if the lane is off: that's the one they want to hear */
 function previewTarget(): FxParams {
   const c = S.lanes.mic
-  return effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
+  return effectTarget(c.effect, c.fx[c.effect], c.amount / 100, S.speaker)
 }
 function previewFollow(): void { pv?.rig.apply(previewTarget(), 0.05) }
 
@@ -584,6 +587,7 @@ async function handle(c: Cmd): Promise<void> {
     case 'out': S.out = c.id; await lanes.mic.setSink(c.id); updateMicHint(); break
     case 'monitor': S.monitor = c.on; await applyMonitor(); break
     case 'monitorVol': S.monitorVol = c.value; await applyMonitor(); break
+    case 'speaker': S.speaker = c.value; lanes.mic.update(); previewFollow(); break
   }
   publish()
 }

@@ -20,6 +20,8 @@ const P: Record<string, string> = {
   mountain: '<path d="m8 3 4 8 5-5 5 15H2z"/>',
   acorn: '<path d="M4 10c0-3.3 3.6-6 8-6s8 2.7 8 6z"/><path d="M12 4V2"/><path d="M6 10c0 5 3 9 6 11 3-2 6-6 6-11"/>',
   demon: '<circle cx="12" cy="14" r="7"/><path d="M6.6 9.6 4.5 3l4.7 4.2"/><path d="M17.4 9.6 19.5 3l-4.7 4.2"/><path d="m9 13 1.6 1M15 13l-1.6 1"/><path d="M10 17.5h4"/>',
+  halo: '<ellipse cx="12" cy="4.5" rx="6.5" ry="2"/><circle cx="12" cy="13.5" r="4"/><path d="M12 20v2M4 13.5H2.5M21.5 13.5H20M6.3 19.2l-1.1 1.1M17.7 19.2l1.1 1.1M6.3 7.8 5.2 6.7M17.7 7.8l1.1-1.1"/>',
+  tts: '<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.4A8.5 8.5 0 1 1 21 11.5z"/><path d="M8.5 10v3M12 8v7M15.5 10v3"/>',
   ghost: '<path d="M9 10h.01M15 10h.01"/><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/>',
   bot: '<path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/>',
   skull: '<path d="M12 2a8 8 0 0 0-8 8c0 2.6 1.2 4.5 3 5.7V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-3.3c1.8-1.2 3-3.1 3-5.7a8 8 0 0 0-8-8z"/><circle cx="9" cy="11" r="1.5"/><circle cx="15" cy="11" r="1.5"/><path d="M10 20v-2M14 20v-2"/>',

@@ -2,7 +2,7 @@
 // The graph is not rebuilt when the effect changes: all parameters are AudioParams, so ramp-in, ramp-out and transitions
 // between effects are smooth automation, with no clicks and no latency jumps.
 //
-//   input → holo-voice (noise reduction, pitch, timbre, vibrato, robot, whisper, growl, degradation) → drive
+//   input → holo-voice (noise reduction, pitch, timbre, vibrato, robot, whisper, growl, halo, degradation) → drive (+ grit)
 //        → ring modulation → low/high cut → bass / warmth / clarity / presence / air (+ excite)
 //        → de-esser → compressor → tape wow → chorus (+ doubler) → tremolo → level → output
 //                                                            tremolo ─┬→ echo ───→ level
@@ -57,7 +57,7 @@ export class VoiceRig {
     // voice
     this.input.connect(voice)
     for (const k of ['pitch', 'formant', 'robot', 'whisper', 'crush', 'decimate', 'denoise', 'vibrato', 'vibratoHz',
-      'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola', 'growl', 'sub'] as const) {
+      'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola', 'growl', 'sub', 'fry', 'rasp', 'octave', 'halo', 'steps'] as const) {
       bind(k, voice.parameters.get(k)!)
     }
 
@@ -73,6 +73,13 @@ export class VoiceRig {
     driveIn.connect(drivePre).connect(shaper).connect(driveWet)
     bind('drive', driveDry.gain, (v) => 1 - v)
     bind('drive', driveWet.gain, (v) => v * 0.35)
+
+    // grit: parallel distortion with pre-emphasis — only the band above ~400 Hz is driven hard (so the lows stay
+    // clean and round), then darkened above ~3 kHz so it adds bite and snarl, not fizz
+    const gritPre = gain(30), gritWet = gain(0)
+    const gritShaper = c.createWaveShaper()
+    gritShaper.curve = curve
+    gritShaper.oversample = '4x'
 
     // ring modulation
     const ringIn = gain(), ringDry = gain(), ringVca = gain(0), ringWet = gain(0)
@@ -91,6 +98,9 @@ export class VoiceRig {
     const bass = biq('lowshelf', 180), warmth = biq('peaking', 280, 0.8), mud = biq('peaking', 480, 1.1)
     const presence = biq('peaking', 3200, 0.8), air = biq('highshelf', 10000)
     ringDry.connect(lowcut); ringWet.connect(lowcut)
+    voice.connect(biq('highpass', 400)).connect(biq('highpass', 400)).connect(gritPre).connect(gritShaper)
+      .connect(biq('lowpass', 3000)).connect(biq('lowpass', 3000)).connect(gritWet).connect(ringIn)
+    bind('grit', gritWet.gain, (v) => v * 0.3)
     lowcut.connect(highcut).connect(bass).connect(warmth).connect(mud).connect(presence).connect(air)
     bind('warmth', warmth.gain)
     bind('clarity', mud.gain, (v) => -v) // clarity: cut the 400–500 Hz "mud"

@@ -3,6 +3,7 @@
 // The idea and first chains come from holo-messenger (src/client/audio/voice-fx.ts). Names live in the dictionaries (src/locales).
 import { t } from './i18n'
 import { customIcon } from './icons'
+import type { Speaker } from './shared'
 
 export const fxLabel = (id: string) => (isCustom(id) ? CUSTOM.find((c) => c.id === id)?.name ?? id : t(`fx.${id}`))
 export const paramLabel = (k: string) => t(`p.${k}`)
@@ -10,12 +11,12 @@ export const groupLabel = (g: string) => t(`pg.${g}`)
 
 export type ParamKey =
   | 'denoise' | 'pitch' | 'formant' | 'vibrato' | 'vibratoHz' | 'robot' | 'whisper'
-  | 'autoTarget' | 'targetHz' | 'formantFollow' | 'tune' | 'mono' | 'monoHz' | 'psola'
+  | 'autoTarget' | 'targetHz' | 'formantFollow' | 'tune' | 'mono' | 'monoHz' | 'steps' | 'psola'
   | 'comp' | 'deess' | 'warmth' | 'clarity' | 'excite' | 'double'
-  | 'drive' | 'growl' | 'sub' | 'crush' | 'decimate' | 'ring' | 'ringHz'
+  | 'drive' | 'grit' | 'growl' | 'sub' | 'fry' | 'rasp' | 'octave' | 'crush' | 'decimate' | 'ring' | 'ringHz'
   | 'lowcut' | 'highcut' | 'bass' | 'presence' | 'air'
   | 'wow' | 'chorus' | 'chorusRate' | 'tremolo' | 'tremoloHz'
-  | 'echo' | 'echoTime' | 'echoFb' | 'reverb' | 'size' | 'noise' | 'level'
+  | 'echo' | 'echoTime' | 'echoFb' | 'reverb' | 'size' | 'halo' | 'noise' | 'level'
 export type FxParams = Record<ParamKey, number>
 
 export type ParamGroup = 'voice' | 'enh' | 'color' | 'tone' | 'motion' | 'space'
@@ -46,6 +47,7 @@ export const PARAMS: ParamDef[] = [
   { key: 'tune', group: 'voice', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'mono', group: 'voice', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'monoHz', group: 'voice', min: 50, max: 450, step: 1, fmt: hz, log: true },
+  { key: 'steps', group: 'voice', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'robot', group: 'voice', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'denoise', group: 'enh', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'comp', group: 'enh', min: 0, max: 1, step: 0.01, fmt: pct },
@@ -57,6 +59,10 @@ export const PARAMS: ParamDef[] = [
   { key: 'drive', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'growl', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'sub', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'fry', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'rasp', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'octave', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'grit', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'crush', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'decimate', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'ring', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
@@ -78,22 +84,23 @@ export const PARAMS: ParamDef[] = [
   { key: 'echoFb', group: 'space', min: 0, max: 0.9, step: 0.01, fmt: pct },
   { key: 'reverb', group: 'space', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'size', group: 'space', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'halo', group: 'space', min: 0, max: 1, step: 0.01, fmt: pct },
 ]
 export const PARAM = Object.fromEntries(PARAMS.map((p) => [p.key, p])) as Record<ParamKey, ParamDef>
 
 export const NEUTRAL: FxParams = {
   denoise: 0, pitch: 0, formant: 0, vibrato: 0, vibratoHz: 5, robot: 0, whisper: 0,
-  autoTarget: 0, targetHz: 150, formantFollow: 0, tune: 0, mono: 0, monoHz: 110, psola: 0,
+  autoTarget: 0, targetHz: 150, formantFollow: 0, tune: 0, mono: 0, monoHz: 110, steps: 0, psola: 0,
   comp: 0, deess: 0, warmth: 0, clarity: 0, excite: 0, double: 0,
-  drive: 0, growl: 0, sub: 0, crush: 0, decimate: 0, ring: 0, ringHz: 60, noise: 0,
+  drive: 0, grit: 0, growl: 0, sub: 0, fry: 0, rasp: 0, octave: 0, crush: 0, decimate: 0, ring: 0, ringHz: 60, noise: 0,
   lowcut: 20, highcut: 20000, bass: 0, presence: 0, air: 0, level: 0,
   wow: 0, chorus: 0, chorusRate: 0.8, tremolo: 0, tremoloHz: 5,
-  echo: 0, echoTime: 0.3, echoFb: 0.35, reverb: 0, size: 0.5,
+  echo: 0, echoTime: 0.3, echoFb: 0.35, reverb: 0, size: 0.5, halo: 0,
 }
 
 export type BuiltinId =
   | 'clean' | 'male' | 'female' | 'child' | 'autotune' | 'giant' | 'chipmunk'
-  | 'demon' | 'ghost' | 'digital' | 'whisper' | 'radio'
+  | 'demon' | 'divine' | 'tts' | 'ghost' | 'digital' | 'whisper' | 'radio'
   | 'hologram_classic' | 'hologram_warm' | 'smolder' | 'ice' | 'electric' | 'vhs' | 'cave'
 
 /** A user's custom effect: a snapshot of all parameters of a built-in one (with their edits) under its own name */
@@ -130,6 +137,18 @@ export const EFFECTS: EffectInfo[] = [
     preset: { psola: 1, pitch: -12, formant: -6, growl: 0.8, sub: 0.55, drive: 0.6, lowcut: 40, highcut: 6500, bass: 5, warmth: 3,
       presence: 2, comp: 0.6, reverb: 0.25, size: 0.6, level: -2.5 },
     main: ['pitch', 'formant', 'growl', 'sub', 'drive', 'reverb'] },
+  // divine / angelic: a calm, slightly lower voice wrapped in a quiet choir (octaves and a fifth) and a shimmering
+  // cathedral tail; widened, airy, gently compressed
+  { id: 'divine', icon: 'halo',
+    preset: { psola: 1, pitch: -2.5, formant: -1, halo: 0.6, comp: 0.55, deess: 0.3, warmth: 1.5, lowcut: 60, presence: 1, air: 4,
+      double: 0.4, chorus: 0.2, chorusRate: 0.25, reverb: 0.55, size: 0.9, level: 0 },
+    main: ['halo', 'pitch', 'formant', 'reverb', 'size', 'double', 'air'] },
+  // early web text-to-speech: a flat, steady pitch that jumps between levels from syllable to syllable, glued-together
+  // joins, the vocoder's slightly phasey tone, a lower sample rate, narrow and loud
+  { id: 'tts', icon: 'tts',
+    preset: { autoTarget: 1, targetHz: 185, formantFollow: 1, mono: 1, monoHz: 185, steps: 0.9, decimate: 0.1, crush: 0.12,
+      lowcut: 160, highcut: 7000, presence: 3, clarity: 2, comp: 0.6, level: 2.5 },
+    main: ['steps', 'monoHz', 'targetHz', 'decimate', 'highcut'] },
   { id: 'ghost', icon: 'ghost',
     preset: { pitch: 3, formant: 2, whisper: 0.55, lowcut: 300, air: 3, echo: 0.4, echoTime: 0.33, echoFb: 0.45, reverb: 0.6, size: 0.9,
       tremolo: 0.35, tremoloHz: 4, level: 2.5 },
@@ -223,7 +242,30 @@ export function forSystemSound(p: FxParams): FxParams {
   return out
 }
 
+/**
+ * Presets with a fixed shift are tuned for an average voice (~150 Hz): -12 st makes a 150 Hz voice a 75 Hz demon,
+ * but leaves a 205 Hz female voice at a not-so-demonic 102 Hz, and a chipmunk from a deep voice ends up too low.
+ * Knowing the speaker, part of the gap to the average voice is added: the character lands where it was meant to,
+ * while the speaker's own voice still shows through. Adaptive presets (autoTarget) follow the real pitch anyway.
+ */
+const SPEAKER_HZ = { male: 115, female: 205 } as const
+const SPEAKER_PITCH = 0.6 // share of the gap to the average voice that is compensated
+const SPEAKER_FORMANT = 1.2 // st: female vocal tracts are shorter (~2.4 st between average male and female)
+
+export function adaptToSpeaker(p: FxParams, speaker: Speaker): FxParams {
+  if (speaker === 'neutral' || p.autoTarget >= 0.5) return p
+  const out = { ...p }
+  if (Math.abs(p.pitch) >= 2) {
+    const gap = 12 * Math.log2(150 / SPEAKER_HZ[speaker]) // male +4.6 st, female -5.6 st
+    out.pitch = Math.max(-24, Math.min(24, p.pitch + SPEAKER_PITCH * gap))
+  }
+  if (Math.abs(p.formant) >= 1) {
+    out.formant = Math.max(-12, Math.min(12, p.formant + (speaker === 'female' ? -SPEAKER_FORMANT : SPEAKER_FORMANT)))
+  }
+  return out
+}
+
 /** What is heard: the effect at strength amount (0..1), the fraction of the way from neutral sound to the effect */
-export function effectTarget(id: EffectId, user: EffectUser | undefined, amount: number): FxParams {
-  return interpolate(NEUTRAL, effectFull(id, user), Math.max(0, Math.min(1, amount)))
+export function effectTarget(id: EffectId, user: EffectUser | undefined, amount: number, speaker: Speaker = 'neutral'): FxParams {
+  return interpolate(NEUTRAL, adaptToSpeaker(effectFull(id, user), speaker), Math.max(0, Math.min(1, amount)))
 }

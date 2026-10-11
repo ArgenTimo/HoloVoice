@@ -47,7 +47,9 @@ for cycle in (1, 2, 3):
     ev("__hv.handle({ type: 'toggle', lane: 'sys', on: true })")
     time.sleep(4)
     st = ev(STATUS) or {}
-    heard = probe()
+    print('feed stats:', ev("new Promise((r) => { const p = __hv.lanes.sys.feed.port; p.onmessage = (e) => r(e.data); p.postMessage({ stats: 1 }) })"), flush=True)
+    heard = probe(3000)
+    print('feed stats after:', ev("new Promise((r) => { const p = __hv.lanes.sys.feed.port; p.onmessage = (e) => r(e.data); p.postMessage({ stats: 1 }) })"), flush=True)
     if cycle == 1:
         print(subprocess.run(['tasklist', '/v', '/fo', 'csv'], capture_output=True, text=True).stdout[:200])
         print(subprocess.run(['powershell', '-c', 'Get-CimInstance Win32_Process | ? { $_.Name -match "electron|holo|python" } | select ProcessId,ParentProcessId,Name | ft -a'], capture_output=True, text=True).stdout)

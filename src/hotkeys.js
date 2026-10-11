@@ -15,6 +15,7 @@ const VOICE = ['clean', 'male', 'female', 'child', 'demon', 'ghost', 'digital', 
 const MODS = ['Ctrl', 'Alt', 'Shift', 'Super']
 const TAP_GAP = 350 // ms between presses of a double/triple press
 const HOLD_MS = 250 // a press longer than this is a hold
+const debug = process.env.HOLO_HK_DEBUG ? (...a) => console.log('[hotkeys]', ...a) : () => {}
 
 function defaults() {
   const d = {
@@ -149,6 +150,7 @@ class Hotkeys {
   }
 
   press(name, mods) {
+    debug('press', name, mods)
     if (this.down.has(name)) return // auto-repeat
     const combo = mods ? `${mods}+${name}` : name
     this.down.set(name, combo)
@@ -179,6 +181,7 @@ class Hotkeys {
   /** Taps are counted on release */
   tap(combo) {
     const g = this.gestures.get(combo)
+    debug('tap', combo, !!g, this.taps?.combo, this.taps?.count)
     if (!g) { this.taps = null; return }
     const t = this.taps
     const count = t && t.combo === combo ? t.count + 1 : 1

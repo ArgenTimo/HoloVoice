@@ -522,7 +522,11 @@ async function handle(c: Cmd): Promise<void> {
       const before = held[c.lane]
       held[c.lane] = undefined
       if (!before) break
-      if (!before.enabled) return handle({ type: 'toggle', lane: c.lane, on: false })
+      if (!before.enabled) {
+        await handle({ type: 'toggle', lane: c.lane, on: false })
+        cfg.effect = before.effect // fading out goes to neutral anyway; the selection comes back as it was
+        break
+      }
       if (cfg.effect !== before.effect) return handle({ type: 'effect', lane: c.lane, effect: before.effect })
       if (!cfg.enabled) return handle({ type: 'toggle', lane: c.lane, on: true })
       break

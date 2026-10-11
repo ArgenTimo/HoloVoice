@@ -20,6 +20,9 @@
     "directories": {
       "output": "release"
     },
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
+    ],
     "files": [
       "src/**/*",
       "!src/**/*.ts",
@@ -71,7 +74,8 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "uiohook-napi": "^1.5.5"
   },
   "repository": {
     "type": "git",

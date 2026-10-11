@@ -2,6 +2,7 @@
 // fills over exactly the transition time; at the peak main hides the window.
 import { effectInfo, fxLabel, setCustom } from './effects'
 import { setLang, t } from './i18n'
+import { icon } from './icons'
 import { $, holo, type EngineState, type OsdMsg } from './shared'
 
 let st: EngineState | null = null
@@ -13,8 +14,9 @@ function renderText(): void {
   const cfg = st.S.lanes[cur.lane]
   setCustom(st.S.custom)
   const fx = effectInfo(cfg.effect)
-  $('lane').textContent = `${cur.lane === 'mic' ? '🎙️' : '🔊'} ${t(`lane.${cur.lane}`)}`
-  $('ico').textContent = cfg.enabled ? (fx?.emoji ?? '') : '⏻'
+  $('lane-ico').innerHTML = icon(cur.lane === 'mic' ? 'mic' : 'speaker', 11)
+  $('lane').textContent = t(`lane.${cur.lane}`)
+  $('ico').innerHTML = icon(cfg.enabled ? (fx?.icon ?? 'mic') : 'power', 24)
   $('text').textContent = cfg.enabled ? fxLabel(cfg.effect) : t('osd.off')
   const root = $('root')
   root.classList.toggle('off', !cfg.enabled && !cur.ramp)

@@ -463,6 +463,9 @@ async function applyMonitor(): Promise<void> {
 // Turning off computer audio waits for the effect to fade out, and only then releases the capture
 let sysOffTimer = 0
 
+/** state before a held hotkey, restored on release */
+const held: Partial<Record<LaneId, { enabled: boolean; effect: EffectId }>> = {}
+
 async function handle(c: Cmd): Promise<void> {
   switch (c.type) {
     case 'toggle': {
@@ -507,6 +510,23 @@ async function handle(c: Cmd): Promise<void> {
       if (cfg.enabled && cfg.effect === c.action) return handle({ type: 'toggle', lane: c.lane, on: false })
       return handle({ type: 'effect', lane: c.lane, effect: c.action as EffectId })
     }
+    case 'hold': {
+      const cfg = S.lanes[c.lane]
+      if (c.down) {
+        held[c.lane] ??= { enabled: cfg.enabled, effect: cfg.effect }
+        if (c.action === 'toggle') return handle({ type: 'toggle', lane: c.lane, on: !held[c.lane]!.enabled })
+        if (c.action === 'next' || c.action === 'prev') return handle({ type: 'hotkey', lane: c.lane, action: c.action })
+        if (!effectInfo(c.action)) break
+        return handle({ type: 'effect', lane: c.lane, effect: c.action as EffectId })
+      }
+      const before = held[c.lane]
+      held[c.lane] = undefined
+      if (!before) break
+      if (!before.enabled) return handle({ type: 'toggle', lane: c.lane, on: false })
+      if (cfg.effect !== before.effect) return handle({ type: 'effect', lane: c.lane, effect: before.effect })
+      if (!cfg.enabled) return handle({ type: 'toggle', lane: c.lane, on: true })
+      break
+    }
     case 'set':
       S.lanes[c.lane][c.key] = c.value
       if (c.key === 'gain') lanes[c.lane].outGain.gain.setTargetAtTime(c.value / 100, lanes[c.lane].ctx.currentTime, 0.02)
@@ -536,7 +556,7 @@ async function handle(c: Cmd): Promise<void> {
       const src = cfg.effect
       const id = `c-${Date.now().toString(36)}` as const
       const base: BuiltinId = isCustom(src) ? (S.custom.find((x) => x.id === src)?.base ?? 'clean') : src
-      S.custom.push({ id, name: c.name.trim().slice(0, 40) || id, emoji: c.emoji || '⭐', base, preset: effectFull(src, cfg.fx[src]) })
+      S.custom.push({ id, name: c.name.trim().slice(0, 40) || id, icon: c.icon || 'star', base, preset: effectFull(src, cfg.fx[src]) })
       setCustom(S.custom)
       cfg.fx[id] = { rampIn: cfg.fx[src]?.rampIn, rampOut: cfg.fx[src]?.rampOut }
       cfg.effect = id
@@ -571,8 +591,12 @@ async function main(): Promise<void> {
   holo.onLang((code) => { setLang(code); updateMicHint(); updateSysHint(); publish() })
   holo.onCmd((c) => { handle(c).catch((e) => console.error(e)) })
   updateSysHint()
-  // my voice: microphone (also grants permission to see device names), virtual output, chain
-  await openMic()
+  // effect chains first: a missing or broken microphone must not take the computer-sound lane down with it
+  await lanes.mic.makeRig()
+  await lanes.sys.makeRig()
+  // my voice: microphone (also grants permission to see device names), virtual output
+  let micError = ''
+  try { await openMic() } catch (e) { micError = String((e as Error)?.message ?? e) }
   micRoute = await holo.routeMic()
   const virt = micRoute.ok && micRoute.sinkLabel
     ? await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
@@ -580,8 +604,6 @@ async function main(): Promise<void> {
   // At startup the voice always goes to the virtual microphone, if present (the null sink id changes between runs)
   if (virt) S.out = virt.deviceId
   await lanes.mic.setSink(S.out)
-  await lanes.mic.makeRig()
-  await lanes.sys.makeRig()
   lanes.mic.update(0) // at startup — immediately, no fade-in or bar
   await refreshDevices()
   await lanes.mic.ctx.resume()
@@ -590,6 +612,7 @@ async function main(): Promise<void> {
   if (S.lanes.sys.enabled) await setSys(true)
   else await lanes.sys.ctx.suspend()
   await applyMonitor()
+  if (micError) hint.mic = { warn: true, html: t('err.start', { err: esc(micError) }) }
   ready = true
   publish()
 

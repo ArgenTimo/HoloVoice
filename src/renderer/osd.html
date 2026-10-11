@@ -12,8 +12,11 @@
     #root.sys { border-color: #22d3ee; }
     #root.baronly { border: 0; padding: 3px; }
     .toast { flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
-    .ico { font-size: 22px; }
-    .lane { font-size: 11px; font-weight: 500; color: #8a8ea3; }
+    .ico { display: grid; place-items: center; width: 24px; height: 24px; color: #a78bfa; }
+    #root.sys .ico { color: #22d3ee; }
+    #root.off .ico { color: #8a8ea3; }
+    .lane-row { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #8a8ea3; }
+    .lane-row svg { display: block; }
     .pct { margin-left: auto; font-size: 11px; color: #8a8ea3; font-variant-numeric: tabular-nums; }
     .track { height: 6px; margin: 0 10px 8px; border-radius: 3px; background: #2a2d3b; overflow: hidden; }
     #root.baronly .track { height: 100%; margin: 0; border-radius: 4px; }
@@ -26,7 +29,7 @@
   <div id="root">
     <div class="toast" id="toast">
       <span class="ico" id="ico"></span>
-      <div><div class="lane" id="lane"></div><div id="text"></div></div>
+      <div><div class="lane-row"><span id="lane-ico"></span><span id="lane"></span></div><div id="text"></div></div>
       <span class="pct" id="pct"></span>
     </div>
     <div class="track" id="track"><div class="fill" id="fill"></div></div>

@@ -1,6 +1,6 @@
 // AudioWorklet "holo-voice": pitch, timbre, robot, whisper, noise reduction, vibrato (phase vocoder, pv.ts)
-// + degradation (bits, sample rate). Tracks voice pitch (pitch.ts): steering to a target pitch (any speaker's
-// voice to ~110 Hz male, ~210 female…), timbre following the shift, autotune, monotone (robot).
+// + growl (rattle, rasp, undertone) + degradation (bits, sample rate). Tracks voice pitch (pitch.ts): steering to a
+// target pitch (any speaker's voice to ~110 Hz male, ~210 female…), timbre following the shift, autotune, monotone (robot).
 // Every 200 ms posts { f0, avg } to the port; the panel shows "your voice ≈ … Hz".
 // Pitch and timbre come from either the vocoder or PSOLA (psola.ts, psola parameter): PSOLA sounds more natural for
 // voice changing (male/female/child); the vocoder is needed for whisper, noise reduction and the buzzing robot.
@@ -18,7 +18,112 @@ declare class AudioWorkletProcessor {
 }
 
 const PARAMS = ['pitch', 'formant', 'robot', 'whisper', 'crush', 'decimate', 'denoise', 'vibrato', 'vibratoHz',
-  'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola'] as const
+  'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola', 'growl', 'sub'] as const
+
+/** Growl ("false-chord" / death-metal texture), applied to the shifted voice. Two independent amounts:
+ *  - growl: a rattle — jittery amplitude modulation at ~35–75 Hz like loosely flapping false vocal folds — plus raspy
+ *    noise that follows the voice envelope and pulses with the rattle (silent in pauses);
+ *  - sub: an undertone an octave below the voice — every other period is louder (period doubling) and an
+ *    octave-divided copy of the fundamental is mixed in (flip-flop divider, like an analog octaver).
+ *  All amounts are smoothed per sample, so presets crossfade without clicks; nothing allocates. */
+class Growl {
+  private g = 0 // smoothed amounts
+  private s = 0
+  private seed = 0x2545f491
+  // rattle oscillator: phase, current rate and depth (re-drawn every cycle)
+  private rPh = 0
+  private rInc = 0
+  private rAmp = 1
+  // octave divider: low-passed voice, its envelope, Schmitt trigger, ±1 flip-flop (smoothed)
+  private l1 = 0
+  private l2 = 0
+  private lEnv = 0
+  private armed = false
+  private flip = 1
+  private sq = 0
+  private sl = 0 // sub layer low-pass
+  // raspy noise: band-limited white noise, voice envelope
+  private n1 = 0
+  private n2 = 0
+  private n3 = 0
+  private vEnv = 0
+  private lpA = 0.98
+  private readonly smooth: number
+  private readonly envDecay: number
+  private readonly sqA: number
+  private readonly subA: number
+  private readonly nHp: number
+  private readonly nLp: number
+  private readonly vAtt: number
+  private readonly vRel: number
+
+  constructor(private readonly sr: number) {
+    this.smooth = Math.exp(-1 / (0.03 * sr))
+    this.envDecay = Math.exp(-1 / (0.02 * sr))
+    this.sqA = Math.exp(-1 / (0.0012 * sr))
+    this.subA = Math.exp((-2 * Math.PI * 160) / sr)
+    this.nHp = Math.exp((-2 * Math.PI * 700) / sr)
+    this.nLp = Math.exp((-2 * Math.PI * 3500) / sr)
+    this.vAtt = Math.exp(-1 / (0.003 * sr))
+    this.vRel = Math.exp(-1 / (0.03 * sr))
+    this.rInc = (2 * Math.PI * 50) / sr
+  }
+
+  private rnd(): number { // xorshift32, 0..1
+    let x = this.seed
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5
+    this.seed = x
+    return (x >>> 0) / 4294967296
+  }
+
+  get busy(): boolean { return this.g > 1e-4 || this.s > 1e-4 }
+
+  /** f is the current (shifted) voice pitch, 0 if unknown: the divider's low-pass sits just above it */
+  process(y: Float32Array, growl: number, sub: number, f: number): void {
+    if (f > 0) this.lpA = Math.exp((-2 * Math.PI * Math.max(45, Math.min(320, f * 1.25))) / this.sr)
+    const a = this.smooth, lpA = this.lpA
+    for (let i = 0; i < y.length; i++) {
+      this.g = growl + (this.g - growl) * a
+      this.s = sub + (this.s - sub) * a
+      const g = this.g, s = this.s
+      const v = y[i]
+      // voice envelope (fast attack, slower release)
+      const av = Math.abs(v)
+      this.vEnv = av + (this.vEnv - av) * (av > this.vEnv ? this.vAtt : this.vRel)
+      // rattle: a sine whose rate (35–75 Hz) and depth are re-drawn every cycle: irregular, like flapping tissue
+      this.rPh += this.rInc
+      if (this.rPh >= 2 * Math.PI) {
+        this.rPh -= 2 * Math.PI
+        this.rInc = (2 * Math.PI * (35 + 40 * this.rnd())) / this.sr
+        this.rAmp = 0.45 + 0.55 * this.rnd()
+      }
+      const rattle = this.rAmp * Math.sin(this.rPh)
+      // octave divider: toggle on each period of the low-passed voice (Schmitt trigger at ±30% of its envelope)
+      this.l1 = v + (this.l1 - v) * lpA
+      this.l2 = this.l1 + (this.l2 - this.l1) * lpA
+      const l = this.l2, al = Math.abs(l)
+      this.lEnv = al > this.lEnv ? al : this.lEnv * this.envDecay
+      const th = 0.3 * this.lEnv
+      if (!this.armed) { if (l < -th) this.armed = true }
+      else if (l > th) { this.armed = false; this.flip = -this.flip }
+      this.sq = this.flip + (this.sq - this.flip) * this.sqA
+      // octave-down copy of the fundamental, smoothed
+      const lo = l * this.sq
+      this.sl = lo + (this.sl - lo) * this.subA
+      // amplitude: period doubling (sub) and rattle (growl); never below zero
+      let m = 1 + 0.55 * s * this.sq + 0.75 * g * rattle
+      if (m < 0) m = 0
+      // raspy noise: band-limited white noise shaped by the voice envelope, pulsing with the rattle
+      const w = this.rnd() * 2 - 1
+      this.n1 = w + (this.n1 - w) * this.nHp
+      const hp = w - this.n1
+      this.n2 = hp + (this.n2 - hp) * this.nLp
+      this.n3 = this.n2 + (this.n3 - this.n2) * this.nLp // 0.7–3.5 kHz: raspy, not fizzy
+      const rasp = this.n3 * this.vEnv * (0.6 + 0.4 * rattle)
+      y[i] = v * m + 2.2 * s * this.sl + 2.4 * g * rasp
+    }
+  }
+}
 
 class Channel {
   pv: PhaseVocoder
@@ -31,6 +136,7 @@ class Channel {
   mix = 0 // 0 = dry, 1 = vocoder
   hold = 0
   held = 0
+  growl = new Growl(sampleRate)
   constructor(n: number) {
     this.pv = new PhaseVocoder(n, 8, sampleRate)
     this.delay = new Float32Array(this.pv.latency)
@@ -58,6 +164,8 @@ class HoloVoice extends AudioWorkletProcessor {
       { name: 'mono', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
       { name: 'monoHz', defaultValue: 110, minValue: 50, maxValue: 500, automationRate: 'k-rate' },
       { name: 'psola', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'growl', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
+      { name: 'sub', defaultValue: 0, minValue: 0, maxValue: 1, automationRate: 'k-rate' },
     ]
   }
 
@@ -101,6 +209,7 @@ class HoloVoice extends AudioWorkletProcessor {
     const denoise = params.denoise[0], vibrato = params.vibrato[0], vibratoHz = params.vibratoHz[0]
     const autoTarget = params.autoTarget[0], targetHz = params.targetHz[0], follow = params.formantFollow[0]
     const tune = params.tune[0], mono = params.mono[0], monoHz = params.monoHz[0], psola = params.psola[0]
+    const growl = params.growl[0], sub = params.sub[0]
 
     // speaker pitch from the first channel
     const tr = this.tracker
@@ -164,12 +273,21 @@ class HoloVoice extends AudioWorkletProcessor {
         let v = dry + (st.pvBuf[i] - dry) * st.mix
         st.psMix = psola + (st.psMix - psola) * a
         if (st.psMix > 0.0005) v += (st.psBuf[i] - v) * st.psMix
-        if (holdN > 1) {
-          if (st.hold-- <= 0) { st.held = v; st.hold = holdN - 1 }
-          v = st.held
-        }
-        if (levels) v = Math.round(v * levels) / levels
         y[i] = v
+      }
+      if (growl > 0.001 || sub > 0.001 || st.growl.busy) {
+        st.growl.process(y, growl, sub, tr.f0 > 0 ? tr.f0 * 2 ** (semis / 12) : 0)
+      }
+      if (holdN > 1 || levels) {
+        for (let i = 0; i < y.length; i++) {
+          let v = y[i]
+          if (holdN > 1) {
+            if (st.hold-- <= 0) { st.held = v; st.hold = holdN - 1 }
+            v = st.held
+          }
+          if (levels) v = Math.round(v * levels) / levels
+          y[i] = v
+        }
       }
     }
     return true

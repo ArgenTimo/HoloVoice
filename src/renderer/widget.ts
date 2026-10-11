@@ -2,6 +2,7 @@
 // An engine controller, like the panel; a pinned widget starts with the system (main.js).
 import { allEffects, customs, fxLabel, setCustom, type EffectId } from './effects'
 import { applyStatic, setLang } from './i18n'
+import { applyIcons } from './icons'
 import { $, holo, type EngineState, type LaneId } from './shared'
 
 const rows = {} as Record<LaneId, HTMLElement>
@@ -13,14 +14,14 @@ function fillOptions(sel: HTMLSelectElement): void {
   for (const e of allEffects()) {
     const o = document.createElement('option')
     o.value = e.id
-    o.textContent = `${e.emoji} ${fxLabel(e.id)}`
+    o.textContent = fxLabel(e.id) // <option> can't hold an SVG
     sel.appendChild(o)
   }
 }
 
 function render(st: EngineState): void {
   setCustom(st.S.custom)
-  const now = customs().map((c) => c.id + c.name + c.emoji).join('|')
+  const now = customs().map((c) => c.id + c.name + c.icon).join('|')
   if (now !== sig) { sig = now; for (const id of ['mic', 'sys'] as LaneId[]) fillOptions(rows[id].querySelector<HTMLSelectElement>('.w-fx')!) }
   for (const id of ['mic', 'sys'] as LaneId[]) {
     const cfg = st.S.lanes[id]
@@ -35,6 +36,7 @@ function render(st: EngineState): void {
 async function main(): Promise<void> {
   setLang((await holo.getUi()).lang)
   applyStatic()
+  applyIcons()
   holo.onLang(() => location.reload())
   $('btn-panel').onclick = () => holo.showPanel()
   $('btn-unpin').onclick = () => holo.widget(false)

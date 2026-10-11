@@ -2,6 +2,7 @@
 // transitions between effects and ramp-in are smooth interpolation of all parameters (frequencies on a log scale).
 // The idea and first chains come from holo-messenger (src/client/audio/voice-fx.ts). Names live in the dictionaries (src/locales).
 import { t } from './i18n'
+import { customIcon } from './icons'
 
 export const fxLabel = (id: string) => (isCustom(id) ? CUSTOM.find((c) => c.id === id)?.name ?? id : t(`fx.${id}`))
 export const paramLabel = (k: string) => t(`p.${k}`)
@@ -11,7 +12,7 @@ export type ParamKey =
   | 'denoise' | 'pitch' | 'formant' | 'vibrato' | 'vibratoHz' | 'robot' | 'whisper'
   | 'autoTarget' | 'targetHz' | 'formantFollow' | 'tune' | 'mono' | 'monoHz' | 'psola'
   | 'comp' | 'deess' | 'warmth' | 'clarity' | 'excite' | 'double'
-  | 'drive' | 'crush' | 'decimate' | 'ring' | 'ringHz'
+  | 'drive' | 'growl' | 'sub' | 'crush' | 'decimate' | 'ring' | 'ringHz'
   | 'lowcut' | 'highcut' | 'bass' | 'presence' | 'air'
   | 'wow' | 'chorus' | 'chorusRate' | 'tremolo' | 'tremoloHz'
   | 'echo' | 'echoTime' | 'echoFb' | 'reverb' | 'size' | 'noise' | 'level'
@@ -54,6 +55,8 @@ export const PARAMS: ParamDef[] = [
   { key: 'excite', group: 'enh', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'double', group: 'enh', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'drive', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'growl', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
+  { key: 'sub', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'crush', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'decimate', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
   { key: 'ring', group: 'color', min: 0, max: 1, step: 0.01, fmt: pct },
@@ -82,7 +85,7 @@ export const NEUTRAL: FxParams = {
   denoise: 0, pitch: 0, formant: 0, vibrato: 0, vibratoHz: 5, robot: 0, whisper: 0,
   autoTarget: 0, targetHz: 150, formantFollow: 0, tune: 0, mono: 0, monoHz: 110, psola: 0,
   comp: 0, deess: 0, warmth: 0, clarity: 0, excite: 0, double: 0,
-  drive: 0, crush: 0, decimate: 0, ring: 0, ringHz: 60, noise: 0,
+  drive: 0, growl: 0, sub: 0, crush: 0, decimate: 0, ring: 0, ringHz: 60, noise: 0,
   lowcut: 20, highcut: 20000, bass: 0, presence: 0, air: 0, level: 0,
   wow: 0, chorus: 0, chorusRate: 0.8, tremolo: 0, tremoloHz: 5,
   echo: 0, echoTime: 0.3, echoFb: 0.35, reverb: 0, size: 0.5,
@@ -96,62 +99,67 @@ export type BuiltinId =
 /** A user's custom effect: a snapshot of all parameters of a built-in one (with their edits) under its own name */
 export type CustomId = `c-${string}`
 export type EffectId = BuiltinId | CustomId
-export interface CustomEffect { id: CustomId; name: string; emoji: string; base: BuiltinId; preset: FxParams }
+/** icon — an id from icons.ts; `emoji` is the legacy field of saves from older versions (migrated in setCustom) */
+export interface CustomEffect { id: CustomId; name: string; icon: string; emoji?: string; base: BuiltinId; preset: FxParams }
 
 export interface EffectInfo {
-  id: EffectId; emoji: string
+  id: EffectId; icon: string // icon id from icons.ts
   preset: Partial<FxParams>
   main: ParamKey[] // the effect's main knobs, shown up front; the rest are under "All parameters"
 }
 
 export const EFFECTS: EffectInfo[] = [
-  { id: 'clean', emoji: '🎙️',
+  { id: 'clean', icon: 'mic',
     preset: { denoise: 0.3, comp: 0.45, deess: 0.3, warmth: 1.5, clarity: 2, presence: 1.5, air: 2, excite: 0.15, lowcut: 70, level: 2.5 },
     main: ['denoise', 'comp', 'deess', 'warmth', 'clarity', 'presence', 'air', 'excite', 'double', 'reverb'] },
-  { id: 'male', emoji: '👨',
+  { id: 'male', icon: 'mars',
     preset: { psola: 1, autoTarget: 1, targetHz: 115, formantFollow: 1, formant: -1, warmth: 2.5, bass: 2, clarity: 1, presence: -0.5 },
     main: ['targetHz', 'formant', 'warmth', 'bass', 'vibrato', 'psola'] },
-  { id: 'female', emoji: '👩',
+  { id: 'female', icon: 'venus',
     preset: { psola: 1, autoTarget: 1, targetHz: 195, formantFollow: 1, lowcut: 90, air: 1, level: -0.5 },
     main: ['targetHz', 'formant', 'air', 'presence', 'warmth', 'vibrato', 'psola'] },
-  { id: 'child', emoji: '🧒',
+  { id: 'child', icon: 'baby',
     preset: { psola: 1, autoTarget: 1, targetHz: 260, formantFollow: 1, formant: 1, lowcut: 150, clarity: 2, presence: 1, air: 1, level: -0.5 },
     main: ['targetHz', 'formant', 'air', 'presence', 'vibrato', 'psola'] },
-  { id: 'autotune', emoji: '🎤',
+  { id: 'autotune', icon: 'music',
     preset: { psola: 1, tune: 1, comp: 0.45, deess: 0.35, clarity: 2, presence: 2, air: 2.5, excite: 0.2, double: 0.3, reverb: 0.15, size: 0.3, level: -3.5 },
     main: ['tune', 'pitch', 'formant', 'double', 'reverb'] },
-  { id: 'demon', emoji: '😈', preset: { psola: 1, pitch: -8, formant: -5, drive: 0.45, bass: 6, reverb: 0.35, size: 0.6, level: 0 },
-    main: ['pitch', 'formant', 'drive', 'reverb'] },
-  { id: 'ghost', emoji: '👻',
+  // deep demonic growl: an octave down with a bigger "vocal tract", false-chord rattle and rasp, an undertone
+  // another octave below, saturation darkened by the high cut, heavy low end, compressed
+  { id: 'demon', icon: 'demon',
+    preset: { psola: 1, pitch: -12, formant: -6, growl: 0.8, sub: 0.55, drive: 0.6, lowcut: 40, highcut: 6500, bass: 5, warmth: 3,
+      presence: 2, comp: 0.6, reverb: 0.25, size: 0.6, level: -2.5 },
+    main: ['pitch', 'formant', 'growl', 'sub', 'drive', 'reverb'] },
+  { id: 'ghost', icon: 'ghost',
     preset: { pitch: 3, formant: 2, whisper: 0.55, lowcut: 300, air: 3, echo: 0.4, echoTime: 0.33, echoFb: 0.45, reverb: 0.6, size: 0.9,
       tremolo: 0.35, tremoloHz: 4, level: 2.5 },
     main: ['whisper', 'echo', 'reverb', 'tremolo'] },
-  { id: 'digital', emoji: '🤖', preset: { psola: 1, mono: 1, monoHz: 100, ring: 0.35, ringHz: 60, crush: 0.25, presence: 2, highcut: 9000, level: 2 },
+  { id: 'digital', icon: 'bot', preset: { psola: 1, mono: 1, monoHz: 100, ring: 0.35, ringHz: 60, crush: 0.25, presence: 2, highcut: 9000, level: 2 },
     main: ['monoHz', 'mono', 'ring', 'ringHz', 'crush'] },
-  { id: 'hologram_classic', emoji: '🛰️',
+  { id: 'hologram_classic', icon: 'orbit',
     preset: { ring: 0.5, ringHz: 50, lowcut: 400, highcut: 4500, presence: 4, chorus: 0.5, chorusRate: 0.3, noise: 0.15, level: -2.5 },
     main: ['ring', 'ringHz', 'chorus', 'noise'] },
-  { id: 'hologram_warm', emoji: '✨', preset: { chorus: 0.6, chorusRate: 0.2, highcut: 6000, bass: 2, reverb: 0.3, size: 0.4, level: -2.5 },
+  { id: 'hologram_warm', icon: 'sparkles', preset: { chorus: 0.6, chorusRate: 0.2, highcut: 6000, bass: 2, reverb: 0.3, size: 0.4, level: -2.5 },
     main: ['chorus', 'reverb', 'highcut'] },
-  { id: 'smolder', emoji: '🔥', preset: { psola: 1, pitch: -3, formant: -1.5, drive: 0.4, whisper: 0.15, bass: 3, reverb: 0.2, size: 0.3, level: 0.5 },
+  { id: 'smolder', icon: 'flame', preset: { psola: 1, pitch: -3, formant: -1.5, drive: 0.4, whisper: 0.15, bass: 3, reverb: 0.2, size: 0.3, level: 0.5 },
     main: ['pitch', 'drive', 'whisper'] },
-  { id: 'ice', emoji: '🧊',
+  { id: 'ice', icon: 'snowflake',
     preset: { pitch: 2, formant: 1.5, ring: 0.25, ringHz: 420, air: 6, presence: 2, chorus: 0.3, reverb: 0.45, size: 0.8, level: 0 },
     main: ['ring', 'ringHz', 'air', 'reverb'] },
-  { id: 'electric', emoji: '⚡',
+  { id: 'electric', icon: 'zap',
     preset: { ring: 0.6, ringHz: 90, crush: 0.45, decimate: 0.2, drive: 0.2, lowcut: 300, highcut: 6000, noise: 0.25, level: 1.5 },
     main: ['ring', 'crush', 'decimate', 'noise'] },
-  { id: 'vhs', emoji: '📼', preset: { wow: 0.7, crush: 0.35, drive: 0.15, lowcut: 120, highcut: 4000, noise: 0.35, level: 1 },
+  { id: 'vhs', icon: 'cassette', preset: { wow: 0.7, crush: 0.35, drive: 0.15, lowcut: 120, highcut: 4000, noise: 0.35, level: 1 },
     main: ['wow', 'crush', 'noise', 'highcut'] },
-  { id: 'giant', emoji: '🗿', preset: { psola: 1, pitch: -12, formant: -7, bass: 4, reverb: 0.25, size: 0.7, level: 1 },
+  { id: 'giant', icon: 'mountain', preset: { psola: 1, pitch: -12, formant: -7, bass: 4, reverb: 0.25, size: 0.7, level: 1 },
     main: ['pitch', 'formant', 'reverb'] },
-  { id: 'chipmunk', emoji: '🐿️', preset: { psola: 1, pitch: 12, formant: 12, lowcut: 200, level: -1.5 },
+  { id: 'chipmunk', icon: 'acorn', preset: { psola: 1, pitch: 12, formant: 12, lowcut: 200, level: -1.5 },
     main: ['pitch', 'formant'] },
-  { id: 'whisper', emoji: '🤫', preset: { whisper: 1, lowcut: 300, presence: 3, air: 4, level: 6 },
+  { id: 'whisper', icon: 'wind', preset: { whisper: 1, lowcut: 300, presence: 3, air: 4, level: 6 },
     main: ['whisper', 'air', 'reverb'] },
-  { id: 'radio', emoji: '📻', preset: { lowcut: 500, highcut: 3200, drive: 0.5, presence: 6, noise: 0.2, crush: 0.15, level: -7.5 },
+  { id: 'radio', icon: 'radio', preset: { lowcut: 500, highcut: 3200, drive: 0.5, presence: 6, noise: 0.2, crush: 0.15, level: -7.5 },
     main: ['drive', 'noise', 'lowcut', 'highcut'] },
-  { id: 'cave', emoji: '🕳️', preset: { reverb: 0.8, size: 1, echo: 0.3, echoTime: 0.45, echoFb: 0.3, bass: 2, level: -1.5 },
+  { id: 'cave', icon: 'cave', preset: { reverb: 0.8, size: 1, echo: 0.3, echoTime: 0.45, echoFb: 0.3, bass: 2, level: -1.5 },
     main: ['reverb', 'size', 'echo'] },
 ]
 export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Record<BuiltinId, EffectInfo>
@@ -163,7 +171,11 @@ const customInfo = new Map<string, EffectInfo>()
 export function setCustom(list: CustomEffect[] | undefined): void {
   CUSTOM = list ?? []
   customInfo.clear()
-  for (const c of CUSTOM) customInfo.set(c.id, { id: c.id, emoji: c.emoji, preset: c.preset, main: EFFECT[c.base]?.main ?? EFFECT.clean.main })
+  for (const c of CUSTOM) {
+    // older saves: an emoji instead of an icon id
+    if (!c.icon || c.emoji !== undefined) { c.icon = customIcon(c.icon ?? c.emoji); delete c.emoji }
+    customInfo.set(c.id, { id: c.id, icon: c.icon, preset: c.preset, main: EFFECT[c.base]?.main ?? EFFECT.clean.main })
+  }
 }
 export function customs(): CustomEffect[] { return CUSTOM }
 export const isCustom = (id: string): id is CustomId => id.startsWith('c-')

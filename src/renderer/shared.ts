@@ -40,13 +40,15 @@ export type Cmd =
   | { type: 'fxReset'; lane: LaneId; effect: EffectId }
   | { type: 'quality'; lane: LaneId; value: Quality }
   | { type: 'record' } | { type: 'play' } | { type: 'stopPreview' }
-  | { type: 'customSave'; lane: LaneId; name: string; emoji: string }
+  | { type: 'customSave'; lane: LaneId; name: string; icon: string }
   | { type: 'customDelete'; id: EffectId }
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }
   /** hotkey: toggle / next / prev / effect id */
   | { type: 'hotkey'; lane: LaneId; action: string }
+  /** held hotkey: down — apply the action, up — return to the state before it */
+  | { type: 'hold'; lane: LaneId; action: string; down: boolean }
 
 /** input/output levels, %, and voice pitch: current and average, Hz (0 — no voice) */
 export interface Levels { mic: [number, number]; sys: [number, number]; f0: Record<LaneId, [number, number]> }

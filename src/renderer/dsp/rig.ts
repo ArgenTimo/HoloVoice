@@ -2,7 +2,7 @@
 // The graph is not rebuilt when the effect changes: all parameters are AudioParams, so ramp-in, ramp-out and transitions
 // between effects are smooth automation, with no clicks and no latency jumps.
 //
-//   input → holo-voice (noise reduction, pitch, timbre, vibrato, robot, whisper, degradation) → drive
+//   input → holo-voice (noise reduction, pitch, timbre, vibrato, robot, whisper, growl, degradation) → drive
 //        → ring modulation → low/high cut → bass / warmth / clarity / presence / air (+ excite)
 //        → de-esser → compressor → tape wow → chorus (+ doubler) → tremolo → level → output
 //                                                            tremolo ─┬→ echo ───→ level
@@ -57,7 +57,7 @@ export class VoiceRig {
     // voice
     this.input.connect(voice)
     for (const k of ['pitch', 'formant', 'robot', 'whisper', 'crush', 'decimate', 'denoise', 'vibrato', 'vibratoHz',
-      'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola'] as const) {
+      'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola', 'growl', 'sub'] as const) {
       bind(k, voice.parameters.get(k)!)
     }
 

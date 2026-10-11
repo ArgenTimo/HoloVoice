@@ -9,14 +9,14 @@
 <body class="panel">
   <div id="app">
     <header class="titlebar">
-      <button class="brand brand-btn" id="btn-holo" data-i18n-title="holo.title"><span class="dot"></span>HoloVoice <span class="caret">▾</span></button>
+      <button class="brand brand-btn" id="btn-holo" data-i18n-title="holo.title"><span class="dot"></span>HoloVoice <i class="caret" data-icon="chevronDown" data-size="14"></i></button>
       <div class="win-btns">
         <button id="btn-lang" class="lang-btn" data-i18n-title="lang.title"></button>
-        <button id="btn-widget" data-i18n-title="win.widget">🧩</button>
-        <button id="btn-compact" data-i18n-title="win.compact">▭</button>
-        <button id="btn-pin" class="on" data-i18n-title="win.pin">📌</button>
-        <button id="btn-min" data-i18n-title="win.min">—</button>
-        <button id="btn-close" data-i18n-title="win.close">✕</button>
+        <button id="btn-widget" data-i18n-title="win.widget"><i data-icon="widget"></i></button>
+        <button id="btn-compact" data-i18n-title="win.compact"><i data-icon="shrink"></i></button>
+        <button id="btn-pin" class="on" data-i18n-title="win.pin"><i data-icon="pin"></i></button>
+        <button id="btn-min" data-i18n-title="win.min"><i data-icon="minus"></i></button>
+        <button id="btn-close" data-i18n-title="win.close"><i data-icon="x"></i></button>
       </div>
     </header>
 
@@ -36,16 +36,16 @@
     </main>
 
     <footer class="bar">
-      <label class="dev" data-i18n-title="dev.mic">🎙️ <select id="mic"></select></label>
-      <span class="arrow">→</span>
-      <label class="dev" data-i18n-title="dev.out"><select id="out"></select></label>
+      <label class="dev" data-i18n-title="dev.mic"><i class="dev-ico" data-icon="mic"></i><select id="mic"></select></label>
+      <i class="arrow" data-icon="arrowRight" data-size="14"></i>
+      <label class="dev" data-i18n-title="dev.out"><i class="dev-ico" data-icon="headphones"></i><select id="out"></select></label>
       <label class="check" data-i18n-title="dev.monitorTip"><input type="checkbox" id="monitor"> <span data-i18n="dev.monitor"></span></label>
       <input type="range" id="monitor-vol" min="0" max="100" step="1" data-i18n-title="dev.monitorVol">
       <span class="spacer"></span>
-      <button class="ghost" id="open-hk" data-i18n="btn.hotkeys"></button>
-      <button class="ghost" id="open-osd" data-i18n="btn.osd"></button>
+      <button class="ghost" id="open-hk"><i data-icon="keyboard"></i><span data-i18n="btn.hotkeys"></span></button>
+      <button class="ghost" id="open-osd"><i data-icon="monitor"></i><span data-i18n="btn.osd"></span></button>
       <span class="ver" id="version"></span>
-      <button class="ghost" id="btn-update" data-i18n-title="btn.updateTip" data-i18n="btn.update"></button>
+      <button class="ghost" id="btn-update" data-i18n-title="btn.updateTip"><i data-icon="refresh"></i><span data-i18n="btn.update"></span></button>
       <span class="upd" id="update-status"></span>
     </footer>
 
@@ -54,11 +54,11 @@
 
     <div class="modal" id="modal-hk" hidden>
       <div class="sheet wide">
-        <header><b data-i18n="hk.title"></b><button class="x" data-close>✕</button></header>
+        <header><b class="with-ico"><i data-icon="keyboard" data-size="18"></i><span data-i18n="hk.title"></span></b><button class="x" data-close><i data-icon="x" data-size="18"></i></button></header>
         <p class="note" data-i18n="hk.note"></p>
         <div class="hk-cols">
-          <div><h4>🎙️ <span data-i18n="lane.mic"></span></h4><div class="hk-list" id="hk-mic"></div></div>
-          <div><h4>🔊 <span data-i18n="lane.sys"></span></h4><div class="hk-list" id="hk-sys"></div></div>
+          <div><h4 class="with-ico"><i data-icon="mic"></i><span data-i18n="lane.mic"></span></h4><div class="hk-list" id="hk-mic"></div></div>
+          <div><h4 class="with-ico"><i data-icon="speaker"></i><span data-i18n="lane.sys"></span></h4><div class="hk-list" id="hk-sys"></div></div>
         </div>
         <footer><button class="ghost" id="hk-reset" data-i18n="hk.resetAll"></button></footer>
       </div>
@@ -66,13 +66,13 @@
 
     <div class="modal" id="modal-osd" hidden>
       <div class="sheet">
-        <header><b data-i18n="osd.title"></b><button class="x" data-close>✕</button></header>
+        <header><b class="with-ico"><i data-icon="monitor" data-size="18"></i><span data-i18n="osd.title"></span></b><button class="x" data-close><i data-icon="x" data-size="18"></i></button></header>
         <label class="check"><input type="checkbox" id="osd-toast"> <span data-i18n="osd.toast"></span></label>
         <label class="check"><input type="checkbox" id="osd-bar"> <span data-i18n="osd.bar"></span></label>
         <div class="pos-label" data-i18n="osd.where"></div>
         <div class="pos-grid" id="osd-pos">
-          <button data-pos="top-left">↖</button><button data-pos="top">↑</button><button data-pos="top-right">↗</button>
-          <button data-pos="bottom-left">↙</button><button data-pos="bottom">↓</button><button data-pos="bottom-right">↘</button>
+          <button data-pos="top-left"><i data-icon="arrowUp" style="transform:rotate(-45deg)"></i></button><button data-pos="top"><i data-icon="arrowUp"></i></button><button data-pos="top-right"><i data-icon="arrowUp" style="transform:rotate(45deg)"></i></button>
+          <button data-pos="bottom-left"><i data-icon="arrowUp" style="transform:rotate(-135deg)"></i></button><button data-pos="bottom"><i data-icon="arrowUp" style="transform:rotate(180deg)"></i></button><button data-pos="bottom-right"><i data-icon="arrowUp" style="transform:rotate(135deg)"></i></button>
         </div>
         <p class="note" data-i18n="osd.note"></p>
         <footer><button class="ghost" id="osd-test" data-i18n="osd.test"></button></footer>

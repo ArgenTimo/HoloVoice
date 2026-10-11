@@ -48,7 +48,7 @@ let quitting = false
 let osd = null
 let osdTimer = null
 let osdToast = null // { lane, at } — hotkey: show the toast together with the ramp or on the next state
-const hotkeys = new Hotkeys(onHotkey)
+const hotkeys = new Hotkeys(onHotkey, onHotkeyHold)
 
 // ---------------------------------------------------------------- window settings
 
@@ -103,6 +103,12 @@ function start() {
 function onHotkey(lane, action) {
   osdToast = { lane, at: Date.now() }
   toEngine({ type: 'hotkey', lane, action })
+}
+
+/** Held shortcut: the effect is on while held, the previous state comes back on release */
+function onHotkeyHold(lane, action, down) {
+  osdToast = { lane, at: Date.now() }
+  toEngine({ type: 'hold', lane, action, down })
 }
 
 const OSD_W = 260

@@ -4,6 +4,7 @@
 // No audio is processed here (see engine.ts).
 import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
+import { CUSTOM_ICONS, DEFAULT_CUSTOM_ICON, applyIcons, icon, iconEl } from './icons'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type UiConfig } from './shared'
 
 let st: EngineState | null = null
@@ -11,7 +12,7 @@ let ui: UiConfig
 let hk: HotkeyInfo = { map: {}, failed: [] }
 const LANES: LaneId[] = ['mic', 'sys']
 const laneName = (id: LaneId) => t(`lane.${id}`)
-const LANE_ICO: Record<LaneId, string> = { mic: '🎙️', sys: '🔊' }
+const LANE_ICO: Record<LaneId, string> = { mic: 'mic', sys: 'speaker' }
 
 const BUILTIN_GROUPS: [string, EffectId[]][] = [
   ['grp.voices', ['clean', 'male', 'female', 'child', 'autotune', 'giant', 'chipmunk', 'whisper']],
@@ -25,8 +26,14 @@ function groups(): [string, EffectId[]][] {
 }
 /** Signature of the custom effect set: when it changes, the catalog, lists and hotkeys are rebuilt */
 let customSig = ''
-const sigOf = () => customs().map((c) => c.id + c.name + c.emoji).join('|')
-const emojiOf = (id: EffectId) => effectInfo(id)?.emoji ?? '⭐'
+const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|')
+const iconOf = (id: EffectId) => effectInfo(id)?.icon ?? DEFAULT_CUSTOM_ICON
+/** Icon + text in one element; text goes through textContent (custom effect names are user input) */
+const labeled = (cls: string, ico: string, text: string, size = 16) => {
+  const e = el('span', `with-ico ${cls}`.trim())
+  e.append(iconEl(ico, size), el('span', '', text))
+  return e
+}
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => {
   const e = document.createElement(tag)
@@ -52,7 +59,7 @@ function buildLanes(): void {
     card.id = `card-${id}`
     card.innerHTML = `
       <div class="lc-head">
-        <div class="lc-ico">${LANE_ICO[id]}</div>
+        <div class="lc-ico">${icon(LANE_ICO[id], 20)}</div>
         <div class="lc-title"><div class="lc-name">${laneName(id)}</div><div class="lc-fx" id="fx-${id}"></div></div>
         <button class="switch" id="sw-${id}" title="${id === 'mic' ? 'Ctrl+Alt+V' : 'Ctrl+Alt+B'}"><i></i></button>
       </div>
@@ -100,7 +107,7 @@ function buildLanes(): void {
 function fillFxSelect(sel: HTMLSelectElement): void {
   sel.innerHTML = ''
   for (const [, ids] of groups()) for (const fx of ids) {
-    const o = el('option', '', `${emojiOf(fx)} ${fxLabel(fx)}`)
+    const o = el('option', '', fxLabel(fx)) // <option> can't hold an SVG
     o.value = fx
     sel.appendChild(o)
   }
@@ -110,11 +117,11 @@ function renderLanes(): void {
   if (!st) return
   for (const id of LANES) {
     const cfg = st.S.lanes[id]
-    const fx = { id: cfg.effect, emoji: emojiOf(cfg.effect) }
     $(`card-${id}`).classList.toggle('on', cfg.enabled)
     $(`card-${id}`).classList.toggle('sel', ui.tab === id)
     $(`sw-${id}`).classList.toggle('on', cfg.enabled)
-    $(`fx-${id}`).textContent = cfg.enabled ? `${fx.emoji} ${fxLabel(fx.id)}` : t(id === 'mic' ? 'lane.offMic' : 'lane.offSys')
+    const fxBox = $(`fx-${id}`)
+    fxBox.replaceChildren(cfg.enabled ? labeled('', iconOf(cfg.effect), fxLabel(cfg.effect), 13) : t(id === 'mic' ? 'lane.offMic' : 'lane.offSys'))
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
     if (document.activeElement !== sel) sel.value = cfg.effect
     const q = $<HTMLSelectElement>(`q-${id}`)
@@ -135,7 +142,7 @@ function selectLane(id: LaneId): void {
   ui.tab = id
   holo.setUi({ tab: id })
   document.body.classList.toggle('lane-sys', id === 'sys')
-  $('cat-lane').textContent = `${LANE_ICO[id]} ${laneName(id)}`
+  $('cat-lane').replaceChildren(labeled('', LANE_ICO[id], laneName(id), 16))
   renderLanes()
   renderCatalog()
   renderInspector()
@@ -153,10 +160,10 @@ function buildCatalog(): void {
     for (const id of ids) {
       const tile = el('button', 'tile')
       tile.dataset.effect = id
-      tile.append(el('span', 't-emoji', emojiOf(id)), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
+      tile.append(iconEl(iconOf(id), 24, 't-icon'), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
       tile.onclick = () => holo.cmd({ type: 'effect', lane: ui.tab, effect: id })
       if (isCustom(id)) {
-        const del = el('span', 't-del', '✕')
+        const del = iconEl('x', 12, 't-del')
         del.title = t('ins.delete')
         del.onclick = (e) => { e.stopPropagation(); holo.cmd({ type: 'customDelete', id }) }
         tile.appendChild(del)
@@ -242,8 +249,8 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
 
   const head = el('div', 'ins-head')
   const titles = el('div')
-  titles.append(el('div', 'ins-title', fxLabel(effect)), el('div', 'ins-sub', `${LANE_ICO[lane]} ${laneName(lane)}`))
-  head.append(el('span', 'ins-emoji', info.emoji), titles)
+  titles.append(el('div', 'ins-title', fxLabel(effect)), labeled('ins-sub', LANE_ICO[lane], laneName(lane), 13))
+  head.append(iconEl(info.icon, 24, 'ins-icon'), titles)
   box.appendChild(head)
 
   const status = el('div', 'ins-info')
@@ -281,25 +288,25 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
 
   // custom effect: save the current settings under a custom name
   const mine = el('div', 'box')
-  mine.appendChild(el('div', 'box-title', t('ins.saveTitle')))
+  mine.appendChild(labeled('box-title', 'save', t('ins.saveTitle'), 14))
   mine.appendChild(el('div', 'prev-status', t('ins.saveHint')))
-  const EMOJIS = ['⭐', '🔥', '🎭', '🦊', '🐉', '👽', '🎃', '🤖', '🧙', '💀', '🌊', '⚡', '🍄', '🎸', '👑', '🫧']
-  let pick = EMOJIS[0]
-  const emo = el('div', 'emoji-row')
-  for (const e of EMOJIS) {
-    const b = el('button', 'emoji-btn' + (e === pick ? ' sel' : ''), e)
-    b.onclick = () => { pick = e; emo.querySelectorAll('.emoji-btn').forEach((x) => x.classList.toggle('sel', x === b)) }
-    emo.appendChild(b)
+  let pick: string = isCustom(effect) ? iconOf(effect) : DEFAULT_CUSTOM_ICON
+  const icons = el('div', 'icon-row')
+  for (const name of CUSTOM_ICONS) {
+    const b = el('button', 'icon-btn' + (name === pick ? ' sel' : ''))
+    b.innerHTML = icon(name, 16)
+    b.onclick = () => { pick = name; icons.querySelectorAll('.icon-btn').forEach((x) => x.classList.toggle('sel', x === b)) }
+    icons.appendChild(b)
   }
   const row = el('div', 'row-btns')
   const name = el('input', 'name-input')
   name.type = 'text'; name.maxLength = 40; name.placeholder = t('ins.saveName')
-  name.value = `${fxLabel(effect)} ★`
+  name.value = fxLabel(effect)
   const save = el('button', 'btn primary', t('ins.save'))
-  save.onclick = () => holo.cmd({ type: 'customSave', lane, name: name.value, emoji: pick })
+  save.onclick = () => holo.cmd({ type: 'customSave', lane, name: name.value, icon: pick })
   name.onkeydown = (e) => { if (e.key === 'Enter') save.click() }
   row.append(name, save)
-  mine.append(emo, row)
+  mine.append(icons, row)
   if (isCustom(effect)) {
     const del = el('button', 'btn', t('ins.delete'))
     del.onclick = () => holo.cmd({ type: 'customDelete', id: effect })
@@ -309,16 +316,18 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
 
   if (lane === 'mic') {
     const p = el('div', 'box')
-    p.appendChild(el('div', 'box-title', t('pv.title')))
+    p.appendChild(labeled('box-title', 'headphones', t('pv.title'), 14))
     p.appendChild(el('div', 'prev-status', t('pv.desc')))
     const row = el('div', 'row-btns')
-    const rec = el('button', 'btn rec', t('pv.rec'))
+    const rec = el('button', 'btn rec')
     rec.id = 'pv-rec'
     rec.onclick = () => holo.cmd({ type: 'record' })
-    const play = el('button', 'btn primary', t('pv.play'))
+    const play = el('button', 'btn primary')
+    play.append(iconEl('play', 12), el('span', '', t('pv.play')))
     play.id = 'pv-play'
     play.onclick = () => holo.cmd({ type: 'play' })
-    const stop = el('button', 'btn', '■')
+    const stop = el('button', 'btn')
+    stop.append(iconEl('stop', 12))
     stop.id = 'pv-stop'
     stop.onclick = () => holo.cmd({ type: 'stopPreview' })
     row.append(rec, play, stop)
@@ -349,7 +358,7 @@ function renderInspector(): void {
   const pv = st.preview
   const rec = document.getElementById('pv-rec') as HTMLButtonElement | null
   if (rec) {
-    rec.textContent = t(pv.recording ? 'pv.recording' : 'pv.rec')
+    rec.replaceChildren(iconEl('record', 12, pv.recording ? 'blink' : ''), el('span', '', t(pv.recording ? 'pv.recording' : 'pv.rec')))
     rec.disabled = pv.recording
     ;($('pv-play') as HTMLButtonElement).disabled = !pv.ready || pv.recording
     ;($('pv-stop') as HTMLButtonElement).disabled = !pv.playing && !pv.recording
@@ -427,6 +436,12 @@ function render(): void {
 
 // ---------------------------------------------------------------- hotkeys
 
+const MODS = (e: KeyboardEvent | MouseEvent) =>
+  [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean) as string[]
+
+/** Keys that are fine on their own (no modifier): they don't type text */
+const LONE_KEY = /^(F\d{1,2}|Insert|Home|End|PageUp|PageDown|CapsLock|Scrolllock|Numlock|PrintScreen|num.+|Mouse\d)$/
+
 /** KeyboardEvent → Electron accelerator. Uses e.code — independent of the keyboard layout (Russian, English). */
 function accelerator(e: KeyboardEvent): string | null {
   const c = e.code
@@ -435,6 +450,7 @@ function accelerator(e: KeyboardEvent): string | null {
     Slash: '/', Backslash: '\\', Backquote: '`', Space: 'Space', Tab: 'Tab', Enter: 'Enter', ArrowUp: 'Up', ArrowDown: 'Down',
     ArrowLeft: 'Left', ArrowRight: 'Right', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', Insert: 'Insert',
     NumpadAdd: 'numadd', NumpadSubtract: 'numsub', NumpadMultiply: 'nummult', NumpadDivide: 'numdiv', NumpadDecimal: 'numdec',
+    CapsLock: 'CapsLock', ScrollLock: 'Scrolllock', NumLock: 'Numlock', PrintScreen: 'PrintScreen',
   }
   let key: string | undefined
   if (/^Digit\d$/.test(c)) key = c.slice(5)
@@ -443,9 +459,29 @@ function accelerator(e: KeyboardEvent): string | null {
   else if (/^F\d{1,2}$/.test(c)) key = c
   else key = named[c]
   if (!key) return null
-  const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean)
-  if (!mods.length && !/^F\d/.test(key)) return null // a single key would interfere with typing and gaming
+  const mods = MODS(e)
+  if (!mods.length && !LONE_KEY.test(key)) return null // a single letter would fire while typing
   return [...mods, key].join('+')
+}
+
+/** Middle and side mouse buttons (DOM: 1 middle, 3 back, 4 forward) → "Mouse3/4/5" as the input hook names them */
+function mouseAccelerator(e: MouseEvent): string | null {
+  const name = ({ 1: 'Mouse3', 3: 'Mouse4', 4: 'Mouse5' } as Record<number, string>)[e.button]
+  return name ? [...MODS(e), name].join('+') : null
+}
+
+type HkMode = 'press' | 'x2' | 'x3' | 'hold'
+const HK_MODES: HkMode[] = ['press', 'x2', 'x3', 'hold']
+
+/** "Ctrl+F8 x2" → ["Ctrl+F8", "x2"] */
+function splitBinding(b: string): [string, HkMode] {
+  const m = /^(.*?)(?: (x2|x3|hold))?$/.exec(b)!
+  return [m[1], (m[2] as HkMode) || 'press']
+}
+
+/** Human-readable shortcut: mouse buttons by name */
+function bindingText(combo: string): string {
+  return combo.split('+').map((k) => (/^Mouse\d$/.test(k) ? t(`hk.${k.toLowerCase()}`) : k)).join(' + ')
 }
 
 function buildHotkeys(): void {
@@ -454,14 +490,26 @@ function buildHotkeys(): void {
     list.innerHTML = ''
     const actions: [string, string][] = [
       ['toggle', t('hk.toggle')], ['next', t('hk.next')], ['prev', t('hk.prev')],
-      ...groups().flatMap(([, ids]) => ids.map((id): [string, string] => [id, `${emojiOf(id)} ${fxLabel(id)}`])),
+      ...groups().flatMap(([, ids]) => ids.map((id): [string, string] => [id, fxLabel(id)])),
     ]
     for (const [what, label] of actions) {
       const row = el('div', 'hk-row')
+      const fx = effectInfo(what)
       const btn = el('button', 'hk-key')
       btn.dataset.action = `${lane}:${what}`
       btn.onclick = () => record(btn)
-      row.append(el('span', '', label), btn)
+      const mode = el('select', 'hk-mode') as HTMLSelectElement
+      mode.dataset.action = btn.dataset.action
+      mode.title = t('hk.modeTitle')
+      for (const m of HK_MODES) mode.add(new Option(t(`hk.mode.${m}`), m))
+      mode.onchange = async () => {
+        const [combo] = splitBinding(hk.map[mode.dataset.action!] || '')
+        if (!combo) return
+        await holo.setHotkey(mode.dataset.action!, mode.value === 'press' ? combo : `${combo} ${mode.value}`)
+        hk = await holo.getHotkeys()
+        renderHotkeys()
+      }
+      row.append(fx ? labeled('hk-label', fx.icon, label, 15) : el('span', 'hk-label', label), btn, mode)
       list.appendChild(row)
     }
   }
@@ -473,10 +521,15 @@ function renderHotkeys(): void {
     if (b.classList.contains('rec')) return
     const a = b.dataset.action!
     const k = hk.map[a] || ''
-    b.textContent = k || '—'
+    b.textContent = k ? bindingText(splitBinding(k)[0]) : '—'
     b.classList.toggle('empty', !k)
     b.classList.toggle('busy', !!k && hk.failed.includes(a))
     b.title = k && hk.failed.includes(a) ? t('hk.busy') : ''
+  })
+  document.querySelectorAll<HTMLSelectElement>('.hk-mode').forEach((m) => {
+    const k = hk.map[m.dataset.action!] || ''
+    m.value = splitBinding(k)[1]
+    m.disabled = !k
   })
   renderCatalog()
 }
@@ -487,11 +540,15 @@ async function record(btn: HTMLButtonElement): Promise<void> {
   await holo.pauseHotkeys(true) // otherwise the global shortcut itself would intercept the keypress
   btn.classList.add('rec')
   btn.textContent = t('hk.press')
+  const [, mode] = splitBinding(hk.map[btn.dataset.action!] || '')
   const finish = async (accel: string | null) => {
     window.removeEventListener('keydown', onKey, true)
+    window.removeEventListener('mousedown', onMouse, true)
+    window.removeEventListener('auxclick', stop, true)
     window.removeEventListener('blur', onBlur)
     recording = null
-    if (accel !== null) await holo.setHotkey(btn.dataset.action!, accel)
+    // a new key keeps the row's mode (double press, hold…)
+    if (accel !== null) await holo.setHotkey(btn.dataset.action!, accel && mode !== 'press' ? `${accel} ${mode}` : accel)
     await holo.pauseHotkeys(false)
     hk = await holo.getHotkeys()
     btn.classList.remove('rec')
@@ -508,10 +565,18 @@ async function record(btn: HTMLButtonElement): Promise<void> {
       return
     }
     if (accel) finish(accel)
-    else btn.textContent = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super']
-      .filter(Boolean).join('+') + '+…'
+    else btn.textContent = MODS(e).join('+') + '+…'
   }
+  // middle / side mouse buttons; a left click elsewhere cancels, a right click is ignored
+  const onMouse = (e: MouseEvent) => {
+    const accel = mouseAccelerator(e)
+    if (accel) { e.preventDefault(); e.stopPropagation(); finish(accel); return }
+    if (e.button === 0 && e.target !== btn) finish(null)
+  }
+  const stop = (e: Event) => { e.preventDefault(); e.stopPropagation() } // the "back" button must not navigate
   const onBlur = () => finish(null)
+  window.addEventListener('mousedown', onMouse, true)
+  window.addEventListener('auxclick', stop, true)
   window.addEventListener('keydown', onKey, true)
   window.addEventListener('blur', onBlur)
   recording = () => finish(null)
@@ -545,6 +610,7 @@ function openModal(id: string): void {
 async function setCompact(on: boolean): Promise<void> {
   ui = await holo.setUi({ compact: on })
   document.body.classList.toggle('compact', on)
+  $('btn-compact').innerHTML = icon(on ? 'expand' : 'shrink', 16)
   await new Promise((r) => requestAnimationFrame(r))
   // height — down to the bottom of the last card (the column spans the whole window, so its scrollHeight is useless)
   await holo.compact(on, $('card-sys').getBoundingClientRect().bottom + 14)
@@ -574,10 +640,10 @@ function buildLangMenu(): void {
 
 /** HoloVoice is one product of the HOLO family; the other entries are placeholders until their links exist. */
 const HOLO_PRODUCTS: { name: string; icon: string; desc: string; url?: string; current?: boolean }[] = [
-  { name: 'HoloVoice', icon: '🎙️', desc: 'holo.voice', current: true },
-  { name: 'HOLO Messenger', icon: '💬', desc: 'holo.messenger' },
-  { name: 'HOLO Viewer', icon: '🥽', desc: 'holo.viewer' },
-  { name: 'HOLO Studio', icon: '🧊', desc: 'holo.studio' },
+  { name: 'HoloVoice', icon: 'mic', desc: 'holo.voice', current: true },
+  { name: 'HOLO Messenger', icon: 'message', desc: 'holo.messenger' },
+  { name: 'HOLO Viewer', icon: 'glasses', desc: 'holo.viewer' },
+  { name: 'HOLO Studio', icon: 'cube', desc: 'holo.studio' },
 ]
 
 function buildHoloMenu(): void {
@@ -588,7 +654,7 @@ function buildHoloMenu(): void {
     item.disabled = !p.current && !p.url
     const text = el('div')
     text.append(el('div', 'holo-name', p.name), el('div', 'holo-desc', t(p.desc)))
-    item.append(el('span', 'holo-icon', p.icon), text, el('span', 'holo-badge', p.current ? t('holo.here') : t('holo.soon')))
+    item.append(iconEl(p.icon, 20, 'holo-icon'), text, el('span', 'holo-badge', p.current ? t('holo.here') : t('holo.soon')))
     if (p.url) item.onclick = () => holo.open(p.url!)
     menu.appendChild(item)
   }
@@ -600,6 +666,7 @@ async function main(): Promise<void> {
   ui = await holo.getUi()
   setLang(ui.lang)
   applyStatic()
+  applyIcons()
   buildLangMenu()
   buildHoloMenu()
   $('btn-close').onclick = () => holo.close()

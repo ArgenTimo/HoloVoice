@@ -82,15 +82,22 @@ HF_HOME="$HV/models/hf" HF_HUB_DISABLE_TELEMETRY=1 "$PY" - "$SEED/checkpoints" <
 import sys
 from huggingface_hub import hf_hub_download
 ck = sys.argv[1]
+# pinned to the same reviewed commits as REVISIONS in holovoice_vc.py (it loads them offline only)
+REV = {
+    "Plachta/Seed-VC": "257283f9f41585055e8f858fba4fd044e5caed6e",
+    "funasr/campplus": "e4b6ede7ce16997aff4ae69fbca1f0175e2afede",
+    "FunAudioLLM/CosyVoice-300M": "24c40509c3c5ea6fe06b5f8790ff99e3714a6bee",
+    "facebook/wav2vec2-xls-r-300m": "1a640f32ac3e39899438a2931f9924c02f080a54",
+}
 for repo, fn in [("Plachta/Seed-VC", "DiT_uvit_tat_xlsr_ema.pth"),
                  ("Plachta/Seed-VC", "config_dit_mel_seed_uvit_xlsr_tiny.yml"),
                  ("funasr/campplus", "campplus_cn_common.bin"),
                  ("FunAudioLLM/CosyVoice-300M", "hift.pt")]:
     print("  ", repo, fn, flush=True)
-    hf_hub_download(repo_id=repo, filename=fn, cache_dir=ck)
+    hf_hub_download(repo_id=repo, filename=fn, cache_dir=ck, revision=REV[repo])
 for fn in ("config.json", "preprocessor_config.json", "pytorch_model.bin"):
     print("   facebook/wav2vec2-xls-r-300m", fn, flush=True)
-    hf_hub_download(repo_id="facebook/wav2vec2-xls-r-300m", filename=fn)
+    hf_hub_download(repo_id="facebook/wav2vec2-xls-r-300m", filename=fn, revision=REV["facebook/wav2vec2-xls-r-300m"])
 EOF
 
 # --- target voices ------------------------------------------------------------------------------------

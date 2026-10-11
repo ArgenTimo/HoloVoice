@@ -298,7 +298,7 @@ class Lane {
 
 const lanes: Record<LaneId, Lane> = { mic: new Lane('mic'), sys: new Lane('sys') }
 // diagnostics from DevTools (and the Windows CI test): window.__hv.lanes.sys.rig.current, .ctx.state, .stream, handle(cmd) …
-;(window as unknown as { __hv: unknown }).__hv = { lanes, handle, get S() { return S }, get sysHint() { return hint.sys } }
+;(window as unknown as { __hv: unknown }).__hv = { lanes, handle, get S() { return S }, get sysHint() { return hint.sys }, get neural() { return neural } }
 
 // ---------------------------------------------------------------- test with a recording
 

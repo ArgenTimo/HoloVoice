@@ -49,6 +49,14 @@ def default_home() -> str:
 
 
 DIT_REPO, DIT_FILE, DIT_CFG = "Plachta/Seed-VC", "DiT_uvit_tat_xlsr_ema.pth", "config_dit_mel_seed_uvit_xlsr_tiny.yml"
+# Every model is pinned to a reviewed commit and read from the local cache only (install.sh downloads them):
+# a changed upstream repository can never put new code or weights into a running sidecar.
+REVISIONS = {
+    "Plachta/Seed-VC": "257283f9f41585055e8f858fba4fd044e5caed6e",
+    "funasr/campplus": "e4b6ede7ce16997aff4ae69fbca1f0175e2afede",
+    "FunAudioLLM/CosyVoice-300M": "24c40509c3c5ea6fe06b5f8790ff99e3714a6bee",
+    "facebook/wav2vec2-xls-r-300m": "1a640f32ac3e39899438a2931f9924c02f080a54",
+}
 CAMPPLUS = ("funasr/campplus", "campplus_cn_common.bin")
 HIFT = ("FunAudioLLM/CosyVoice-300M", "hift.pt")
 XLSR = "facebook/wav2vec2-xls-r-300m"
@@ -282,7 +290,7 @@ class SeedVC:
         import torch
         import yaml
         from huggingface_hub import hf_hub_download
-        from modules.commons import build_model, load_checkpoint, recursive_munch
+        from modules.commons import build_model, recursive_munch
         from modules.campplus.DTDNN import CAMPPlus
         from modules.hifigan.generator import HiFTGenerator
         from modules.hifigan.f0_predictor import ConvRNNF0Predictor
@@ -295,15 +303,25 @@ class SeedVC:
         self.device = torch.device("cuda")
         self.fp16 = fp16
         ck = os.path.join(self.seed_dir, "checkpoints")
-        dl = lambda repo, fn: hf_hub_download(repo_id=repo, filename=fn, cache_dir=ck)  # noqa: E731
+        def dl(repo, fn):
+            try:
+                return hf_hub_download(repo_id=repo, filename=fn, cache_dir=ck, revision=REVISIONS[repo], local_files_only=True)
+            except Exception as e:
+                raise RuntimeError(f"model file {repo}/{fn} missing — run native/neural-vc/install.sh") from e
 
         with open(dl(DIT_REPO, DIT_CFG)) as f:
             cfg = yaml.safe_load(f)
         mp = recursive_munch(cfg["model_params"])
         mp.dit_type = "DiT"
         model = build_model(mp, stage="DiT")
-        model, _, _, _ = load_checkpoint(model, None, dl(DIT_REPO, DIT_FILE), load_only_params=True,
-                                         ignore_modules=[], is_distributed=False)
+        # Seed-VC's own load_checkpoint unpickles arbitrary objects; tensors only here (same mapping otherwise)
+        params = torch.load(dl(DIT_REPO, DIT_FILE), map_location="cpu", weights_only=True)["net"]
+        for key in model:
+            if key not in params:
+                continue
+            own = model[key].state_dict()
+            src = {(k[7:] if k.startswith("module.") else k): v for k, v in params[key].items()}
+            model[key].load_state_dict({k: v for k, v in src.items() if k in own and v.shape == own[k].shape}, strict=False)
         for k in model:
             model[k].eval().to(self.device)
         model.cfm.estimator.setup_caches(max_batch_size=1, max_seq_length=8192)
@@ -320,8 +338,11 @@ class SeedVC:
         self.vocoder = hift.eval().to(self.device)
 
         sp = cfg["model_params"]["speech_tokenizer"]
-        self.w2v_fe = Wav2Vec2FeatureExtractor.from_pretrained(sp["name"])
-        w2v = Wav2Vec2Model.from_pretrained(sp["name"])
+        if sp["name"] not in REVISIONS:
+            raise RuntimeError(f"unexpected speech tokenizer {sp['name']}")
+        pin = dict(revision=REVISIONS[sp["name"]], local_files_only=True)
+        self.w2v_fe = Wav2Vec2FeatureExtractor.from_pretrained(sp["name"], **pin)
+        w2v = Wav2Vec2Model.from_pretrained(sp["name"], **pin)
         w2v.encoder.layers = w2v.encoder.layers[: sp["output_layer"]]
         self.w2v = w2v.to(self.device).eval().half()
 

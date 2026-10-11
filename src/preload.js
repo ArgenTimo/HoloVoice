@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('holo', {
   copyDiagnostics: () => ipcRenderer.invoke('diag:copy'),
   update: () => ipcRenderer.invoke('app:update'),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, t) => cb(t)),
+  updateAvailable: () => ipcRenderer.invoke('app:updateAvailable'),
+  onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_e, v) => cb(v)),
   // engine
   routeMic: () => ipcRenderer.invoke('routing:mic'),
   routeSys: (on, rate) => ipcRenderer.invoke('routing:sys', on, rate),
@@ -49,4 +51,5 @@ contextBridge.exposeInMainWorld('holo', {
   pushLevels: (l) => ipcRenderer.send('levels', l),
   pushRamp: (r) => ipcRenderer.send('ramp', r),
   onCmd: (cb) => ipcRenderer.on('cmd', (_e, c) => cb(c)),
+  onResume: (cb) => ipcRenderer.on('power:resume', () => cb()),
 })

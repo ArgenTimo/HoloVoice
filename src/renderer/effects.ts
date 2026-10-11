@@ -201,7 +201,10 @@ export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Recor
 let CUSTOM: CustomEffect[] = []
 const customInfo = new Map<string, EffectInfo>()
 export function setCustom(list: CustomEffect[] | undefined): void {
-  CUSTOM = list ?? []
+  // a damaged entry is dropped on its own — never the whole list
+  CUSTOM = (Array.isArray(list) ? list : []).filter((c) =>
+    c && typeof c === 'object' && typeof c.id === 'string' && c.id.startsWith('c-') && typeof c.name === 'string'
+    && !!c.preset && typeof c.preset === 'object')
   customInfo.clear()
   for (const c of CUSTOM) {
     // older saves: an emoji instead of an icon id

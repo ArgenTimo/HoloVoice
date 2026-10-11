@@ -5,7 +5,7 @@
 //            to the tray and audio keeps running; if nothing is on — the whole app quits
 //   widget — desktop widget; when pinned it starts with the system (--widget) and does not depend on the panel
 //   osd    — hotkey toast and effect ramp bar; takes no focus and ignores the mouse (doesn't disturb games)
-const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, Notification, clipboard, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, Notification, clipboard, nativeImage, powerMonitor, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -127,6 +127,9 @@ function start() {
   })
 
   createTray()
+  powerMonitor.on('resume', () => engine?.webContents.send('power:resume'))
+  setTimeout(checkUpdates, 15000)
+  setInterval(checkUpdates, 6 * 3600 * 1000)
   if (ui.widget) showWidget()
   if (!fromAutostart) showPanel()
   // Linux: refresh the autostart entry's paths (an AppImage may have moved). Windows: only when the user toggles
@@ -350,6 +353,7 @@ function updateTray() {
     .map((id) => ({ label: fxName(id), type: 'radio', checked: L?.[lane].effect === id, click: () => toEngine({ type: 'effect', lane, effect: id }) }))
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: tr('tray.open'), click: showPanel },
+    ...(updateAvailable ? [{ label: tr('upd.toV', { v: updateAvailable }), click: showPanel }] : []),
     { type: 'separator' },
     { label: tr('tray.mic'), type: 'checkbox', checked: !!L?.mic.enabled, click: () => toEngine({ type: 'toggle', lane: 'mic' }) },
     { label: tr('tray.effect'), submenu: effects('mic'), enabled: !!state },
@@ -418,8 +422,26 @@ ipcMain.handle('app:update', async (e) => {
   if (updating) return tr('upd.busy')
   updating = true
   const progress = (t) => { if (!e.sender.isDestroyed()) e.sender.send('update:progress', t) }
-  try { return await updater.update(progress, tr) } catch (err) { return tr('upd.fail', { err: err.message || err }) } finally { updating = false }
+  const beforeInstall = async () => {
+    winSys?.stop()
+    neural?.stop()
+    await new Promise((r) => setTimeout(r, 1500)) // let the helpers restore and exit
+  }
+  try { return await updater.update(progress, tr, beforeInstall) } finally { updating = false }
 })
+// a quiet check shortly after start and then every 6 hours: the panel shows "Update to X" instead of a plain button
+let updateAvailable = null
+async function checkUpdates() {
+  try {
+    const v = await updater.check()
+    if (v && v !== updateAvailable) {
+      updateAvailable = v
+      for (const w of remotes()) w.webContents.send('update:available', v)
+      updateTray()
+    }
+  } catch (e) { console.warn('update check:', e.message || e) }
+}
+ipcMain.handle('app:updateAvailable', () => updateAvailable)
 
 ipcMain.handle('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())
 ipcMain.handle('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
@@ -434,7 +456,8 @@ ipcMain.handle('win:height', (e, h) => {
   w.setResizable(resizable)
 })
 ipcMain.handle('open', (_e, url) => {
-  if (/^https:\/\/(www\.)?vb-audio\.com\//.test(url)) shell.openExternal(url)
+  // only what the UI links to: VB-Cable, Windows privacy/sound settings
+  if (/^https:\/\/(www\.)?vb-audio\.com\//.test(url) || /^ms-settings:(privacy-microphone|sound)$/.test(url)) shell.openExternal(url)
 })
 
 // ---------------------------------------------------------------- routing (Linux)

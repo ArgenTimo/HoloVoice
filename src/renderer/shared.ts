@@ -114,8 +114,11 @@ export interface HoloApi {
   onSysEnd(cb: (error: string) => void): void
   /** Linux: the real output changed while computer sound is captured */
   onRealSink(cb: (r: { realSinkLabel: string }) => void): void
+  onResume(cb: () => void): void
   // neural voices (optional GPU mode)
   quit(): Promise<void>
+  updateAvailable(): Promise<string | null>
+  onUpdateAvailable(cb: (version: string) => void): void
   openLogs(): Promise<string>
   copyDiagnostics(): Promise<boolean>
   neuralCheck(force?: boolean): Promise<NeuralCheck>

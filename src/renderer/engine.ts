@@ -8,7 +8,7 @@
 // Each lane has its own AudioContext: they use different output devices.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, isNeural, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
+import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, customs, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, isNeural, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type NeuralState, type Settings, type Speaker } from './shared'
 
 const isWin = holo.platform === 'win32'
@@ -25,19 +25,36 @@ const DEFAULTS: Settings = {
 }
 const KEY = 'holovoice.settings.v2'
 function loadSettings(): Settings {
+  const text = localStorage.getItem(KEY)
+  let raw: Partial<Settings> = {}
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<Settings>
-    setCustom(raw.custom) // custom effects — before validating the lanes: a lane may use a custom effect
-    const lane = (id: LaneId): LaneSettings => {
-      // from older versions: extra keys (strength, pitch, space) are harmless, effects that no longer exist become "Clean"
-      const l = { ...DEFAULTS.lanes[id], ...raw.lanes?.[id] }
-      if (!effectInfo(l.effect)) l.effect = 'clean'
-      l.fx ??= {}
-      return l
-    }
-    const speaker = (['neutral', 'male', 'female'] as const).includes(raw.speaker as Speaker) ? raw.speaker! : 'neutral'
-    return { ...DEFAULTS, ...raw, speaker, lanes: { mic: lane('mic'), sys: lane('sys') } }
-  } catch { return structuredClone(DEFAULTS) }
+    raw = JSON.parse(text || '{}') ?? {}
+    if (typeof raw !== 'object') raw = {}
+  } catch (e) {
+    // unreadable: keep a copy before anything overwrites it (custom effects can be recovered from it)
+    console.error('settings unreadable, starting with defaults:', e)
+    try { localStorage.setItem(`${KEY}.broken.${Date.now()}`, text ?? '') } catch { /* full */ }
+  }
+  // every part is checked on its own: one bad value must not reset everything (custom effects especially)
+  try { setCustom(raw.custom) } catch (e) { console.error('custom effects:', e); setCustom([]) }
+  const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d)
+  const lane = (id: LaneId): LaneSettings => {
+    const def = DEFAULTS.lanes[id]
+    const r = (raw.lanes?.[id] ?? {}) as Partial<LaneSettings>
+    // from older versions: extra keys are harmless, effects that no longer exist become "Clean"
+    const l: LaneSettings = { ...def, ...r,
+      enabled: typeof r.enabled === 'boolean' ? r.enabled : def.enabled,
+      amount: num(r.amount, 0, 100, def.amount), gain: num(r.gain, 0, 200, def.gain), gate: num(r.gate, -80, -20, def.gate),
+      quality: r.quality === 'fast' ? 'fast' : 'hq',
+      fx: r.fx && typeof r.fx === 'object' ? r.fx : {} }
+    if (typeof l.effect !== 'string' || !effectInfo(l.effect)) l.effect = 'clean'
+    return l
+  }
+  const speaker = (['neutral', 'male', 'female'] as const).includes(raw.speaker as Speaker) ? raw.speaker! : 'neutral'
+  return { ...DEFAULTS, ...raw, speaker, custom: customs(),
+    monitorVol: num(raw.monitorVol, 0, 100, DEFAULTS.monitorVol), monitor: raw.monitor === true,
+    mic: typeof raw.mic === 'string' ? raw.mic : 'default', out: typeof raw.out === 'string' ? raw.out : '',
+    lanes: { mic: lane('mic'), sys: lane('sys') } }
 }
 const S = loadSettings()
 const hint: Record<LaneId, Hint> = { mic: { html: '', warn: false }, sys: { html: '', warn: false } }
@@ -349,6 +366,8 @@ async function findDevice(kind: MediaDeviceKind, test: (label: string) => boolea
   return undefined
 }
 
+let micError = '' // the last failure to open the microphone (shown in the hint until it opens again)
+
 async function openMic(): Promise<void> {
   const audio: MediaTrackConstraints = {
     echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1,
@@ -356,13 +375,37 @@ async function openMic(): Promise<void> {
   if (S.mic && S.mic !== 'default') audio.deviceId = { exact: S.mic }
   let stream: MediaStream
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio })
-  } catch {
-    S.mic = 'default'
-    delete audio.deviceId
-    stream = await navigator.mediaDevices.getUserMedia({ audio })
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio })
+    } catch (e) {
+      if ((e as Error)?.name === 'NotAllowedError') throw e // a different device won't help
+      S.mic = 'default'
+      delete audio.deviceId
+      stream = await navigator.mediaDevices.getUserMedia({ audio })
+    }
+  } catch (e) {
+    micError = (e as Error)?.name || String(e)
+    console.error('microphone:', e)
+    updateMicHint()
+    throw e
   }
+  micError = ''
+  // unplugged (or taken away by the system): try again shortly — a replugged USB mic keeps its id
+  stream.getAudioTracks()[0]?.addEventListener('ended', () => {
+    console.warn('microphone track ended')
+    setTimeout(() => { openMic().then(() => { updateMicHint(); publish() }).catch(() => publish()) }, 1500)
+  })
   lanes.mic.setStream(stream)
+}
+
+/** Plain-language microphone errors with a way out */
+function micErrorHint(name: string): string {
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return t('err.micDenied') + (isWin ? ` <a data-href="ms-settings:privacy-microphone">${t('err.micSettings')}</a>` : '')
+  }
+  if (name === 'NotReadableError' || name === 'AbortError') return t('err.micBusy')
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return t('err.micNone')
+  return t('err.start', { err: esc(name) })
 }
 
 /** The virtual microphone's input side: HoloVoice-feed on Linux, CABLE Input (VB-Cable) etc. on Windows */
@@ -380,11 +423,21 @@ async function applyMicOut(): Promise<void> {
   await lanes.mic.setSink(target)
 }
 
+let rerouteAt = 0
 async function refreshDevices(): Promise<void> {
   await listDevices()
   const pick = (items: MediaDeviceInfo[], v: string) => (items.some((d) => d.deviceId === v) ? v : items[0]?.deviceId ?? 'default')
   const mic = pick(mics, S.mic)
-  if (mic !== S.mic) { S.mic = mic; await openMic() }
+  const dead = lanes.mic.stream?.getAudioTracks()[0]?.readyState !== 'live'
+  if (mic !== S.mic || dead || micError) { S.mic = mic; await openMic().catch(() => {}) }
+  // Linux: PipeWire restarted (update, resume) and took the HoloVoice sink with it — create it again
+  if (holo.platform === 'linux' && micRoute.ok && micRoute.sinkLabel && !outs.some((d) => d.label === micRoute.sinkLabel)
+    && Date.now() - rerouteAt > 10000) {
+    rerouteAt = Date.now()
+    console.warn('virtual microphone gone — recreating')
+    micRoute = await holo.routeMic()
+    if (micRoute.ok && micRoute.sinkLabel) await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
+  }
   // a virtual cable that appears (VB-Cable just installed, PipeWire restarted) is taken at once — no restart needed
   const virt = virtualOut()
   if (virt && !S.outManual) S.out = virt.deviceId
@@ -399,7 +452,9 @@ const HK = (lane: LaneId) => `<b data-hk="${lane}:toggle"></b>`
 
 function updateMicHint(): void {
   const outLabel = outLabelOf(S.out)
-  if (isVirtualOut(outLabel)) {
+  if (micError) {
+    hint.mic = { warn: true, html: micErrorHint(micError) }
+  } else if (isVirtualOut(outLabel)) {
     const mic = /HoloVoice/.test(outLabel) ? 'HoloVoice-Microphone'
       : /CABLE/.test(outLabel) ? 'CABLE Output (VB-Audio Virtual Cable)' : t('hint.cableOut')
     hint.mic = { warn: false, html: t('hint.micOk', { mic, key: HK('mic') }) }
@@ -727,8 +782,7 @@ async function main(): Promise<void> {
   await lanes.mic.makeRig()
   await lanes.sys.makeRig()
   // my voice: microphone (also grants permission to see device names), virtual output
-  let micError = ''
-  try { await openMic() } catch (e) { micError = String((e as Error)?.message ?? e) }
+  try { await openMic() } catch { /* micError is set; the hint explains it */ }
   micRoute = await holo.routeMic()
   // the HoloVoice sink may take a moment to show up in the device list
   if (micRoute.ok && micRoute.sinkLabel) await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
@@ -742,7 +796,6 @@ async function main(): Promise<void> {
   if (S.lanes.sys.enabled) await setSys(true)
   else await lanes.sys.ctx.suspend()
   await applyMonitor()
-  if (micError) hint.mic = { warn: true, html: t('err.start', { err: esc(micError) }) }
   ready = true
   publish()
   // neural voices: only with the optional GPU install (checking imports torch — a few seconds, in the background)
@@ -756,6 +809,13 @@ async function main(): Promise<void> {
   }).catch(() => {})
 
   navigator.mediaDevices.addEventListener('devicechange', () => { refreshDevices() })
+  // after sleep: contexts may be suspended, devices re-enumerated
+  holo.onResume(() => {
+    console.log('resumed from sleep')
+    lanes.mic.ctx.resume().catch(() => {})
+    if (sysActive) lanes.sys.ctx.resume().catch(() => {})
+    setTimeout(() => refreshDevices(), 1500)
+  })
   // devicechange doesn't fire in the hidden engine window — otherwise a connected headset goes unseen: re-check the list every 3 s
   let devSig = ''
   setInterval(async () => {

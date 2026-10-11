@@ -362,3 +362,5 @@ li.info > .st-mark { border-color: var(--accent); }
 .st-wait { color: var(--muted); font-size: 12px; animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .45; } }
 .lc-hint, .ins-info { user-select: text; }
+/* "Update to X" — a newer version is waiting */
+.ghost.primary { background: var(--accent); border-color: var(--accent); color: #fff; }

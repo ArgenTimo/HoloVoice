@@ -266,5 +266,14 @@
   "setup.try": "Put on headphones and turn on <b>Hear myself</b>, then click a voice. More voices are in the catalog.",
   "setup.voiceGuess": "Your voice sounds around {hz} Hz — “{v}”. Effects tune themselves to it.",
   "setup.voiceApply": "Use this voice type",
-  "setup.done": "Done"
+  "setup.done": "Done",
+  "err.micDenied": "The microphone is blocked by the system’s privacy settings — allow desktop apps to use the microphone.",
+  "err.micSettings": "Open the settings",
+  "err.micBusy": "The microphone is busy — another program holds it exclusively, or the driver stopped. Close that program or pick another microphone; HoloVoice retries by itself.",
+  "err.micNone": "No microphone found. Connect one — HoloVoice picks it up by itself.",
+  "upd.toV": "Update to {v}",
+  "upd.noNpm": "Can’t update this copy: npm isn’t available here. Run “git pull && npm ci && npm run build:renderer” in its folder.",
+  "upd.offline": "No connection to the update server — check the internet and try again.",
+  "upd.notReady": "A new version is still being published — try again in a few minutes.",
+  "upd.limit": "The update server asks to wait a little — try again later."
 }

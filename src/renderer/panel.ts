@@ -898,6 +898,14 @@ async function main(): Promise<void> {
   $('version').textContent = `v${await holo.version()}`
   const upd = $<HTMLButtonElement>('btn-update'), updStatus = $('update-status')
   holo.onUpdateProgress((text) => { updStatus.textContent = text })
+  // a newer version was found in the background: the button says so
+  const showAvailable = (v: string | null) => {
+    if (!v) return
+    upd.classList.add('primary')
+    upd.querySelector('span')!.textContent = t('upd.toV', { v })
+  }
+  holo.updateAvailable().then(showAvailable).catch(() => {})
+  holo.onUpdateAvailable(showAvailable)
   upd.onclick = async () => {
     upd.disabled = true
     updStatus.textContent = t('upd.checking')

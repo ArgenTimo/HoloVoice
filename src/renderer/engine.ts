@@ -404,10 +404,18 @@ const isVirtualOut = (label: string) => /HoloVoice|CABLE Input|VB-Audio|Virtual 
 const isVirtualIn = (label: string) => /HoloVoice|Monitor of|CABLE Output|VoiceMeeter Out/i.test(label)
 const isAlias = (d: MediaDeviceInfo) => d.deviceId === 'default' || d.deviceId === 'communications'
 
+/** VB-Cable's installer often makes the cable the system default: the default playback "CABLE Input" means the
+ *  user hears nothing at all; the default recording "CABLE Output" would make us listen to our own output. */
+let defaultInVirtual = false
+let defaultOutVirtual = false
+
 async function listDevices(): Promise<MediaDeviceInfo[]> {
   const all = await navigator.mediaDevices.enumerateDevices()
   mics = all.filter((d) => d.kind === 'audioinput' && !isVirtualIn(d.label))
   outs = all.filter((d) => d.kind === 'audiooutput' && !/HoloVoice-speaker/.test(d.label))
+  const def = (kind: MediaDeviceKind) => all.find((d) => d.kind === kind && d.deviceId === 'default')?.label ?? ''
+  defaultInVirtual = /CABLE Output|VoiceMeeter Out|HoloVoice/i.test(def('audioinput'))
+  defaultOutVirtual = isWin && /CABLE Input|VoiceMeeter Input/i.test(def('audiooutput'))
   return all
 }
 
@@ -425,7 +433,12 @@ let micError = '' // the last failure to open the microphone (shown in the hint 
 
 /** S.mic is the user's choice and is kept even while that mic is unplugged; activeMic is what is open now */
 let activeMic = ''
-const wantedMic = () => (S.mic && S.mic !== 'default' && mics.some((d) => d.deviceId === S.mic) ? S.mic : 'default')
+const wantedMic = () => {
+  if (S.mic && S.mic !== 'default' && mics.some((d) => d.deviceId === S.mic)) return S.mic
+  // the system's default input is the virtual cable itself: take the first real microphone instead
+  if (defaultInVirtual) return mics.find((d) => !isAlias(d))?.deviceId ?? 'default'
+  return 'default'
+}
 
 async function openMic(): Promise<void> {
   const audio: MediaTrackConstraints = {
@@ -522,6 +535,8 @@ function updateMicHint(): void {
   const outLabel = outLabelOf(S.out)
   if (micError) {
     hint.mic = { warn: true, html: micErrorHint(micError) }
+  } else if (defaultOutVirtual) {
+    hint.mic = { warn: true, html: `${t('hint.cableDefault')} <a data-href="ms-settings:sound">${t('err.micSettings')}</a>` }
   } else if (isVirtualOut(outLabel)) {
     const mic = /HoloVoice/.test(outLabel) ? 'HoloVoice-Microphone'
       : /CABLE/.test(outLabel) ? 'CABLE Output (VB-Audio Virtual Cable)' : t('hint.cableOut')

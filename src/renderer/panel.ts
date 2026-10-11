@@ -810,9 +810,17 @@ function renderSetup(): void {
   const micLabel = st.mics.find((d) => d.id === st!.S.mic)?.label || t('dev.default')
 
   step('st-mic', heard ? 'ok' : 'todo', heard ? t('setup.micOk', { mic: esc(micLabel) }) : t('setup.micSay', { mic: esc(micLabel) }))
-  step('st-virt', virtual ? 'ok' : 'todo',
-    virtual ? t('setup.virtOk', { dev: esc(virtual.label) }) : win ? t('setup.virtWin') : t('setup.virtLinux'),
+  // the cable installer made the cable the default output: the user hears nothing until that is undone
+  const cableDefault = win && /CABLE Input/i.test(st.outs.find((d) => d.id === 'default')?.label ?? '')
+  step('st-virt', virtual && !cableDefault ? 'ok' : 'todo',
+    cableDefault ? t('hint.cableDefault') : virtual ? t('setup.virtOk', { dev: esc(virtual.label) }) : win ? t('setup.virtWin') : t('setup.virtLinux'),
     (box) => {
+      if (cableDefault) {
+        const b = el('button', 'btn primary', t('err.micSettings'))
+        b.onclick = () => holo.open('ms-settings:sound')
+        box.appendChild(b)
+        return
+      }
       if (virtual || !win) return
       const b = el('button', 'btn primary', t('setup.virtGet'))
       b.onclick = () => holo.open('https://vb-audio.com/Cable/')

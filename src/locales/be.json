@@ -292,5 +292,6 @@
   "fx.oldman": "Стары",
   "fx.zombie": "Зомбі",
   "fx.alien": "Прышэлец",
-  "fx.underwater": "Пад вадой"
+  "fx.underwater": "Пад вадой",
+  "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input)."
 }

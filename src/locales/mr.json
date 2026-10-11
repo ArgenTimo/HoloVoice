@@ -292,5 +292,6 @@
   "fx.oldman": "म्हातारा",
   "fx.zombie": "झोम्बी",
   "fx.alien": "परग्रहवासी",
-  "fx.underwater": "पाण्याखाली"
+  "fx.underwater": "पाण्याखाली",
+  "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input)."
 }

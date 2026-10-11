@@ -48,6 +48,7 @@ class WinSysAudio {
       p.stderr.setEncoding('utf8')
       p.stderr.on('data', (t) => {
         for (const line of t.split(/\r?\n/)) {
+          if (line) console.log('holo-sysaudio:', line)
           if (line.startsWith('ready')) { clearTimeout(timer); done({ ok: true }) }
           if (line.startsWith('error')) err = line
         }

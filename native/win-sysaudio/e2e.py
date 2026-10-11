@@ -27,9 +27,10 @@ def ev(expr):
     try: return json.loads(out.stdout.strip() or 'null')
     except ValueError: print('cdp:', out.stdout, out.stderr); return None
 
-STATUS = '''(() => { const l = __hv.lanes.sys, a = new Float32Array(1024); l.anIn.getFloatTimeDomainData(a);
-  let s = 0; for (const x of a) s += x * x;
-  return { on: __hv.S.lanes.sys.enabled, feed: !!l.feed, ctx: l.ctx.state, inRms: Math.sqrt(s / a.length), hint: __hv.sysHint } })()'''
+STATUS = '''(() => { const l = __hv.lanes.sys, rms = (an) => { const a = new Float32Array(1024); an.getFloatTimeDomainData(a);
+  let s = 0; for (const x of a) s += x * x; return Math.sqrt(s / a.length) };
+  return { on: __hv.S.lanes.sys.enabled, feed: !!l.feed, ctx: l.ctx.state, sink: l.ctx.sinkId, inRms: rms(l.anIn), outRms: rms(l.anOut),
+    gate: l.gate.gain.value, out: l.outGain.gain.value, rig: l.rig?.current ? Object.fromEntries(Object.entries(l.rig.current).filter(([, v]) => v)) : null } })()'''
 
 tone = subprocess.Popen([sys.executable, '-c',
     'import winsound,time;winsound.PlaySound(r"%s",winsound.SND_FILENAME|winsound.SND_LOOP|winsound.SND_ASYNC);time.sleep(300)' % TONE])
@@ -47,6 +48,9 @@ for cycle in (1, 2, 3):
     time.sleep(4)
     st = ev(STATUS) or {}
     heard = probe()
+    if cycle == 1:
+        print(subprocess.run(['tasklist', '/v', '/fo', 'csv'], capture_output=True, text=True).stdout[:200])
+        print(subprocess.run(['powershell', '-c', 'Get-CimInstance Win32_Process | ? { $_.Name -match "electron|holo|python" } | select ProcessId,ParentProcessId,Name | ft -a'], capture_output=True, text=True).stdout)
     check('cycle %d: lane on with the helper feed' % cycle, st.get('on') and st.get('feed') and st.get('ctx') == 'running', st)
     check('cycle %d: captured tone reaches the effect chain' % cycle, (st.get('inRms') or 0) > 0.02, st.get('inRms'))
     check('cycle %d: user hears the processed sound' % cycle, heard > 0.02, '%.4f (original %.4f)' % (heard, base))

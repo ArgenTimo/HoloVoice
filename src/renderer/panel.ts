@@ -54,7 +54,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
 const LANE_SLIDERS: { key: 'amount' | 'gain' | 'gate'; min: number; max: number; fmt: (v: number) => string; lanes: LaneId[] }[] = [
   { key: 'amount', min: 0, max: 100, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'] },
   { key: 'gain', min: 0, max: 200, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'] },
-  { key: 'gate', min: -80, max: -20, fmt: (v) => (v <= -80 ? t('u.off') : `${v}`), lanes: ['mic'] },
+  { key: 'gate', min: -80, max: -20, fmt: (v) => (v <= -80 ? t('u.off') : `${v} ${t('u.db')}`), lanes: ['mic'] },
 ]
 const laneInputs: { lane: LaneId; key: 'amount' | 'gain' | 'gate'; input: HTMLInputElement; val: HTMLElement; fmt: (v: number) => string }[] = []
 
@@ -623,6 +623,13 @@ function buildHotkeys(): void {
     }
   }
   $('hk-reset').onclick = async () => { hk = await holo.resetHotkeys(); renderHotkeys() }
+  // Wayland: apps can't grab global keys — explain and offer the command-line actions for system shortcuts
+  if (holo.wayland && !document.getElementById('hk-wayland')) {
+    const n = el('p', 'note warn')
+    n.id = 'hk-wayland'
+    n.innerHTML = t('hk.wayland')
+    $('hk-mic').closest('.sheet')!.querySelector('.note')!.after(n)
+  }
 }
 
 function renderHotkeys(): void {

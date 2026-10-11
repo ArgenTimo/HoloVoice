@@ -283,5 +283,6 @@
   "undo": "Отменить",
   "ins.deleted": "«{name}» удалён",
   "ins.wasReset": "Настройки эффекта сброшены",
-  "ins.mineName": "{name} (мой)"
+  "ins.mineName": "{name} (мой)",
+  "hk.wayland": "У вас Wayland: здесь программы не могут перехватывать глобальные клавиши, поэтому сочетания работают, только пока окно HoloVoice в фокусе. Добавьте системные сочетания (Настройки → Клавиатура → Свои сочетания) с командами вроде <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
 }

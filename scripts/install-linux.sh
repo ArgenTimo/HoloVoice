@@ -4,7 +4,8 @@
 set -e
 DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$DIR"
-[ -d node_modules ] || npm install --no-audit --no-fund
+command -v npm >/dev/null || { echo "npm is required (Node.js 20+)"; exit 1; }
+[ -d node_modules ] || npm ci --no-audit --no-fund
 npm run build:renderer
 APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 mkdir -p "$APPS"
@@ -20,4 +21,12 @@ StartupWMClass=HoloVoice
 Terminal=false
 DESKTOP
 update-desktop-database "$APPS" 2>/dev/null || true
-echo "HoloVoice installed: $APPS/holovoice.desktop"
+# `holovoice` command: starts the app, or sends an action to the running one (holovoice --toggle mic, --effect mic:demon)
+BIN="$HOME/.local/bin"
+mkdir -p "$BIN"
+cat > "$BIN/holovoice" <<LAUNCHER
+#!/bin/sh
+exec "$DIR/node_modules/electron/dist/electron" "$DIR" --no-sandbox "\$@"
+LAUNCHER
+chmod +x "$BIN/holovoice"
+echo "HoloVoice installed: $APPS/holovoice.desktop and the command $BIN/holovoice"

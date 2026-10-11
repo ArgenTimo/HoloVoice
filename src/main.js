@@ -40,6 +40,26 @@ const ICON = path.join(__dirname, '..', 'build', 'icon.png')
 const PAGE = (name) => path.join(__dirname, 'renderer', `${name}.html`)
 const fromAutostart = process.argv.includes('--widget')
 
+/**
+ * Command-line actions for system shortcuts (Wayland has no global hotkeys for apps) and scripts:
+ *   holovoice --toggle mic|sys      on/off
+ *   holovoice --effect mic:demon    switch to an effect (pressing again for the active one turns it off, like a hotkey)
+ *   holovoice --next mic | --prev mic
+ * A running HoloVoice receives them through the single-instance lock. Returns true if argv had an action.
+ */
+function cliAction(argv) {
+  const arg = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null }
+  const lane = (v) => (v === 'sys' ? 'sys' : 'mic')
+  let cmd = null
+  if (arg('--toggle')) cmd = { lane: lane(arg('--toggle')), action: 'toggle' }
+  else if (arg('--next')) cmd = { lane: lane(arg('--next')), action: 'next' }
+  else if (arg('--prev')) cmd = { lane: lane(arg('--prev')), action: 'prev' }
+  else if (arg('--effect')) { const [l, fx] = arg('--effect').split(':'); if (fx) cmd = { lane: lane(l), action: fx } }
+  if (!cmd) return false
+  onHotkey(cmd.lane, cmd.action)
+  return true
+}
+
 let engine = null
 let panel = null
 let widget = null
@@ -96,7 +116,10 @@ function fitBounds(b, w, h) {
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', (_e, argv) => { if (!argv.includes('--widget')) showPanel() })
+  app.on('second-instance', (_e, argv) => {
+    if (cliAction(argv)) return // `holovoice --toggle mic` etc.: act without showing anything
+    if (!argv.includes('--widget')) showPanel()
+  })
   app.whenReady().then(start)
 }
 

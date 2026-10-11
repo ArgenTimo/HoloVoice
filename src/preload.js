@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('holo', {
   platform: process.platform,
+  wayland: process.platform === 'linux' && process.env.XDG_SESSION_TYPE === 'wayland',
   // controls
   cmd: (c) => ipcRenderer.send('cmd', c),
   getState: () => ipcRenderer.invoke('state:get'),

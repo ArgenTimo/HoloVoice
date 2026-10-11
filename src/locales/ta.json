@@ -283,5 +283,6 @@
   "undo": "Undo",
   "ins.deleted": "“{name}” deleted",
   "ins.wasReset": "Effect settings reset",
-  "ins.mineName": "{name} (mine)"
+  "ins.mineName": "{name} (mine)",
+  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
 }

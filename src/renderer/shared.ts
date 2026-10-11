@@ -86,6 +86,7 @@ export interface RouteResult {
 }
 
 export interface HoloApi {
+  wayland?: boolean
   platform: string
   // controllers
   cmd(c: Cmd): void

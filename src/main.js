@@ -1,10 +1,10 @@
 'use strict'
-// Процессы и окна:
-//   engine — скрытое окно со всем звуком (engine.ts); живёт, пока живёт приложение
-//   panel  — главное окно с настройками; крестик: если какой-то эффект включён или закреплён виджет — прячется
-//            в трей и звук продолжает работать, если ничего не включено — приложение закрывается целиком
-//   widget — виджет рабочего стола; закреплённый запускается вместе с системой (--widget) и не зависит от панели
-//   osd    — подсказка при горячей клавише и полоса нарастания эффекта; не берёт фокус и не ловит мышь (игре не мешает)
+// Processes and windows:
+//   engine — hidden window with all the audio (engine.ts); lives as long as the app does
+//   panel  — main window with settings; close button: if any effect is on or the widget is pinned — hides
+//            to the tray and audio keeps running; if nothing is on — the whole app quits
+//   widget — desktop widget; when pinned it starts with the system (--widget) and does not depend on the panel
+//   osd    — hotkey toast and effect ramp bar; takes no focus and ignores the mouse (doesn't disturb games)
 const { app, BrowserWindow, ipcMain, shell, session, desktopCapturer, Tray, Menu, nativeImage, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -13,7 +13,7 @@ const { LinuxRouter } = require('./routing-linux')
 const updater = require('./updater')
 const { Hotkeys } = require('./hotkeys')
 
-// ---------------------------------------------------------------- язык (словари общие с окнами: src/locales)
+// ---------------------------------------------------------------- language (dictionaries shared with the windows: src/locales)
 const LANG_CODES = ['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja', 'mr', 'te', 'tr', 'ta', 'vi', 'ko', 'it', 'uk', 'be', 'pl']
 const dicts = {}
 const dict = (code) => (dicts[code] ??= (() => { try { return require(`./locales/${code}.json`) } catch { return {} } })())
@@ -26,11 +26,11 @@ function systemLang() {
   return LANG_CODES.includes(code) ? code : 'en'
 }
 
-// Звук в реальном времени не должен засыпать, когда окна свёрнуты или скрыты
+// Real-time audio must not sleep when windows are minimized or hidden
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-background-timer-throttling')
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
-app.disableHardwareAcceleration() // окна крошечные; без GPU-процесса меньше сбоев на разных драйверах
+app.disableHardwareAcceleration() // windows are tiny; without a GPU process there are fewer crashes across drivers
 
 const ICON = path.join(__dirname, '..', 'build', 'icon.png')
 const PAGE = (name) => path.join(__dirname, 'renderer', `${name}.html`)
@@ -42,27 +42,27 @@ let widget = null
 let tray = null
 let router = null
 let followTimer = null
-let state = null // последнее состояние движка
+let state = null // last engine state
 let quitting = false
 let osd = null
 let osdTimer = null
-let osdToast = null // { lane, at } — горячая клавиша: подсказку показать вместе с нарастанием или на следующем состоянии
+let osdToast = null // { lane, at } — hotkey: show the toast together with the ramp or on the next state
 const hotkeys = new Hotkeys(onHotkey)
 
-// ---------------------------------------------------------------- настройки окон
+// ---------------------------------------------------------------- window settings
 
 const UI_DEFAULTS = { pinned: true, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top', lang: null }
 let ui = { ...UI_DEFAULTS }
 const uiPath = () => path.join(app.getPath('userData'), 'ui.json')
 function loadUi() {
-  try { ui = { ...UI_DEFAULTS, ...JSON.parse(fs.readFileSync(uiPath(), 'utf8')) } } catch { /* по умолчанию */ }
+  try { ui = { ...UI_DEFAULTS, ...JSON.parse(fs.readFileSync(uiPath(), 'utf8')) } } catch { /* defaults */ }
   if (!LANG_CODES.includes(ui.lang)) ui.lang = systemLang()
 }
 function saveUi() {
-  try { fs.mkdirSync(path.dirname(uiPath()), { recursive: true }); fs.writeFileSync(uiPath(), JSON.stringify(ui)) } catch { /* не страшно */ }
+  try { fs.mkdirSync(path.dirname(uiPath()), { recursive: true }); fs.writeFileSync(uiPath(), JSON.stringify(ui)) } catch { /* not critical */ }
 }
 
-// ---------------------------------------------------------------- запуск
+// ---------------------------------------------------------------- startup
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -75,11 +75,11 @@ const ownPids = () => new Set([process.pid, ...app.getAppMetrics().map((m) => m.
 
 function start() {
   loadUi()
-  if (fromAutostart && !ui.widget) { app.quit(); return } // виджет открепили, а запись автозапуска осталась
-  // Микрофон и выбор устройства вывода — без запросов (приложение локальное)
+  if (fromAutostart && !ui.widget) { app.quit(); return } // the widget was unpinned but the autostart entry remained
+  // Microphone and output device selection — no prompts (the app is local)
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(true))
   session.defaultSession.setPermissionCheckHandler(() => true)
-  // Windows: звук компьютера — системный loopback с заглушением оригинала (видео не нужно, но без него нельзя)
+  // Windows: computer sound — system loopback with the original muted (video isn't needed, but it can't be omitted)
   session.defaultSession.setDisplayMediaRequestHandler((_req, cb) => {
     desktopCapturer.getSources({ types: ['screen'] })
       .then((sources) => cb({ video: sources[0], audio: 'loopbackWithMute' }))
@@ -102,7 +102,7 @@ function start() {
   hotkeys.apply()
 }
 
-// ---------------------------------------------------------------- горячие клавиши и подсказка
+// ---------------------------------------------------------------- hotkeys and toast
 
 function onHotkey(lane, action) {
   osdToast = { lane, at: Date.now() }
@@ -113,7 +113,7 @@ const OSD_W = 260
 const OSD_H = { toast: 54, toastBar: 64, bar: 14 }
 const OSD_POS = ['top', 'top-left', 'top-right', 'bottom', 'bottom-left', 'bottom-right']
 
-/** toast — подпись «дорожка: эффект»; ramp — { seconds, dir } полоса нарастания/затухания, исчезает на пике */
+/** toast — "lane: effect" caption; ramp — { seconds, dir } fade-in/fade-out bar, disappears at the peak */
 function showOsd(lane, toast, ramp) {
   if (!toast && !ramp) return
   if (!osd) {
@@ -138,7 +138,7 @@ function showOsd(lane, toast, ramp) {
   const send = () => {
     osd.webContents.send('osd', { lane, toast, ramp })
     osd.showInactive()
-    // при показе во время нажатой горячей клавиши оконный менеджер может оставить окно под остальными — поднять явно
+    // when shown while a hotkey is held, the window manager may leave the window below others — raise it explicitly
     osd.setAlwaysOnTop(true, 'screen-saver')
     osd.moveTop()
   }
@@ -148,14 +148,14 @@ function showOsd(lane, toast, ramp) {
   osdTimer = setTimeout(() => osd?.hide(), Math.max(toast ? 1400 : 0, ramp ? ramp.seconds * 1000 + 350 : 0))
 }
 
-/** горячая клавиша этой дорожки нажата только что — подсказку показать (один раз) */
+/** this lane's hotkey was just pressed — show the toast (once) */
 function takeToast(lane) {
   const t = osdToast && osdToast.lane === lane && Date.now() - osdToast.at < 1500
   if (t) osdToast = null
   return !!t && ui.osd
 }
 
-// Движок начал плавный переход (нарастание/затухание/смена эффекта)
+// The engine started a smooth transition (fade-in/fade-out/effect change)
 ipcMain.on('ramp', (e, r) => {
   if (!engine || e.sender !== engine.webContents) return
   const toast = takeToast(r.lane)
@@ -174,15 +174,15 @@ function showPanel() {
     frame: false, alwaysOnTop: ui.pinned, backgroundColor: '#12131a', title: 'HoloVoice', icon: ICON,
     webPreferences: webPrefs(),
   })
-  if (ui.pinned) panel.setAlwaysOnTop(true, 'screen-saver') // поверх всего, включая полноэкранные окна
+  if (ui.pinned) panel.setAlwaysOnTop(true, 'screen-saver') // on top of everything, including fullscreen windows
   panel.loadFile(PAGE('index'))
   panel.on('close', (e) => {
     if (quitting) return
-    if (isActive() || widget) { e.preventDefault(); panel.hide(); updateTray() } // работаем в фоне
+    if (isActive() || widget) { e.preventDefault(); panel.hide(); updateTray() } // keep running in the background
     else quit()
   })
   panel.on('closed', () => { panel = null })
-  // размер и место широкого окна запоминаются (в компактном режиме — нет)
+  // the size and position of the wide window are remembered (not in compact mode)
   const keep = () => { if (panel && !panelCompact) { ui.panelBounds = panel.getBounds(); saveUi() } }
   panel.on('resized', keep)
   panel.on('moved', keep)
@@ -191,7 +191,7 @@ function showPanel() {
 const PANEL_W = 1080, PANEL_H = 700, PANEL_MIN_W = 880, PANEL_MIN_H = 560
 let panelCompact = false
 
-/** Компактный режим — только карточки дорожек: узкое окно по высоте содержимого; обратно — прежний размер */
+/** Compact mode — lane cards only: a narrow window sized to the content height; switching back restores the previous size */
 ipcMain.handle('win:compact', (_e, on, h) => {
   if (!panel) return
   const maxH = screen.getDisplayMatching(panel.getBounds()).workArea.height - 20
@@ -220,7 +220,7 @@ function showWidget() {
   widget.setVisibleOnAllWorkspaces(true)
   widget.loadFile(PAGE('widget'))
   widget.on('moved', () => { ui.widgetBounds = widget.getBounds(); saveUi() })
-  widget.on('close', (e) => { if (!quitting && ui.widget) e.preventDefault() }) // закрывается только откреплением
+  widget.on('close', (e) => { if (!quitting && ui.widget) e.preventDefault() }) // closes only by unpinning
   widget.on('closed', () => { widget = null })
 }
 
@@ -244,7 +244,7 @@ function quit() {
   app.quit()
 }
 
-// ---------------------------------------------------------------- автозапуск (закреплённый виджет)
+// ---------------------------------------------------------------- autostart (pinned widget)
 
 function setAutostart(on) {
   if (process.platform === 'win32' || process.platform === 'darwin') {
@@ -254,21 +254,21 @@ function setAutostart(on) {
   }
   // Linux: ~/.config/autostart/holovoice.desktop
   const file = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'holovoice.desktop')
-  if (!on) { try { fs.unlinkSync(file) } catch { /* нет */ } return }
+  if (!on) { try { fs.unlinkSync(file) } catch { /* none */ } return }
   const exe = process.env.APPIMAGE
     ? `"${process.env.APPIMAGE}"`
     : `"${process.execPath}"${app.isPackaged ? '' : ` "${app.getAppPath()}"`}`
-  // иконка — в постоянное место: путь внутри AppImage временный
+  // icon goes to a permanent location: the path inside the AppImage is temporary
   const icon = path.join(app.getPath('userData'), 'icon.png')
-  try { fs.copyFileSync(ICON, icon) } catch { /* без иконки */ }
+  try { fs.copyFileSync(ICON, icon) } catch { /* no icon */ }
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, [
-    '[Desktop Entry]', 'Type=Application', 'Name=HoloVoice (виджет)', `Exec=${exe} --no-sandbox --widget`,
+    '[Desktop Entry]', 'Type=Application', 'Name=HoloVoice (widget)', `Exec=${exe} --no-sandbox --widget`,
     `Icon=${icon}`, 'X-GNOME-Autostart-enabled=true', 'NoDisplay=true', '',
   ].join('\n'))
 }
 
-// ---------------------------------------------------------------- трей
+// ---------------------------------------------------------------- tray
 
 function createTray() {
   try {
@@ -276,7 +276,7 @@ function createTray() {
     tray.setToolTip('HoloVoice')
     tray.on('click', showPanel)
     updateTray()
-  } catch { tray = null } // нет области уведомлений — не страшно
+  } catch { tray = null } // no notification area — not critical
 }
 
 function updateTray() {
@@ -293,7 +293,7 @@ function updateTray() {
   ]))
 }
 
-// ---------------------------------------------------------------- связь движок ↔ пульты
+// ---------------------------------------------------------------- engine ↔ controls link
 
 function toEngine(cmd) { engine?.webContents.send('cmd', cmd) }
 const remotes = () => [panel, widget].filter((w) => w && !w.isDestroyed())
@@ -368,15 +368,15 @@ ipcMain.handle('open', (_e, url) => {
   if (/^https:\/\/(www\.)?vb-audio\.com\//.test(url)) shell.openExternal(url)
 })
 
-// ---------------------------------------------------------------- маршрутизация (Linux)
+// ---------------------------------------------------------------- routing (Linux)
 
 function getRouter() {
   router = router || new LinuxRouter(app.getPath('userData'), ownPids)
   return router
 }
 
-// Уборка за прошлым запуском, если он упал, — один раз за запуск приложения, а не при каждой загрузке движка:
-// иначе перезагрузка окна движка выгрузила бы модули живого процесса
+// Clean up after the previous run if it crashed — once per app launch, not on every engine load:
+// otherwise reloading the engine window would unload the live process's modules
 let stale = null
 function routerReady() {
   stale = stale || getRouter().restoreStale().catch(() => {})
@@ -400,7 +400,7 @@ ipcMain.handle('routing:sys', async (_e, on) => {
   try {
     if (!on) { await r.releaseSys(); return { ok: true, platform: 'linux' } }
     const res = await r.interceptSys()
-    // Новые потоки сами идут на выход по умолчанию (наш), но некоторые приложения привязаны к устройству
+    // New streams go to the default output (ours) on their own, but some apps are bound to a device
     followTimer = setInterval(() => { r.followStreams().catch(() => {}) }, 2000)
     return { ok: true, platform: 'linux', ...res }
   } catch (e) {
@@ -409,7 +409,7 @@ ipcMain.handle('routing:sys', async (_e, on) => {
   }
 })
 
-// ---------------------------------------------------------------- выход
+// ---------------------------------------------------------------- exit
 
 function cleanup() {
   clearInterval(followTimer)

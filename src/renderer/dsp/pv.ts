@@ -1,11 +1,11 @@
-// Фазовый вокодер со сдвигом высоты и раздельным сдвигом тембра (формант).
-// Высота: перенос бинов спектра с пересчётом истинной частоты каждого бина (схема Бернзее).
-// Тембр: спектральная огибающая через кепстр — источник «отбеливается» (делится на огибающую), сдвигается по высоте,
-// затем умножается на огибающую, растянутую в formant раз. formant = 1 — тембр сохранён (голос другого человека,
-// а не ускоренная плёнка); formant = pitch — классический «бурундук».
-// robot — фазы синтеза одинаковые каждый кадр (монотонный робот на частоте кадров: sampleRate / hop), whisper — случайные фазы (шёпот).
-// Фазы фиксируются относительно пиков спектра (Ларош—Долсон) — голос чище; шумоподавление и вибрато — тут же.
-// Задержка = N − hop отсчётов.
+// Phase vocoder with pitch shifting and independent timbre (formant) shifting.
+// Pitch: spectral bins are moved, recomputing each bin's true frequency (Bernsee's scheme).
+// Timbre: spectral envelope via the cepstrum. The source is "whitened" (divided by the envelope), pitch-shifted,
+// then multiplied by the envelope stretched by formant. formant = 1 keeps the timbre (another person's voice,
+// not a sped-up tape); formant = pitch is the classic "chipmunk".
+// robot: identical synthesis phases every frame (monotone robot at the frame rate, sampleRate / hop); whisper: random phases.
+// Phases are locked to spectral peaks (Laroche–Dolson) for a cleaner voice; noise reduction and vibrato live here too.
+// Latency = N − hop samples.
 
 class FFT {
   private rev: Uint32Array
@@ -28,7 +28,7 @@ class FFT {
     }
   }
 
-  /** На месте; inverse — без деления на n */
+  /** In place; inverse does not divide by n */
   run(re: Float32Array, im: Float32Array, inverse: boolean): void {
     const n = this.n
     for (let i = 0; i < n; i++) {
@@ -61,15 +61,15 @@ const TWO_PI = 2 * Math.PI
 export class PhaseVocoder {
   readonly hop: number
   readonly latency: number
-  pitch = 1 // отношение частот
+  pitch = 1 // frequency ratio
   formant = 1
   robot = 0
   whisper = 0
-  denoise = 0 // 0..1 — спектральное шумоподавление
-  vibrato = 0 // глубина, полутоны
+  denoise = 0 // 0..1, spectral noise reduction
+  vibrato = 0 // depth, semitones
   vibratoHz = 5
-  /** холостой ход: вход копится (буфер всегда свежий), но кадры не считаются — выход тишина. Включается, когда
-   *  вокодер не нужен (нейтраль, PSOLA): это основная нагрузка, а её пики давали треск */
+  /** idle mode: input is still buffered (the buffer stays fresh) but frames are not computed; output is silence. Enabled
+   *  when the vocoder is not needed (neutral, PSOLA): it is the main CPU load, and its spikes caused crackling */
   idle = false
 
   private fft: FFT
@@ -135,9 +135,9 @@ export class PhaseVocoder {
     this.cre = new Float32Array(n)
     this.cim = new Float32Array(n)
     this.rover = this.latency
-    // кепстр: оставляем кефренции короче ~1.6 мс — огибающая без гармоник голоса (период основного тона ≥ 2.5 мс)
+    // cepstrum: keep quefrencies below ~1.6 ms, an envelope without voice harmonics (fundamental period ≥ 2.5 ms)
     this.lifter = Math.max(8, Math.round(sampleRate / 600))
-    // Ханн на анализе и синтезе: сумма перекрытий ханна² = osamp·3/8; обратное БПФ без 1/n
+    // Hann on analysis and synthesis: overlapped hann² sums to osamp·3/8; inverse FFT without 1/n
     this.scale = 1 / (n * osamp * 0.375)
     this.expct = (TWO_PI * this.hop) / n
   }
@@ -173,21 +173,21 @@ export class PhaseVocoder {
     for (let k = 0; k <= half; k++) env[k] = Math.exp(cre[k])
   }
 
-  /** Шумоподавление (в духе MCRA): минимум сглаженной мощности полосы — детектор «здесь только шум»;
-   *  оценка шума — среднее мощности на таких участках; усиление по Винеру с порогом и сглаживанием во времени
-   *  (без «музыкального» шума). Голос между паузами шумом не становится: минимум растёт медленно. */
+  /** Noise reduction (MCRA-style): the minimum of smoothed band power detects "only noise here";
+   *  the noise estimate is the mean power over such stretches; Wiener gain with a floor and temporal smoothing
+   *  (no "musical" noise). Voice between pauses does not become noise: the minimum rises slowly. */
   private reduceNoise(): void {
     const { anaMag, noise, pmin, power, gain } = this
     const d = this.denoise
     const over = 1 + 1.5 * d
-    const floor = 10 ** (-(24 * d) / 20) // до −24 дБ
+    const floor = 10 ** (-(24 * d) / 20) // down to −24 dB
     const first = this.frames < 10
     for (let k = 0; k < anaMag.length; k++) {
       const m = anaMag[k]
       const P = (power[k] = power[k] * 0.7 + m * m * 0.3)
       if (first) { pmin[k] = Math.max(pmin[k], P); noise[k] = Math.max(noise[k], P) }
       else {
-        pmin[k] = P < pmin[k] ? P : pmin[k] * 1.0012 // ~+1 дБ/с
+        pmin[k] = P < pmin[k] ? P : pmin[k] * 1.0012 // ~+1 dB/s
         if (P < 4 * pmin[k]) noise[k] = noise[k] * 0.96 + P * 0.04
       }
       const g = Math.max(floor, 1 - (over * noise[k]) / (P + 1e-20))
@@ -203,7 +203,7 @@ export class PhaseVocoder {
     for (let k = 0; k < n; k++) { re[k] = this.inFifo[k] * win[k]; im[k] = 0 }
     this.fft.run(re, im, false)
 
-    // анализ: амплитуда, фаза и истинная частота каждого бина (в долях бина)
+    // analysis: magnitude, phase and true frequency of each bin (in bins)
     for (let k = 0; k <= half; k++) {
       const mag = Math.hypot(re[k], im[k])
       const phase = Math.atan2(im[k], re[k])
@@ -216,7 +216,7 @@ export class PhaseVocoder {
     }
     if (this.denoise > 0.001) this.reduceNoise()
 
-    // вибрато — качание высоты
+    // vibrato: pitch wobble
     let pitch = this.pitch
     if (this.vibrato > 0.001) {
       this.vibPhase = (this.vibPhase + (TWO_PI * this.vibratoHz * hop) / this.sampleRate) % TWO_PI
@@ -226,7 +226,7 @@ export class PhaseVocoder {
     const shaping = Math.abs(pitch - 1) > 1e-4 || Math.abs(formant - 1) > 1e-4
     if (shaping) this.envelope()
 
-    // пики спектра; каждый бин принадлежит ближайшему пику
+    // spectral peaks; each bin belongs to the nearest peak
     let np = 0
     for (let k = 2; k < half - 1; k++) {
       const m = anaMag[k]
@@ -236,7 +236,7 @@ export class PhaseVocoder {
     synMag.fill(0)
     synBest.fill(0)
     if (np === 0) {
-      // тишина: без пиков — просто перенос бинов
+      // silence: no peaks, just move the bins
       for (let k = 0; k <= half; k++) {
         const j = Math.round(k * pitch)
         if (j > half) break
@@ -249,8 +249,8 @@ export class PhaseVocoder {
         while (pi < np - 1 && Math.abs(peaks[pi + 1] - k) <= Math.abs(peaks[pi] - k)) pi++
         owner[k] = peaks[pi]
       }
-      // фаза пика — накопление по его истинной частоте после сдвига (схема Ларош—Долсон с фиксацией фаз):
-      // соседние бины области пика сохраняют фазы относительно него — меньше «фазового» металла в голосе
+      // peak phase accumulates at its true frequency after shifting (Laroche–Dolson phase locking):
+      // neighbouring bins in the peak's region keep their phases relative to it, less "phasey" metallic tone
       for (let q = 0; q < np; q++) {
         const p = peaks[q]
         const jp = Math.round(p * pitch)
@@ -259,7 +259,7 @@ export class PhaseVocoder {
       }
       for (let k = 0; k <= half; k++) {
         const p = owner[k]
-        const j = k + Math.round(p * pitch) - p // область пика сдвигается целиком, сохраняя форму
+        const j = k + Math.round(p * pitch) - p // the peak region is shifted as a whole, keeping its shape
         if (j < 0 || j > half) continue
         const m = shaping ? anaMag[k] / env[k] : anaMag[k]
         synMag[j] += m
@@ -275,13 +275,13 @@ export class PhaseVocoder {
       }
     }
 
-    // синтез
+    // synthesis
     const robot = this.robot, whisper = this.whisper
     for (let k = 0; k <= half; k++) {
       let ph = synMag[k] > 0 ? synPh[k] : this.sumPhase[k] + k * expct
       ph -= TWO_PI * Math.floor(ph / TWO_PI)
       this.sumPhase[k] = ph
-      // робот: фаза πk — импульс кадра в центре окна (нулевая фаза ставит его на край, где окно Ханна гасит звук)
+      // robot: phase πk puts the frame's impulse at the window center (zero phase puts it at the edge, where the Hann window silences it)
       let out = ph + robot * (Math.PI * k - ph)
       if (whisper > 0) out += whisper * (Math.random() * TWO_PI - Math.PI)
       re[k] = synMag[k] * Math.cos(out)

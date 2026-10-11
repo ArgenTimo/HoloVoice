@@ -1,6 +1,6 @@
 #!/bin/sh
-# Установка HoloVoice из этой git-папки: ярлык в меню приложений. Кнопка «Обновить» в приложении
-# делает git pull из master + пересборку, поэтому ставим именно из исходников, а не AppImage.
+# Install HoloVoice from this git folder: a shortcut in the applications menu. The "Update" button in the app
+# does git pull from master + rebuild, so we install from source rather than the AppImage.
 set -e
 DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$DIR"
@@ -12,7 +12,7 @@ cat > "$APPS/holovoice.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=HoloVoice
-Comment=Эффекты на голос и звук компьютера в реальном времени
+Comment=Real-time effects for your voice and computer sound
 Exec="$DIR/node_modules/electron/dist/electron" "$DIR" --no-sandbox
 Icon=$DIR/build/icon.png
 Categories=Audio;AudioVideo;
@@ -20,4 +20,4 @@ StartupWMClass=HoloVoice
 Terminal=false
 DESKTOP
 update-desktop-database "$APPS" 2>/dev/null || true
-echo "HoloVoice установлен: $APPS/holovoice.desktop"
+echo "HoloVoice installed: $APPS/holovoice.desktop"

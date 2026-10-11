@@ -1,6 +1,6 @@
-// Эффекты — пресеты одной цепочки обработки (rig.ts). Любой параметр любого эффекта можно подкрутить в панели;
-// переход между эффектами и нарастание — плавная интерполяция всех параметров (частоты — в логарифме).
-// Идея и первые цепочки — из holo-messenger (src/client/audio/voice-fx.ts). Названия — в словарях (src/locales).
+// Effects are presets of a single processing chain (rig.ts). Any parameter of any effect can be tweaked in the panel;
+// transitions between effects and ramp-in are smooth interpolation of all parameters (frequencies on a log scale).
+// The idea and first chains come from holo-messenger (src/client/audio/voice-fx.ts). Names live in the dictionaries (src/locales).
 import { t } from './i18n'
 
 export const fxLabel = (id: string) => (isCustom(id) ? CUSTOM.find((c) => c.id === id)?.name ?? id : t(`fx.${id}`))
@@ -22,7 +22,7 @@ export interface ParamDef {
   key: ParamKey; group: ParamGroup
   min: number; max: number; step: number
   fmt: (v: number) => string
-  log?: boolean // частоты: ползунок и интерполяция в логарифме
+  log?: boolean // frequencies: slider and interpolation on a log scale
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -93,7 +93,7 @@ export type BuiltinId =
   | 'demon' | 'ghost' | 'digital' | 'whisper' | 'radio'
   | 'hologram_classic' | 'hologram_warm' | 'smolder' | 'ice' | 'electric' | 'vhs' | 'cave'
 
-/** Свой эффект пользователя — снимок всех параметров встроенного (с его правками) под своим именем */
+/** A user's custom effect: a snapshot of all parameters of a built-in one (with their edits) under its own name */
 export type CustomId = `c-${string}`
 export type EffectId = BuiltinId | CustomId
 export interface CustomEffect { id: CustomId; name: string; emoji: string; base: BuiltinId; preset: FxParams }
@@ -101,7 +101,7 @@ export interface CustomEffect { id: CustomId; name: string; emoji: string; base:
 export interface EffectInfo {
   id: EffectId; emoji: string
   preset: Partial<FxParams>
-  main: ParamKey[] // главные ручки эффекта — показываются сразу, остальные в «Все параметры»
+  main: ParamKey[] // the effect's main knobs, shown up front; the rest are under "All parameters"
 }
 
 export const EFFECTS: EffectInfo[] = [
@@ -156,7 +156,7 @@ export const EFFECTS: EffectInfo[] = [
 ]
 export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Record<BuiltinId, EffectInfo>
 
-// ---------------------------------------------------------------- свои эффекты (хранятся в настройках движка)
+// ---------------------------------------------------------------- custom effects (stored in the engine settings)
 
 let CUSTOM: CustomEffect[] = []
 const customInfo = new Map<string, EffectInfo>()
@@ -167,22 +167,22 @@ export function setCustom(list: CustomEffect[] | undefined): void {
 }
 export function customs(): CustomEffect[] { return CUSTOM }
 export const isCustom = (id: string): id is CustomId => id.startsWith('c-')
-/** Любой эффект — встроенный или свой */
+/** Any effect, built-in or custom */
 export function effectInfo(id: string): EffectInfo | undefined {
   return isCustom(id) ? customInfo.get(id) : EFFECT[id as BuiltinId]
 }
-/** Все эффекты по порядку: встроенные, затем свои */
+/** All effects in order: built-in, then custom */
 export function allEffects(): EffectInfo[] { return [...EFFECTS, ...customInfo.values()] }
 
-/** Настройки одного эффекта, сохранённые пользователем (поверх пресета) */
+/** User-saved settings for one effect (on top of the preset) */
 export interface EffectUser { p?: Partial<FxParams>; rampIn?: number; rampOut?: number }
 
-/** Полные параметры эффекта: нейтраль ← пресет ← свои правки */
+/** Full effect parameters: neutral ← preset ← user edits */
 export function effectFull(id: EffectId, user?: EffectUser): FxParams {
   return { ...NEUTRAL, ...(effectInfo(id)?.preset ?? {}), ...(user?.p ?? {}) }
 }
 
-/** Между a и b на долю t; частоты — в логарифме, чтобы звучало равномерно */
+/** Between a and b at fraction t; frequencies on a log scale so it sounds even */
 export function interpolate(a: FxParams, b: FxParams, t: number): FxParams {
   const out = { ...a }
   for (const d of PARAMS) {
@@ -211,7 +211,7 @@ export function forSystemSound(p: FxParams): FxParams {
   return out
 }
 
-/** Что звучит: эффект с силой amount (0..1) — доля пути от нейтрального звука к эффекту */
+/** What is heard: the effect at strength amount (0..1), the fraction of the way from neutral sound to the effect */
 export function effectTarget(id: EffectId, user: EffectUser | undefined, amount: number): FxParams {
   return interpolate(NEUTRAL, effectFull(id, user), Math.max(0, Math.min(1, amount)))
 }

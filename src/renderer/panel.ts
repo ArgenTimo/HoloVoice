@@ -1,7 +1,7 @@
-// Главное окно — пульт движка. Раскладка: слева карточки дорожек (вкл/выкл, уровни, сила, громкость),
-// по центру каталог эффектов для выбранной дорожки, справа настройки выбранного эффекта и «Проверить на записи»,
-// снизу — устройства. Горячие клавиши и подсказка на экране — в окнах поверх панели.
-// Звук здесь не обрабатывается (см. engine.ts).
+// Main window — the engine controller. Layout: lane cards on the left (on/off, levels, strength, volume),
+// the effect catalog for the selected lane in the center, the selected effect's settings and "Test with a recording" on the right,
+// devices at the bottom. Hotkeys and the on-screen hint are in windows on top of the panel.
+// No audio is processed here (see engine.ts).
 import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type UiConfig } from './shared'
@@ -18,12 +18,12 @@ const BUILTIN_GROUPS: [string, EffectId[]][] = [
   ['grp.characters', ['demon', 'ghost', 'digital', 'smolder']],
   ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'vhs', 'radio', 'cave']],
 ]
-/** Группы каталога: встроенные + «Мои эффекты», если они есть */
+/** Catalog groups: built-in + "My effects", if any */
 function groups(): [string, EffectId[]][] {
   const mine = customs().map((c) => c.id)
   return mine.length ? [...BUILTIN_GROUPS, ['grp.custom', mine]] : BUILTIN_GROUPS
 }
-/** Подпись набора своих эффектов: меняется — каталог, списки и горячие клавиши перестраиваются */
+/** Signature of the custom effect set: when it changes, the catalog, lists and hotkeys are rebuilt */
 let customSig = ''
 const sigOf = () => customs().map((c) => c.id + c.name + c.emoji).join('|')
 const emojiOf = (id: EffectId) => effectInfo(id)?.emoji ?? '⭐'
@@ -35,7 +35,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
   return e
 }
 
-// ---------------------------------------------------------------- карточки дорожек
+// ---------------------------------------------------------------- lane cards
 
 const LANE_SLIDERS: { key: 'amount' | 'gain' | 'gate'; min: number; max: number; fmt: (v: number) => string; lanes: LaneId[] }[] = [
   { key: 'amount', min: 0, max: 100, fmt: (v) => `${v}%`, lanes: ['mic', 'sys'] },
@@ -120,7 +120,7 @@ function renderLanes(): void {
     const q = $<HTMLSelectElement>(`q-${id}`)
     if (document.activeElement !== q) q.value = cfg.quality
     const h = $(`hint-${id}`)
-    h.innerHTML = st.hint[id].html // собирается в движке, подписи устройств экранированы там
+    h.innerHTML = st.hint[id].html // built in the engine, device labels are escaped there
     h.classList.toggle('warn', st.hint[id].warn)
   }
   for (const s of laneInputs) {
@@ -141,7 +141,7 @@ function selectLane(id: LaneId): void {
   renderInspector()
 }
 
-// ---------------------------------------------------------------- каталог эффектов
+// ---------------------------------------------------------------- effect catalog
 
 function buildCatalog(): void {
   const box = $('groups')
@@ -185,13 +185,13 @@ function renderCatalog(): void {
   })
 }
 
-// ---------------------------------------------------------------- инспектор эффекта
+// ---------------------------------------------------------------- effect inspector
 
 let shown = ''
 const fxInputs: { key: ParamKey | 'rampIn' | 'rampOut'; input: HTMLInputElement; val: HTMLElement; row: HTMLElement
   toSlider: (v: number) => number; fmt: (v: number) => string }[] = []
 
-// частоты — ползунок в логарифме: равные шаги на слух
+// frequencies — logarithmic slider: perceptually equal steps
 const STEPS = 1000
 const toSlider = (d: ParamDef, v: number) => (d.log ? (Math.log(v / d.min) / Math.log(d.max / d.min)) * STEPS : v)
 const fromSlider = (d: ParamDef, x: number) => (d.log ? d.min * (d.max / d.min) ** (x / STEPS) : x)
@@ -279,7 +279,7 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   main.appendChild(btns)
   box.appendChild(main)
 
-  // свой эффект: сохранить текущие настройки под своим именем
+  // custom effect: save the current settings under a custom name
   const mine = el('div', 'box')
   mine.appendChild(el('div', 'box-title', t('ins.saveTitle')))
   mine.appendChild(el('div', 'prev-status', t('ins.saveHint')))
@@ -384,7 +384,7 @@ function renderVoiceInfo(l: Levels): void {
   } else info.hidden = true
 }
 
-// ---------------------------------------------------------------- устройства
+// ---------------------------------------------------------------- devices
 
 function fillSelect(sel: HTMLSelectElement, items: { id: string; label: string }[], value: string): void {
   const sig = items.map((d) => d.id + d.label).join('|')
@@ -411,7 +411,7 @@ function renderDevices(): void {
 function render(): void {
   if (st) setCustom(st.S.custom)
   if (sigOf() !== customSig) {
-    // набор своих эффектов изменился — каталог, списки в карточках и горячие клавиши строим заново
+    // the custom effect set changed — rebuild the catalog, card lists and hotkeys
     customSig = sigOf()
     buildCatalog()
     for (const id of LANES) fillFxSelect($(`fxsel-${id}`) as HTMLSelectElement)
@@ -425,9 +425,9 @@ function render(): void {
   renderDevices()
 }
 
-// ---------------------------------------------------------------- горячие клавиши
+// ---------------------------------------------------------------- hotkeys
 
-/** KeyboardEvent → ускоритель Electron. По e.code — не зависит от раскладки (русская, английская). */
+/** KeyboardEvent → Electron accelerator. Uses e.code — independent of the keyboard layout (Russian, English). */
 function accelerator(e: KeyboardEvent): string | null {
   const c = e.code
   const named: Record<string, string> = {
@@ -444,7 +444,7 @@ function accelerator(e: KeyboardEvent): string | null {
   else key = named[c]
   if (!key) return null
   const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean)
-  if (!mods.length && !/^F\d/.test(key)) return null // одиночная клавиша мешала бы печатать и играть
+  if (!mods.length && !/^F\d/.test(key)) return null // a single key would interfere with typing and gaming
   return [...mods, key].join('+')
 }
 
@@ -484,7 +484,7 @@ function renderHotkeys(): void {
 let recording: (() => void) | null = null
 async function record(btn: HTMLButtonElement): Promise<void> {
   recording?.()
-  await holo.pauseHotkeys(true) // иначе нажатие перехватит само глобальное сочетание
+  await holo.pauseHotkeys(true) // otherwise the global shortcut itself would intercept the keypress
   btn.classList.add('rec')
   btn.textContent = t('hk.press')
   const finish = async (accel: string | null) => {
@@ -502,7 +502,7 @@ async function record(btn: HTMLButtonElement): Promise<void> {
     if (e.key === 'Escape') { finish(null); return }
     if (e.key === 'Delete' || e.key === 'Backspace') { finish(''); return }
     const accel = accelerator(e)
-    // X11: Shift с цифрой/знаком даёт другой символ, и глобальное сочетание срабатывает как без Shift
+    // X11: Shift with a digit/symbol yields a different character, and the global shortcut fires as if without Shift
     if (accel && holo.platform === 'linux' && e.shiftKey && /\+[0-9\-=[\];',./\\`]$/.test(accel)) {
       btn.textContent = t('hk.shiftLinux')
       return
@@ -517,7 +517,7 @@ async function record(btn: HTMLButtonElement): Promise<void> {
   recording = () => finish(null)
 }
 
-// ---------------------------------------------------------------- подсказка на экране
+// ---------------------------------------------------------------- on-screen hint
 
 async function buildOsd(): Promise<void> {
   const info = await holo.getOsd()
@@ -540,22 +540,22 @@ function openModal(id: string): void {
   m.onclick = (e) => { if (e.target === m || (e.target as HTMLElement).closest('[data-close]')) m.hidden = true }
 }
 
-// ---------------------------------------------------------------- запуск
+// ---------------------------------------------------------------- startup
 
 async function setCompact(on: boolean): Promise<void> {
   ui = await holo.setUi({ compact: on })
   document.body.classList.toggle('compact', on)
   await new Promise((r) => requestAnimationFrame(r))
-  // высота — по низу последней карточки (колонка растянута на всё окно, её scrollHeight не годится)
+  // height — down to the bottom of the last card (the column spans the whole window, so its scrollHeight is useless)
   await holo.compact(on, $('card-sys').getBoundingClientRect().bottom + 14)
 }
 
-// ---------------------------------------------------------------- язык
+// ---------------------------------------------------------------- language
 
 function buildLangMenu(): void {
   const cur = LANGS.find((l) => l.code === lang()) ?? LANGS[0]
   const btn = $('btn-lang')
-  btn.innerHTML = flagSvg(cur.flag) // свои SVG: на Windows эмодзи-флаги не отображаются
+  btn.innerHTML = flagSvg(cur.flag) // our own SVGs: Windows doesn't render emoji flags
   const menu = $('lang-menu')
   for (const l of LANGS) {
     const b = el('button')
@@ -567,7 +567,7 @@ function buildLangMenu(): void {
   }
   btn.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden }
   document.addEventListener('click', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('#lang-menu')) menu.hidden = true })
-  holo.onLang(() => location.reload()) // окно перестраивается целиком на новом языке; звук в движке не прерывается
+  holo.onLang(() => location.reload()) // the window is rebuilt entirely in the new language; audio in the engine is not interrupted
 }
 
 // ---------------------------------------------------------------- HOLO ecosystem
@@ -614,13 +614,13 @@ async function main(): Promise<void> {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !recording) document.querySelectorAll<HTMLElement>('.modal').forEach((m) => { m.hidden = true })
   })
-  // ссылки в подсказках (VB-Cable) — во внешнем браузере
+  // links in hints (VB-Cable) open in the external browser
   document.addEventListener('click', (e) => {
     const a = (e.target as HTMLElement).closest<HTMLElement>('a[data-href]')
     if (a) { e.preventDefault(); holo.open(a.dataset.href!) }
   })
 
-  // обновление
+  // update
   $('version').textContent = `v${await holo.version()}`
   const upd = $<HTMLButtonElement>('btn-update'), updStatus = $('update-status')
   holo.onUpdateProgress((text) => { updStatus.textContent = text })
@@ -631,7 +631,7 @@ async function main(): Promise<void> {
     upd.disabled = false
   }
 
-  // устройства
+  // devices
   const mon = $<HTMLInputElement>('monitor'), monVol = $<HTMLInputElement>('monitor-vol')
   mon.onchange = () => holo.cmd({ type: 'monitor', on: mon.checked })
   monVol.oninput = () => holo.cmd({ type: 'monitorVol', value: Number(monVol.value) })

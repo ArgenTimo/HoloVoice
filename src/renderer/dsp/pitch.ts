@@ -1,12 +1,12 @@
-// Слежение за основным тоном голоса (YIN) — для подстройки голоса под цель, автотюна и монотонного робота.
-// Считается на сигнале, прореженном до ~12 кГц: голосу хватает, а стоит в десятки раз дешевле.
+// Voice fundamental pitch tracking (YIN), for steering the voice to a target pitch, autotune and the monotone robot.
+// Runs on a signal decimated to ~12 kHz: enough for voice, and tens of times cheaper.
 
 export class PitchTracker {
-  /** текущий тон, Гц (0 — не голос: пауза, шипящие) */
+  /** current pitch, Hz (0 = unvoiced: pause, sibilants) */
   f0 = 0
-  /** средний тон говорящего за последние секунды, Гц (0 — ещё не слышали голоса) */
+  /** speaker's average pitch over the last seconds, Hz (0 = no voice heard yet) */
   avg = 0
-  /** уверенность последнего решения 0..1 */
+  /** confidence of the last decision, 0..1 */
   clarity = 0
 
   private readonly decim: number
@@ -23,14 +23,14 @@ export class PitchTracker {
   private readonly maxLag: number
   private readonly d: Float32Array
   private readonly frame: Float32Array
-  private readonly hist = new Float32Array(400) // последние тона голоса (~2 с при кадре 256 отсчётов)
+  private readonly hist = new Float32Array(400) // recent voice pitches (~2 s at 256-sample frames)
   private readonly sorted = new Float32Array(400)
   private hi = 0
   private lastF = 0
   private holdLeft = 0
-  thrV = 0.3 // порог «точно голос» для глобального минимума
-  thrHold = 0.5 // порог при гистерезисе
-  hold = 8 // сколько анализов подряд (по ~5 мс) держится гистерезис
+  thrV = 0.3 // "definitely voiced" threshold for the global minimum
+  thrHold = 0.5 // threshold under hysteresis
+  hold = 8 // how many consecutive analyses (~5 ms each) hysteresis lasts
   private hn = 0
   private since2 = 0
 
@@ -46,7 +46,7 @@ export class PitchTracker {
   }
 
   push(x: Float32Array): void {
-    // НЧ-фильтр (две однополюсные ступени ~2.5 кГц) и прореживание
+    // low-pass filter (two one-pole stages, ~2.5 kHz) and decimation
     const a = Math.exp((-2 * Math.PI * 2500) / (this.rate * this.decim))
     for (let i = 0; i < x.length; i++) {
       this.lp1 = x[i] + (this.lp1 - x[i]) * a
@@ -71,8 +71,8 @@ export class PitchTracker {
     for (let i = 0; i < n; i++) frame[i] = buf[(this.pos + i) % n]
     let energy = 0
     for (let i = 0; i < win; i++) energy += frame[i] * frame[i]
-    if (energy / win < 1e-6) { this.unvoiced(); return } // тишина (−60 дБ)
-    // разностная функция и её нормировка накопленным средним (YIN)
+    if (energy / win < 1e-6) { this.unvoiced(); return } // silence (−60 dB)
+    // difference function and its cumulative mean normalization (YIN)
     d[0] = 1
     let sum = 0
     let best = -1
@@ -86,23 +86,23 @@ export class PitchTracker {
       if (d[tau] < 0.15 && d[tau] <= d[tau + 1]) { best = tau; break }
     }
     if (best < 0) {
-      // нет уверенного провала — берём глобальный минимум, если он достаточно глубокий; если голос только что был,
-      // а минимум рядом с прошлым тоном — верим и менее уверенному (гистерезис): иначе посреди слова голос
-      // на миг «пропадал» и высота прыгала к исходной
+      // no confident dip: take the global minimum if it is deep enough; if we were just voiced and the minimum
+      // is near the last pitch, trust a less confident one too (hysteresis): otherwise the voice "dropped out"
+      // for a moment mid-word and the pitch jumped back to the original
       let m = minLag
       for (let tau = minLag; tau <= maxLag; tau++) if (d[tau] < d[m]) m = tau
       const near = this.lastF > 0 && Math.abs(Math.log((this.rate / m) / this.lastF)) < 0.22
       if (d[m] < this.thrV || (near && this.holdLeft > 0 && d[m] < this.thrHold)) best = m
     }
     if (best < 0) { this.unvoiced(); return }
-    // у низких голосов сильная вторая гармоника даёт ложный провал на половине периода (тон «на октаву выше»):
-    // если на удвоенном периоде провал заметно глубже — настоящий период там
+    // in low voices a strong second harmonic gives a false dip at half the period (pitch "an octave too high"):
+    // if the dip at double the period is noticeably deeper, that is the true period
     if (2 * best + 2 <= maxLag) {
       let b2 = 2 * best - 2
       for (let tau = 2 * best - 2; tau <= 2 * best + 2; tau++) if (d[tau] < d[b2]) b2 = tau
-      if (d[b2] < d[best] - 0.04) best = b2 // абсолютный запас: у чистого периодического сигнала оба провала ≈ 0
+      if (d[b2] < d[best] - 0.04) best = b2 // absolute margin: for a purely periodic signal both dips are ≈ 0
     }
-    // параболическое уточнение
+    // parabolic interpolation
     const y0 = d[best - 1] ?? d[best], y1 = d[best], y2 = d[best + 1] ?? d[best]
     const den = y0 - 2 * y1 + y2
     const lag = den !== 0 ? best + (0.5 * (y0 - y2)) / den : best
@@ -111,13 +111,13 @@ export class PitchTracker {
     this.f0 = f
     this.lastF = f
     this.holdLeft = this.hold
-    // средний тон — медиана последних ~2 с голоса: устойчива к октавным выбросам; первые 0.2 с — копим
+    // average pitch is the median of the last ~2 s of voice: robust to octave outliers; the first 0.2 s just accumulate
     this.hist[this.hi] = f
     this.hi = (this.hi + 1) % this.hist.length
     if (this.hn < this.hist.length) this.hn++
     if (this.hn >= 40 && (++this.since2 >= 8 || this.avg <= 0)) {
       this.since2 = 0
-      // без выделений памяти в аудиопотоке (сборщик мусора давал паузы — треск)
+      // no allocations on the audio thread (GC pauses caused crackling)
       const v = this.sorted.subarray(0, this.hn)
       v.set(this.hist.subarray(0, this.hn))
       v.sort()

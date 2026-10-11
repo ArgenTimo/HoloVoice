@@ -1,11 +1,11 @@
-// AudioWorklet «holo-voice»: высота, тембр, робот, шёпот, шумоподавление, вибрато (фазовый вокодер, pv.ts)
-// + огрубление (биты, частота). Следит за тоном голоса (pitch.ts): подстройка к целевой высоте (голос любого
-// говорящего — к ~110 Гц мужской, ~210 женский…), тембр следом за сдвигом, автотюн, монотонность (робот).
-// Раз в 200 мс отправляет в port { f0, avg } — панель показывает «ваш голос ≈ … Гц».
-// Высота и тембр — либо вокодером, либо PSOLA (psola.ts, параметр psola): PSOLA звучит естественнее для
-// смены голоса (мужской/женский/детский), вокодер нужен для шёпота, шумоподавления и робота-жужжалки.
-// В нейтральном положении (всё по нулям) отдаёт входной сигнал с той же задержкой, что и вокодер, —
-// переход между ними плавный (~30 мс), поэтому нарастание эффекта не щёлкает и задержка не скачет.
+// AudioWorklet "holo-voice": pitch, timbre, robot, whisper, noise reduction, vibrato (phase vocoder, pv.ts)
+// + degradation (bits, sample rate). Tracks voice pitch (pitch.ts): steering to a target pitch (any speaker's
+// voice to ~110 Hz male, ~210 female…), timbre following the shift, autotune, monotone (robot).
+// Every 200 ms posts { f0, avg } to the port; the panel shows "your voice ≈ … Hz".
+// Pitch and timbre come from either the vocoder or PSOLA (psola.ts, psola parameter): PSOLA sounds more natural for
+// voice changing (male/female/child); the vocoder is needed for whisper, noise reduction and the buzzing robot.
+// In the neutral position (everything at zero) it passes the input through with the same latency as the vocoder;
+// the crossfade between them is smooth (~30 ms), so effect ramps don't click and latency doesn't jump.
 import { PitchTracker } from './pitch'
 import { PhaseVocoder } from './pv'
 import { Psola } from './psola'
@@ -24,17 +24,17 @@ class Channel {
   pv: PhaseVocoder
   ps: Psola
   psBuf = new Float32Array(128)
-  psMix = 0 // 0 — вокодер/сухой, 1 — PSOLA
-  delay: Float32Array // сухой сигнал с задержкой вокодера
+  psMix = 0 // 0 = vocoder/dry, 1 = PSOLA
+  delay: Float32Array // dry signal delayed by the vocoder latency
   di = 0
   pvBuf = new Float32Array(128)
-  mix = 0 // 0 — сухой, 1 — вокодер
+  mix = 0 // 0 = dry, 1 = vocoder
   hold = 0
   held = 0
   constructor(n: number) {
     this.pv = new PhaseVocoder(n, 8, sampleRate)
     this.delay = new Float32Array(this.pv.latency)
-    // PSOLA смотрит вперёд на полтора периода: не меньше ~29 мс, чтобы низкие голоса (от ~75 Гц) не обрезались
+    // PSOLA looks ahead one and a half periods: at least ~29 ms so low voices (down to ~75 Hz) aren't clipped
     this.ps = new Psola(sampleRate, Math.max(this.pv.latency, Math.round(sampleRate * 0.029)))
   }
 }
@@ -64,7 +64,7 @@ class HoloVoice extends AudioWorkletProcessor {
   private n: number
   private ch: Channel[] = []
   private tracker = new PitchTracker(sampleRate)
-  private corr = 0 // поправка автотюна/монотонности, полутоны (сглаженная; в паузах держится)
+  private corr = 0 // autotune/monotone correction, semitones (smoothed; held during pauses)
   private report = 0
   private vibPhase = 0
   private readonly smooth = Math.exp(-1 / (0.03 * sampleRate))
@@ -75,8 +75,8 @@ class HoloVoice extends AudioWorkletProcessor {
     this.warmup()
   }
 
-  /** Прогрев JIT: пока код не скомпилирован, кадры вокодера считаются в разы дольше — первые секунды после
-   *  запуска давали щелчки. Прогоняем всё на шуме ~1 с до начала звука; состояние потом сбрасывается. */
+  /** JIT warm-up: until the code is compiled, vocoder frames take several times longer, so the first seconds after
+   *  start clicked. Run everything on ~1 s of noise before audio starts; the state is discarded afterwards. */
   private warmup(): void {
     const ch = new Channel(this.n)
     const tr = new PitchTracker(sampleRate)
@@ -102,24 +102,24 @@ class HoloVoice extends AudioWorkletProcessor {
     const autoTarget = params.autoTarget[0], targetHz = params.targetHz[0], follow = params.formantFollow[0]
     const tune = params.tune[0], mono = params.mono[0], monoHz = params.monoHz[0], psola = params.psola[0]
 
-    // тон говорящего — по первому каналу
+    // speaker pitch from the first channel
     const tr = this.tracker
     if (input[0]) tr.push(input[0])
-    // сдвиг: заданный + к целевой высоте (по среднему тону — интонация сохраняется)
+    // shift: manual + toward the target pitch (based on average pitch, so intonation is kept)
     let semis = pitch
     if (autoTarget > 0.001 && tr.avg > 0) semis += autoTarget * 12 * Math.log2(targetHz / tr.avg)
     semis = Math.max(-24, Math.min(24, semis))
-    // тембр следует за сдвигом: у людей форманты выше вместе с голосом, но слабее (~0.4 от сдвига высоты)
-    // (у реальных голосов форманты выше примерно на 0.27 от разницы высот: мужской → женский ≈ +18 %)
+    // timbre follows the shift: in people, formants rise with the voice but less (~0.4 of the pitch shift)
+    // (in real voices formants are higher by about 0.27 of the pitch difference: male → female ≈ +18%)
     const fmt = Math.max(-12, Math.min(12, formant + follow * 0.27 * (semis - pitch)))
-    // автотюн и монотонность — по текущему тону после сдвига
+    // autotune and monotone use the current pitch after shifting
     if ((tune > 0.001 || mono > 0.001) && tr.f0 > 0) {
       const f1 = tr.f0 * 2 ** (semis / 12)
       const note = 12 * Math.log2(f1 / 440)
       let want = tune * (Math.round(note) - note)
       const f2 = f1 * 2 ** (want / 12)
       if (mono > 0.001) want += mono * 12 * Math.log2(monoHz / f2)
-      const k = 1 - Math.exp(-128 / (0.012 * sampleRate)) // ~12 мс — быстрая подтяжка без щелчков
+      const k = 1 - Math.exp(-128 / (0.012 * sampleRate)) // ~12 ms: fast correction without clicks
       this.corr += (want - this.corr) * k
     } else if (tune <= 0.001 && mono <= 0.001) this.corr = 0
     semis = Math.max(-24, Math.min(24, semis + this.corr))
@@ -131,8 +131,8 @@ class HoloVoice extends AudioWorkletProcessor {
 
     const active = Math.abs(semis) > 0.01 || Math.abs(fmt) > 0.01 || robot > 0.001 || whisper > 0.001 ||
       denoise > 0.001 || vibrato > 0.001
-    const levels = crush > 0.001 ? 2 ** (15 - crush * 12) : 0 // 16 бит → 4 бита
-    const holdN = 1 + Math.round(decimate * 15) // до 1/16 частоты дискретизации
+    const levels = crush > 0.001 ? 2 ** (15 - crush * 12) : 0 // 16 bits → 4 bits
+    const holdN = 1 + Math.round(decimate * 15) // down to 1/16 of the sample rate
     for (let c = 0; c < output.length; c++) {
       const x = input[c] ?? input[0]
       const y = output[c]
@@ -144,9 +144,9 @@ class HoloVoice extends AudioWorkletProcessor {
       pv.robot = robot
       pv.whisper = whisper
       pv.denoise = denoise
-      pv.vibrato = vibrato * 0.8 // до 0.8 полутона
+      pv.vibrato = vibrato * 0.8 // up to 0.8 semitone
       pv.vibratoHz = vibratoHz
-      // вокодер считает, только когда нужен (или ещё звучит в переходе); иначе холостой ход
+      // the vocoder computes only when needed (or still audible in a crossfade); otherwise idle
       pv.idle = !active && st.mix < 0.001
       pv.process(x, st.pvBuf)
       if (psola > 0.001 || st.psMix > 0.001) {
@@ -178,8 +178,8 @@ class HoloVoice extends AudioWorkletProcessor {
 
 registerProcessor('holo-voice', HoloVoice)
 
-// «holo-tap» — запись входа для «Проверить на записи»: по { start: секунды } копит отсчёты (моно) и отдаёт их
-// одним Float32Array, когда набралось или пришло { stop: true }
+// "holo-tap": input recording for "Test on a recording": on { start: seconds } it collects samples (mono) and returns
+// them as one Float32Array when full or when { stop: true } arrives
 class HoloTap extends AudioWorkletProcessor {
   private buf: Float32Array | null = null
   private n = 0

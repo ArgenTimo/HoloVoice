@@ -1,13 +1,13 @@
-// Цепочка обработки одной дорожки — одна на все эффекты, эффект = набор параметров (effects.ts).
-// Граф не перестраивается при смене эффекта: все параметры — AudioParam, поэтому нарастание, затухание и переход
-// между эффектами — это плавная автоматизация, без щелчков и без скачков задержки.
+// Processing chain for one track, shared by all effects; an effect is a set of parameters (effects.ts).
+// The graph is not rebuilt when the effect changes: all parameters are AudioParams, so ramp-in, ramp-out and transitions
+// between effects are smooth automation, with no clicks and no latency jumps.
 //
-//   вход → holo-voice (шумоподавление, высота, тембр, вибрато, робот, шёпот, огрубление) → перегруз
-//        → кольцевая модуляция → срез низа/верха → низы / теплота / чистота / разборчивость / воздух (+ блеск)
-//        → де-эссер → компрессор → плавание плёнки → хорус (+ дублер) → тремоло → уровень → выход
-//                                                            тремоло ─┬→ эхо ─────────→ уровень
-//                                                                     └→ реверберация ─→ уровень
-//   шум → (гейт дорожки) → уровень
+//   input → holo-voice (noise reduction, pitch, timbre, vibrato, robot, whisper, degradation) → drive
+//        → ring modulation → low/high cut → bass / warmth / clarity / presence / air (+ excite)
+//        → de-esser → compressor → tape wow → chorus (+ doubler) → tremolo → level → output
+//                                                            tremolo ─┬→ echo ───→ level
+//                                                                     └→ reverb ─→ level
+//   noise → (track gate) → level
 import { NEUTRAL, PARAM, type FxParams, type ParamKey } from '../effects'
 
 interface Target { p: AudioParam; map: (v: number) => number; exp?: boolean }
@@ -31,7 +31,7 @@ function impulse(ctx: BaseAudioContext, seconds: number, decay: number, seed: nu
 export class VoiceRig {
   readonly input: GainNode
   readonly output: GainNode
-  /** гейт шума: дорожка закрывает его вместе со своим шумодавом, чтобы шипение не шло в паузах */
+  /** noise gate: the track closes it together with its own noise gate so hiss doesn't play during pauses */
   readonly noiseGate: GainNode
   current: FxParams = { ...NEUTRAL }
   private targets = {} as Record<ParamKey, Target[]>
@@ -54,14 +54,14 @@ export class VoiceRig {
     bind('level', level.gain, dbToGain)
     level.connect(this.output)
 
-    // голос
+    // voice
     this.input.connect(voice)
     for (const k of ['pitch', 'formant', 'robot', 'whisper', 'crush', 'decimate', 'denoise', 'vibrato', 'vibratoHz',
       'autoTarget', 'targetHz', 'formantFollow', 'tune', 'mono', 'monoHz', 'psola'] as const) {
       bind(k, voice.parameters.get(k)!)
     }
 
-    // перегруз: смесь чистого и tanh(6x); после насыщения громкость выравнивается
+    // drive: mix of clean and tanh(6x); loudness is evened out after saturation
     const driveIn = gain(), driveDry = gain(), drivePre = gain(6), driveWet = gain(0)
     const shaper = c.createWaveShaper()
     const curve = new Float32Array(4096)
@@ -74,7 +74,7 @@ export class VoiceRig {
     bind('drive', driveDry.gain, (v) => 1 - v)
     bind('drive', driveWet.gain, (v) => v * 0.35)
 
-    // кольцевая модуляция
+    // ring modulation
     const ringIn = gain(), ringDry = gain(), ringVca = gain(0), ringWet = gain(0)
     driveDry.connect(ringIn); driveWet.connect(ringIn)
     const carrier = lfo(60)
@@ -85,7 +85,7 @@ export class VoiceRig {
     bind('ring', ringWet.gain, (v) => v * 1.4)
     bind('ringHz', carrier.frequency, (v) => v, true)
 
-    // тон
+    // tone
     const biq = (type: BiquadFilterType, hz: number, q = 0.7) => { const f = c.createBiquadFilter(); f.type = type; f.frequency.value = hz; f.Q.value = q; return f }
     const lowcut = biq('highpass', 20), highcut = biq('lowpass', 20000)
     const bass = biq('lowshelf', 180), warmth = biq('peaking', 280, 0.8), mud = biq('peaking', 480, 1.1)
@@ -93,14 +93,14 @@ export class VoiceRig {
     ringDry.connect(lowcut); ringWet.connect(lowcut)
     lowcut.connect(highcut).connect(bass).connect(warmth).connect(mud).connect(presence).connect(air)
     bind('warmth', warmth.gain)
-    bind('clarity', mud.gain, (v) => -v) // чистота: вырезать «бубнение» 400–500 Гц
+    bind('clarity', mud.gain, (v) => -v) // clarity: cut the 400–500 Hz "mud"
     bind('lowcut', lowcut.frequency, (v) => v, true)
     bind('highcut', highcut.frequency, (v) => Math.min(v, c.sampleRate / 2 - 100), true)
     bind('bass', bass.gain)
     bind('presence', presence.gain)
     bind('air', air.gain)
 
-    // блеск: насыщение только верхов, подмешивается — добавляет обертоны, голос звучит дороже
+    // excite: saturate only the highs and blend in; adds overtones so the voice sounds richer
     const enh = gain(), excGain = gain(0), excPre = gain(4)
     const excShaper = c.createWaveShaper()
     const ec = new Float32Array(2048)
@@ -110,7 +110,7 @@ export class VoiceRig {
     air.connect(biq('highpass', 3000)).connect(excPre).connect(excShaper).connect(biq('highpass', 2500)).connect(excGain).connect(enh)
     bind('excite', excGain.gain, (v) => v * 0.3)
 
-    // де-эссер: полоса выше 5.5 кГц (кроссовер Линквица—Райли 4-го порядка — в сумме ровно) сжимается отдельно
+    // de-esser: the band above 5.5 kHz (4th-order Linkwitz–Riley crossover, flat when summed) is compressed separately
     const deLow = biq('lowpass', 5500), deLow2 = biq('lowpass', 5500), deHigh = biq('highpass', 5500), deHigh2 = biq('highpass', 5500)
     const deComp = c.createDynamicsCompressor()
     deComp.knee.value = 3; deComp.attack.value = 0.001; deComp.release.value = 0.06
@@ -120,14 +120,14 @@ export class VoiceRig {
     bind('deess', deComp.threshold, (v) => -45 * v)
     bind('deess', deComp.ratio, (v) => 1 + 11 * v)
 
-    // компрессор: ровная громкость, голос «ближе»
+    // compressor: even loudness, the voice sounds "closer"
     const comp = c.createDynamicsCompressor()
     comp.knee.value = 10; comp.attack.value = 0.005; comp.release.value = 0.15
     deOut.connect(comp)
     bind('comp', comp.threshold, (v) => -32 * v)
     bind('comp', comp.ratio, (v) => 1 + 4 * v)
 
-    // плавание плёнки: задержка, качающаяся медленно (wow) и быстро (flutter)
+    // tape wow: a delay modulated slowly (wow) and quickly (flutter)
     const wowDry = gain(), wowWet = gain(0), wowDelay = c.createDelay(0.1), wowDepth = gain(0), flutDepth = gain(0)
     wowDelay.delayTime.value = 0.012
     lfo(0.55).connect(wowDepth).connect(wowDelay.delayTime)
@@ -139,7 +139,7 @@ export class VoiceRig {
     bind('wow', wowDepth.gain, (v) => v * 0.0035)
     bind('wow', flutDepth.gain, (v) => v * 0.0004)
 
-    // хорус: две копии с разной базовой задержкой и скоростью качания
+    // chorus: two copies with different base delays and modulation rates
     const chorusIn = gain(), chorusWet = gain(0)
     wowDry.connect(chorusIn); wowWet.connect(chorusIn)
     for (const [base, rate] of [[0.018, 1], [0.025, 1.37]] as const) {
@@ -151,11 +151,11 @@ export class VoiceRig {
     }
     bind('chorus', chorusWet.gain, (v) => v * 0.6)
 
-    // тремоло
+    // tremolo
     const trem = gain(1), tremDepth = gain(0)
     chorusIn.connect(trem); chorusWet.connect(trem)
 
-    // объём (дублер): две чуть «плавающие» копии, разведённые влево и вправо — голос шире и богаче
+    // width (doubler): two slightly "drifting" copies panned left and right, making the voice wider and richer
     const dblGain = gain(0)
     for (const [base, hz, pan] of [[0.013, 0.31, -0.75], [0.019, 0.43, 0.75]] as const) {
       const dl = c.createDelay(0.05); dl.delayTime.value = base
@@ -173,7 +173,7 @@ export class VoiceRig {
     bind('tremoloHz', tremLfo.frequency, (v) => v, true)
     trem.connect(level)
 
-    // эхо
+    // echo
     const echoSend = gain(0), echoDelay = c.createDelay(2), echoTone = biq('lowpass', 3200), echoFb = gain(0.35)
     trem.connect(echoSend).connect(echoDelay).connect(echoTone)
     echoTone.connect(echoFb).connect(echoDelay)
@@ -182,17 +182,17 @@ export class VoiceRig {
     bind('echoTime', echoDelay.delayTime)
     bind('echoFb', echoFb.gain)
 
-    // реверберация: малая и большая комнаты, «размер» смешивает их
+    // reverb: small and large rooms, "size" blends them
     const revShort = c.createConvolver(), revLong = c.createConvolver()
     revShort.buffer = impulse(c, 1.1, 3, 11)
     revLong.buffer = impulse(c, 3.6, 2.2, 23)
     const sendShort = gain(0), sendLong = gain(0)
     trem.connect(sendShort).connect(revShort).connect(level)
     trem.connect(sendLong).connect(revLong).connect(level)
-    // реверберация хранит эффект через size: обе отправки пересчитываются при любом из двух параметров (см. apply)
+    // reverb is stored via size: both sends are recomputed when either parameter changes (see apply)
     this.revSends = [sendShort.gain, sendLong.gain]
 
-    // шум плёнки/эфира
+    // tape/radio noise
     const n = c.sampleRate * 2
     const buf = c.createBuffer(1, n, c.sampleRate)
     const d = buf.getChannelData(0)
@@ -207,11 +207,11 @@ export class VoiceRig {
 
   private revSends: AudioParam[]
 
-  /** Перейти к параметрам target за seconds (0 — почти мгновенно, со сглаживанием против щелчков) */
+  /** Move to the target parameters over seconds (0 = almost instantly, smoothed to avoid clicks) */
   apply(target: FxParams, seconds: number): void {
     const now = this.ctx.currentTime
-    // Своя кривая от текущего значения: cancelAndHoldAtTime в Chromium после setTargetAtTime может удержать 0,
-    // а экспоненциальный переход от 0 по спецификации остаётся нулём до конца — фильтр закрылся бы в тишину.
+    // Our own curve from the current value: in Chromium cancelAndHoldAtTime after setTargetAtTime may hold 0,
+    // and per the spec an exponential ramp from 0 stays at zero to the end, so the filter would close to silence.
     const go = (p: AudioParam, v: number, exp = false) => {
       const cur = p.value
       p.cancelScheduledValues(now)
@@ -240,7 +240,7 @@ export class VoiceRig {
   }
 
   dispose(): void {
-    for (const s of this.sources) { try { s.stop() } catch { /* уже */ } }
+    for (const s of this.sources) { try { s.stop() } catch { /* already */ } }
     this.input.disconnect()
     this.voice.disconnect()
     this.output.disconnect()

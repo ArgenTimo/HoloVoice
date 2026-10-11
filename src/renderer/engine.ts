@@ -1,11 +1,11 @@
-// Движок — скрытое окно, живёт всё время работы приложения: звук не зависит от того, открыта ли панель или виджет.
-// Две независимые дорожки, у каждой свой эффект (цепочка dsp/rig.ts + вокодер dsp/worklet.ts; начало — voice-fx
-// из holo-messenger):
-//   mic — мой микрофон → эффект → виртуальный микрофон (Linux: HoloVoice-Microphone из routing-linux.js,
-//         механизм re-traductor; Windows: VB-Audio Virtual Cable, звонилка читает «CABLE Output»)
-//   sys — звук компьютера (ролики, собеседник) → эффект → мои наушники
-//         (Linux: перехват через временный null sink; Windows: системный loopback с заглушением оригинала)
-// У каждой дорожки свой AudioContext: у них разные устройства вывода.
+// Engine — a hidden window that lives for the app's whole lifetime: audio doesn't depend on whether the panel or widget is open.
+// Two independent lanes, each with its own effect (chain dsp/rig.ts + vocoder dsp/worklet.ts; originally voice-fx
+// from holo-messenger):
+//   mic — my microphone → effect → virtual microphone (Linux: HoloVoice-Microphone from routing-linux.js,
+//         re-traductor mechanism; Windows: VB-Audio Virtual Cable, the calling app reads "CABLE Output")
+//   sys — computer audio (videos, the other party) → effect → my headphones
+//         (Linux: capture via a temporary null sink; Windows: system loopback with the original muted)
+// Each lane has its own AudioContext: they use different output devices.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
 import { NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
@@ -13,12 +13,12 @@ import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSett
 
 const isWin = holo.platform === 'win32'
 
-// ---------------------------------------------------------------- настройки
+// ---------------------------------------------------------------- settings
 
 const DEFAULTS: Settings = {
   lanes: {
     mic: { enabled: true, effect: 'demon', amount: 100, gate: -50, gain: 100, quality: 'hq', fx: {} },
-    // звук компьютера по умолчанию не перехватывается — пока его не включили
+    // computer audio isn't captured by default — until it is turned on
     sys: { enabled: false, effect: 'hologram_classic', amount: 100, gate: -80, gain: 100, quality: 'hq', fx: {} },
   },
   mic: 'default', out: '', monitor: false, monitorVol: 70, custom: [],
@@ -27,9 +27,9 @@ const KEY = 'holovoice.settings.v2'
 function loadSettings(): Settings {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<Settings>
-    setCustom(raw.custom) // свои эффекты — до проверки дорожек: на них может стоять свой эффект
+    setCustom(raw.custom) // custom effects — before validating the lanes: a lane may use a custom effect
     const lane = (id: LaneId): LaneSettings => {
-      // из прежних версий: лишние ключи (strength, pitch, space) не мешают, эффекты, которых больше нет, — «Чистый»
+      // from older versions: extra keys (strength, pitch, space) are harmless, effects that no longer exist become "Clean"
       const l = { ...DEFAULTS.lanes[id], ...raw.lanes?.[id] }
       if (!effectInfo(l.effect)) l.effect = 'clean'
       l.fx ??= {}
@@ -45,7 +45,7 @@ let outs: MediaDeviceInfo[] = []
 let ready = false
 
 function publish(): void {
-  try { localStorage.setItem(KEY, JSON.stringify(S)) } catch { /* не страшно */ }
+  try { localStorage.setItem(KEY, JSON.stringify(S)) } catch { /* not critical */ }
   const dev = (d: MediaDeviceInfo) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? t('dev.default') : d.deviceId.slice(0, 8)) })
   const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview }
   holo.pushState(st)
@@ -56,30 +56,30 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 type SinkCtx = AudioContext & { setSinkId?: (id: string) => Promise<void> }
 type SinkEl = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }
 
-// ---------------------------------------------------------------- дорожка
+// ---------------------------------------------------------------- lane
 
 class Lane {
   readonly ctx: SinkCtx
   readonly inGain: GainNode
-  // Срез низа на входе: постоянное смещение и гул микрофона эффекты (низкая полка, насыщение) раздувают в рокот
+  // Input low cut: effects (low shelf, saturation) blow up DC offset and mic hum into a rumble
   readonly hpIn: BiquadFilterNode
-  // Шумовой гейт: в паузах эффекты раздувают фон комнаты в шипение
+  // Noise gate: during pauses effects blow up room noise into hiss
   readonly gate: GainNode
   readonly outGain: GainNode
   readonly hpOut: BiquadFilterNode
-  readonly limiter: DynamicsCompressorNode // эффекты с насыщением не должны клиповать
+  readonly limiter: DynamicsCompressorNode // effects with saturation must not clip
   readonly anIn: AnalyserNode
   readonly anOut: AnalyserNode
-  readonly tap: MediaStreamAudioDestinationNode // для самопрослушки
+  readonly tap: MediaStreamAudioDestinationNode // for self-monitoring
   stream: MediaStream | null = null
   src: MediaStreamAudioSourceNode | null = null
   rig: VoiceRig | null = null
-  /** тон голоса от вокодера: текущий и средний, Гц */
+  /** voice pitch from the vocoder: current and average, Hz */
   f0: [number, number] = [0, 0]
   private loaded = false
 
   constructor(readonly id: LaneId) {
-    // буфер: в «качестве» 25 мс — запас против щелчков, когда система нагружена; в «быстро» — минимальный (для игр)
+    // buffer: in "quality" 25 ms — headroom against clicks when the system is loaded; in "fast" — minimal (for games)
     const c = (this.ctx = new AudioContext({ latencyHint: S.lanes[id].quality === 'fast' ? 'interactive' : 0.025 }) as SinkCtx)
     this.inGain = c.createGain()
     this.gate = c.createGain()
@@ -92,7 +92,7 @@ class Lane {
     this.hpOut = this.biquad('highpass', 25)
     const L = this.limiter
     L.threshold.value = -3; L.knee.value = 0; L.ratio.value = 20; L.attack.value = 0.002; L.release.value = 0.1
-    this.anIn.fftSize = 1024; this.anOut.fftSize = 1024 // ≈20 мс: и индикатор, и гейт
+    this.anIn.fftSize = 1024; this.anOut.fftSize = 1024 // ≈20 ms: for both the meter and the gate
     this.inGain.connect(this.hpIn).connect(this.gate)
     this.hpIn.connect(this.anIn)
     this.outGain.connect(this.hpOut).connect(L)
@@ -119,7 +119,7 @@ class Lane {
     this.src?.connect(this.inGain)
   }
 
-  /** Загрузить вокодер и собрать цепочку (и пересобрать при смене качества — с теми же параметрами, без паузы) */
+  /** Load the vocoder and build the chain (and rebuild it on quality change — with the same parameters, without a pause) */
   async makeRig(): Promise<void> {
     if (!this.loaded) {
       await this.ctx.audioWorklet.addModule(new URL('../../dist/dsp/worklet.js', location.href).href)
@@ -136,7 +136,7 @@ class Lane {
     this.rig = rig
   }
 
-  /** Что должно звучать по настройкам: эффект с силой amount, а выключенная дорожка — обычный звук */
+  /** What should be playing per the settings: the effect at strength amount, or the normal sound for a disabled lane */
   target(): FxParams {
     const c = this.cfg
     if (!c.enabled) return NEUTRAL
@@ -148,11 +148,11 @@ class Lane {
     return forSystemSound(p)
   }
 
-  /** Плавно перейти к настройкам за seconds: нарастание, затухание, переход между эффектами */
+  /** Smoothly transition to the settings over seconds: fade-in, fade-out, switching between effects */
   update(seconds = 0.05): void {
     this.rig?.apply(this.target(), seconds)
     if (this.id === 'mic') previewFollow()
-    // заметный переход — показать полосу нарастания (main решает, включена ли она)
+    // noticeable transition — show the fade bar (main decides whether it is enabled)
     if (seconds >= 0.15) holo.pushRamp({ lane: this.id, seconds, dir: this.cfg.enabled ? 'in' : 'out' })
   }
 
@@ -171,8 +171,8 @@ class Lane {
     return 10 * Math.log10(s / buf.length + 1e-12)
   }
 
-  /** Гейт по уровню входа: открывается за 5 мс, держится 250 мс после звука, закрывается за ~80 мс.
-   *  Таймер, а не requestAnimationFrame — тот в скрытом окне не работает. */
+  /** Gate on the input level: opens in 5 ms, holds 250 ms after sound, closes in ~80 ms.
+   *  A timer, not requestAnimationFrame — that doesn't run in a hidden window. */
   private runGate(): void {
     const buf = new Float32Array(this.anIn.fftSize)
     let lastLoud = 0
@@ -196,7 +196,7 @@ const lanes: Record<LaneId, Lane> = { mic: new Lane('mic'), sys: new Lane('sys')
 // diagnostics from DevTools: window.__hv.lanes.sys.rig.current, .ctx.state, .stream …
 ;(window as unknown as { __hv: unknown }).__hv = { lanes, get S() { return S } }
 
-// ---------------------------------------------------------------- проверить на записи
+// ---------------------------------------------------------------- test with a recording
 
 const preview: Preview = { recording: false, ready: false, playing: false, seconds: 0 }
 const REC_SECONDS = 6
@@ -204,7 +204,7 @@ let recBuffer: AudioBuffer | null = null
 let tap: AudioWorkletNode | null = null
 let pv: { ctx: SinkCtx; rig: VoiceRig; src: AudioBufferSourceNode | null } | null = null
 
-/** Эффект дорожки «Мой голос» — тот, что выбран, даже если дорожка выключена: его и хотят послушать */
+/** The "My voice" lane effect — the selected one, even if the lane is off: that's the one they want to hear */
 function previewTarget(): FxParams {
   const c = S.lanes.mic
   return effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
@@ -217,7 +217,7 @@ async function startRecording(): Promise<void> {
   const lane = lanes.mic
   if (!tap) {
     tap = new AudioWorkletNode(lane.ctx, 'holo-tap')
-    lane.hpIn.connect(tap) // до шумодава и эффекта — чистая запись
+    lane.hpIn.connect(tap) // before the noise gate and effect — a clean recording
     tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
       const data = e.data
       preview.recording = false
@@ -248,8 +248,8 @@ async function playPreview(): Promise<void> {
     rig.output.connect(lim).connect(ctx.destination)
     pv = { ctx, rig, src: null }
   }
-  // в наушники: при перехвате звука компьютера выход по умолчанию — наш, поэтому явно настоящий
-  try { await pv.ctx.setSinkId?.(realOutId) } catch { /* по умолчанию */ }
+  // to the headphones: while computer audio is captured the default output is ours, so set the real one explicitly
+  try { await pv.ctx.setSinkId?.(realOutId) } catch { /* default */ }
   await pv.ctx.resume()
   pv.rig.apply(previewTarget(), 0)
   const src = pv.ctx.createBufferSource()
@@ -264,14 +264,14 @@ async function playPreview(): Promise<void> {
 
 function stopPreview(): void {
   if (preview.recording) tap?.port.postMessage({ stop: true })
-  if (pv?.src) { const s = pv.src; pv.src = null; try { s.stop() } catch { /* уже */ } }
+  if (pv?.src) { const s = pv.src; pv.src = null; try { s.stop() } catch { /* already */ } }
   preview.playing = false
 }
 
-// ---------------------------------------------------------------- устройства
+// ---------------------------------------------------------------- devices
 
 let micRoute: RouteResult = { ok: false, platform: holo.platform }
-let realOutId = '' // настоящие наушники/колонки (на Linux при перехвате выход по умолчанию — наш)
+let realOutId = '' // the real headphones/speakers (on Linux, while capturing, the default output is ours)
 
 const isVirtualOut = (label: string) => /HoloVoice|CABLE Input|VB-Audio|Virtual Cable|VoiceMeeter Input/i.test(label)
 const isVirtualIn = (label: string) => /HoloVoice|Monitor of|CABLE Output|VoiceMeeter Out/i.test(label)
@@ -284,7 +284,7 @@ async function listDevices(): Promise<MediaDeviceInfo[]> {
   return all
 }
 
-/** Новые устройства (наши null sink) появляются в списке не сразу — подождать. */
+/** New devices (our null sinks) don't show up in the list immediately — wait. */
 async function findDevice(kind: MediaDeviceKind, test: (label: string) => boolean, tries = 15) {
   for (let i = 0; i < tries; i++) {
     const d = (await listDevices()).find((x) => x.kind === kind && !isAlias(x) && test(x.label))
@@ -343,10 +343,10 @@ function updateSysHint(err = ''): void {
     : t('hint.sysOff') }
 }
 
-// ---------------------------------------------------------------- звук компьютера
+// ---------------------------------------------------------------- computer audio
 
-// Включение/выключение перехвата занимает до пары секунд; горячую клавишу могут нажать снова раньше.
-// Поэтому запоминается желаемое состояние, а цикл доводит до него фактическое — ни одно нажатие не теряется.
+// Enabling/disabling capture takes up to a couple of seconds; the hotkey may be pressed again before that.
+// So the desired state is stored, and a loop brings the actual state to it — no keypress is lost.
 let sysBusy = false
 let sysActive = false
 let sysWanted = false
@@ -377,18 +377,18 @@ async function applySys(on: boolean): Promise<void> {
   try {
     let stream: MediaStream
     if (isWin) {
-      // системный loopback; видео-дорожка обязательна для getDisplayMedia, сразу выключаем её
+      // system loopback; a video track is required by getDisplayMedia, so we stop it right away
       stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
       stream.getVideoTracks().forEach((t) => { t.stop(); stream.removeTrack(t) })
-      if (!stream.getAudioTracks().length) throw new Error('система не отдала звук')
+      if (!stream.getAudioTracks().length) throw new Error('the system provided no audio')
       await lane.setSink('')
     } else {
       const r = await holo.routeSys(true)
       if (!r.ok) throw new Error(r.error ?? 'pactl')
       const cap = await findDevice('audioinput', (l) => l === r.monitorLabel)
       const real = await findDevice('audiooutput', (l) => l === r.realSinkLabel, 10)
-      if (!cap) throw new Error('не найден вход перехвата')
-      if (!real) throw new Error(`не найден выход «${r.realSinkLabel}»`)
+      if (!cap) throw new Error('capture input not found')
+      if (!real) throw new Error(`output "${r.realSinkLabel}" not found`)
       realOutId = real.deviceId
       await lane.setSink(realOutId)
       stream = await navigator.mediaDevices.getUserMedia({ audio: {
@@ -396,7 +396,7 @@ async function applySys(on: boolean): Promise<void> {
         channelCount: 2,
       } })
     }
-    lane.rig?.apply(NEUTRAL, 0) // перехваченный звук сначала как есть — дальше нарастание эффекта
+    lane.rig?.apply(NEUTRAL, 0) // captured audio starts as is — then the effect fades in
     lane.setStream(stream)
     await lane.ctx.resume()
     lane.update(lane.rampIn())
@@ -412,7 +412,7 @@ async function applySys(on: boolean): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------- самопрослушка
+// ---------------------------------------------------------------- self-monitoring
 
 const monAudio = new Audio() as SinkEl
 monAudio.srcObject = lanes.mic.tap.stream
@@ -426,9 +426,9 @@ async function applyMonitor(): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------- команды пультов
+// ---------------------------------------------------------------- controller commands
 
-// Выключение звука компьютера ждёт затухания эффекта, а уже потом снимает перехват
+// Turning off computer audio waits for the effect to fade out, and only then releases the capture
 let sysOffTimer = 0
 
 async function handle(c: Cmd): Promise<void> {
@@ -443,7 +443,7 @@ async function handle(c: Cmd): Promise<void> {
       clearTimeout(sysOffTimer)
       updateSysHint(); publish()
       if (on) {
-        if (sysActive) lane.update(lane.rampIn()) // ещё не успел выключиться — просто нарастить обратно
+        if (sysActive) lane.update(lane.rampIn()) // hasn't turned off yet — just fade back in
         else await setSys(true)
       } else {
         const t = lane.rampOut()
@@ -455,7 +455,7 @@ async function handle(c: Cmd): Promise<void> {
     case 'effect': {
       const cfg = S.lanes[c.lane]
       cfg.effect = c.effect
-      // включённый — перетекает в новый эффект за его время нарастания
+      // if enabled — crossfades into the new effect over its fade-in time
       if (cfg.enabled) lanes[c.lane].update(lanes[c.lane].rampIn())
       else return handle({ type: 'toggle', lane: c.lane, on: true })
       break
@@ -471,7 +471,7 @@ async function handle(c: Cmd): Promise<void> {
         return handle({ type: 'effect', lane: c.lane, effect: next })
       }
       if (!effectInfo(c.action)) break
-      // то же сочетание у включённого эффекта — выключить: «нажал — включил, нажал ещё раз — выключил»
+      // same shortcut for the enabled effect — turn it off: "press to turn on, press again to turn off"
       if (cfg.enabled && cfg.effect === c.action) return handle({ type: 'toggle', lane: c.lane, on: false })
       return handle({ type: 'effect', lane: c.lane, effect: c.action as EffectId })
     }
@@ -493,13 +493,13 @@ async function handle(c: Cmd): Promise<void> {
       if (S.lanes[c.lane].effect === c.effect) lanes[c.lane].update()
       break
     case 'quality':
-      // размер буфера задаётся при создании AudioContext — перезапускаем движок (маршрутизация переживает это)
+      // the buffer size is set when the AudioContext is created — restart the engine (routing survives this)
       S.lanes[c.lane].quality = c.value
       publish()
       setTimeout(() => location.reload(), 100)
       return
     case 'customSave': {
-      // снимок того, что звучит сейчас (пресет + правки), под своим именем; дорожка сразу переходит на него
+      // a snapshot of what's playing now (preset + tweaks) under a custom name; the lane switches to it immediately
       const cfg = S.lanes[c.lane]
       const src = cfg.effect
       const id = `c-${Date.now().toString(36)}` as const
@@ -532,29 +532,29 @@ async function handle(c: Cmd): Promise<void> {
   publish()
 }
 
-// ---------------------------------------------------------------- запуск
+// ---------------------------------------------------------------- startup
 
 async function main(): Promise<void> {
   setLang((await holo.getUi()).lang)
   holo.onLang((code) => { setLang(code); updateMicHint(); updateSysHint(); publish() })
   holo.onCmd((c) => { handle(c).catch((e) => console.error(e)) })
   updateSysHint()
-  // мой голос: микрофон (заодно даёт право видеть названия устройств), виртуальный выход, цепочка
+  // my voice: microphone (also grants permission to see device names), virtual output, chain
   await openMic()
   micRoute = await holo.routeMic()
   const virt = micRoute.ok && micRoute.sinkLabel
     ? await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
     : await findDevice('audiooutput', (l) => /CABLE Input/i.test(l), 1)
-  // На старте голос всегда идёт в виртуальный микрофон, если он есть (id null sink меняется от запуска к запуску)
+  // At startup the voice always goes to the virtual microphone, if present (the null sink id changes between runs)
   if (virt) S.out = virt.deviceId
   await lanes.mic.setSink(S.out)
   await lanes.mic.makeRig()
   await lanes.sys.makeRig()
-  lanes.mic.update(0) // при запуске — сразу, без нарастания и полосы
+  lanes.mic.update(0) // at startup — immediately, no fade-in or bar
   await refreshDevices()
   await lanes.mic.ctx.resume()
 
-  // звук компьютера — если был включён в прошлый раз
+  // computer audio — if it was on last time
   if (S.lanes.sys.enabled) await setSys(true)
   else await lanes.sys.ctx.suspend()
   await applyMonitor()
@@ -562,14 +562,14 @@ async function main(): Promise<void> {
   publish()
 
   navigator.mediaDevices.addEventListener('devicechange', () => { refreshDevices() })
-  // в скрытом окне движка devicechange не приходит — подключённую гарнитуру иначе не увидеть: сверяем список раз в 3 с
+  // devicechange doesn't fire in the hidden engine window — otherwise a connected headset goes unseen: re-check the list every 3 s
   let devSig = ''
   setInterval(async () => {
     const sig = (await navigator.mediaDevices.enumerateDevices()).map((d) => d.kind + d.deviceId + d.label).join('|')
     if (devSig && sig !== devSig) refreshDevices()
     devSig = sig
   }, 3000)
-  // индикаторы уровня для пультов, 20 раз в секунду
+  // level meters for the controllers, 20 times per second
   const buf = new Float32Array(1024)
   const pct = (db: number) => Math.max(0, Math.min(100, ((db + 60) / 60) * 100))
   setInterval(() => {

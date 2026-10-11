@@ -1,5 +1,5 @@
-// Подсказка поверх экрана: какая дорожка и эффект (при горячей клавише) и полоса нарастания/затухания —
-// заполняется ровно за время перехода, на пике окно прячет main.
+// On-screen hint: which lane and effect (on hotkey) and the fade-in/fade-out bar —
+// fills over exactly the transition time; at the peak main hides the window.
 import { effectInfo, fxLabel, setCustom } from './effects'
 import { setLang, t } from './i18n'
 import { $, holo, type EngineState, type OsdMsg } from './shared'
@@ -37,7 +37,7 @@ holo.onOsd(async (msg) => {
   const fill = $('fill'), pct = $('pct')
   pct.textContent = ''
   if (!msg.ramp) return
-  // нарастание — полоса заполняется к эффекту, затухание — убывает к обычному звуку
+  // fade-in — the bar fills toward the effect, fade-out — it drains toward the normal sound
   const { seconds, dir } = msg.ramp
   const t0 = performance.now()
   const tick = () => {

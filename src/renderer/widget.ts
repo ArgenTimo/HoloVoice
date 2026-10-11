@@ -1,5 +1,5 @@
-// Виджет рабочего стола: без регуляторов — только эффект на вход/выход из списка и мгновенное вкл/выкл.
-// Пульт движка, как и панель; закреплённый виджет запускается вместе с системой (main.js).
+// Desktop widget: no controls — just an input/output effect picked from a list and instant on/off.
+// An engine controller, like the panel; a pinned widget starts with the system (main.js).
 import { allEffects, customs, fxLabel, setCustom, type EffectId } from './effects'
 import { applyStatic, setLang } from './i18n'
 import { $, holo, type EngineState, type LaneId } from './shared'

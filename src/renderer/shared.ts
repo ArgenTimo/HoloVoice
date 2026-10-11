@@ -1,4 +1,4 @@
-// Общее для движка (engine — скрытое окно со звуком) и пультов (panel — главное окно, widget — виджет).
+// Shared by the engine (engine — hidden window with the audio) and the controllers (panel — main window, widget — widget).
 import type { CustomEffect, EffectId, EffectUser, ParamKey } from './effects'
 
 export type LaneId = 'mic' | 'sys'
@@ -6,20 +6,20 @@ export type LaneId = 'mic' | 'sys'
 export type Quality = 'hq' | 'fast'
 export interface LaneSettings {
   enabled: boolean; effect: EffectId
-  amount: number // сила, 0..100 — доля пути от обычного звука к эффекту
+  amount: number // strength, 0..100 — fraction of the way from the normal sound to the effect
   gate: number; gain: number
-  quality: Quality // hq — окно вокодера 2048 (~40 мс), fast — 1024 (~20 мс)
-  fx: Partial<Record<EffectId, EffectUser>> // свои настройки каждого эффекта: параметры, нарастание, затухание
+  quality: Quality // hq — vocoder window 2048 (~40 ms), fast — 1024 (~20 ms)
+  fx: Partial<Record<EffectId, EffectUser>> // per-effect user settings: parameters, fade-in, fade-out
 }
 export interface Settings {
   lanes: Record<LaneId, LaneSettings>
   mic: string; out: string; monitor: boolean; monitorVol: number
-  custom: CustomEffect[] // свои эффекты
+  custom: CustomEffect[] // custom effects
 }
 export interface Hint { html: string; warn: boolean }
 export interface Device { id: string; label: string }
 
-/** Что движок рассылает пультам при каждом изменении */
+/** What the engine broadcasts to the controllers on every change */
 export interface EngineState {
   S: Settings
   mics: Device[]; outs: Device[]
@@ -27,7 +27,7 @@ export interface EngineState {
   ready: boolean
   preview: Preview
 }
-/** «Проверить на записи»: запись своего голоса и прослушивание через эффект дорожки «Мой голос» */
+/** "Test with a recording": record your voice and play it back through the "My voice" lane effect */
 export interface Preview { recording: boolean; ready: boolean; playing: boolean; seconds: number
 }
 
@@ -45,10 +45,10 @@ export type Cmd =
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }
-  /** горячая клавиша: toggle / next / prev / id эффекта */
+  /** hotkey: toggle / next / prev / effect id */
   | { type: 'hotkey'; lane: LaneId; action: string }
 
-/** уровни вход/выход, %, и тон голоса: текущий и средний, Гц (0 — нет голоса) */
+/** input/output levels, %, and voice pitch: current and average, Hz (0 — no voice) */
 export interface Levels { mic: [number, number]; sys: [number, number]; f0: Record<LaneId, [number, number]> }
 
 export interface UiConfig { pinned: boolean; compact: boolean; tab: LaneId; widget: boolean; widgetPinned: boolean; lang: string }
@@ -65,7 +65,7 @@ export interface RouteResult {
 
 export interface HoloApi {
   platform: string
-  // пульты
+  // controllers
   cmd(c: Cmd): void
   getState(): Promise<EngineState | null>
   onState(cb: (s: EngineState) => void): void
@@ -91,7 +91,7 @@ export interface HoloApi {
   version(): Promise<string>
   update(): Promise<string>
   onUpdateProgress(cb: (text: string) => void): void
-  // движок
+  // engine
   routeMic(): Promise<RouteResult>
   routeSys(on: boolean): Promise<RouteResult>
   pushState(s: EngineState): void

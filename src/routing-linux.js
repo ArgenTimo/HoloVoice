@@ -1,18 +1,18 @@
-// Перехват звука на Linux — механизм из re-traductor (src/callsubs/audio/routing.py, guard.py):
-// только временные устройства pipewire-pulse (`pactl load-module`), никаких конфигов.
+// Audio capture on Linux — the mechanism from re-traductor (src/callsubs/audio/routing.py, guard.py):
+// only temporary pipewire-pulse devices (`pactl load-module`), no config files.
 //
-// mic — мой голос для собеседника:
-//   null sink  holovoice_out ("HoloVoice-feed")       — сюда приложение играет обработанный голос
-//   remap      holovoice_mic ("HoloVoice-Microphone") — его монитор как микрофон: выбрать в Discord/Telegram/Zoom
-//   Мой настоящий микрофон остаётся устройством по умолчанию — его и читает приложение.
-// sys — звук компьютера (ролики, собеседник):
-//   null sink  holovoice_in ("HoloVoice-speaker") становится выходом по умолчанию, потоки приложений
-//   переносятся в него — оригинал больше не идёт в наушники напрямую; приложение читает его монитор,
-//   накладывает эффект и играет в настоящий выход. Chromium не видит мониторы (.monitor) как входы,
-//   поэтому монитор пробрасывается remap-source holovoice_in_cap ("HoloVoice-system-sound").
+// mic — my voice for the other party:
+//   null sink  holovoice_out ("HoloVoice-feed")       — the app plays the processed voice here
+//   remap      holovoice_mic ("HoloVoice-Microphone") — its monitor as a microphone: select it in Discord/Telegram/Zoom
+//   My real microphone stays the default device — that is what the app reads.
+// sys — computer sound (videos, the other party):
+//   null sink  holovoice_in ("HoloVoice-speaker") becomes the default output, app streams
+//   are moved into it — the original no longer goes straight to the headphones; the app reads its monitor,
+//   applies the effect and plays to the real output. Chromium does not see monitors (.monitor) as inputs,
+//   so the monitor is exposed via remap-source holovoice_in_cap ("HoloVoice-system-sound").
 //
-// Что изменено, пишется в файл состояния ДО следующего шага; при выходе всё откатывается, при падении —
-// сторож (отдельный sh-процесс), при следующем запуске — restoreStale().
+// Every change is written to the state file BEFORE the next step; on exit everything is rolled back, on a crash —
+// by the guard (a separate sh process), on the next launch — by restoreStale().
 'use strict'
 const { execFile, execFileSync, spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -25,7 +25,7 @@ const SINK_LABEL = 'HoloVoice-feed'
 const MIC_LABEL = 'HoloVoice-Microphone'
 const SPEAKER_LABEL = 'HoloVoice-speaker'
 const IN_CAP = 'holovoice_in_cap'
-const CAPTURE_LABEL = 'HoloVoice-system-sound' // Chromium не показывает мониторы — читаем через remap-source
+const CAPTURE_LABEL = 'HoloVoice-system-sound' // Chromium does not show monitors — read via remap-source
 const OURS = [OUT_SINK, IN_SINK]
 
 /** Is `pid` our process or a child of it (renderers, audio service)? Walks /proc parent links. */
@@ -56,7 +56,7 @@ async function sinkNames() {
   return out
 }
 
-/** `pactl list sink-inputs` (текст: с кириллицей в именах надёжнее JSON) → [{id, sink, pid, owner}] */
+/** `pactl list sink-inputs` (text: more reliable than JSON with Cyrillic in names) → [{id, sink, pid, owner}] */
 async function sinkInputs() {
   const names = await sinkNames()
   const text = await pactl('list', 'sink-inputs')
@@ -75,7 +75,7 @@ async function sinkInputs() {
   return out
 }
 
-/** Описание устройства (то, что Chromium показывает как label) по имени sink. */
+/** Device description (what Chromium shows as the label) by sink name. */
 async function sinkDescription(name) {
   const text = await pactl('list', 'sinks')
   for (const block of text.split(/\n(?=Sink #)/)) {
@@ -87,7 +87,7 @@ async function sinkDescription(name) {
 }
 
 class LinuxRouter {
-  /** ownPids() — pid'ы процессов приложения: их потоки не перехватываем (иначе петля) */
+  /** ownPids() — pids of the app's processes: their streams are not captured (otherwise a loop) */
   constructor(stateDir, ownPids) {
     this.statePath = path.join(stateDir, 'routing.json')
     this.ownPids = ownPids
@@ -109,14 +109,14 @@ class LinuxRouter {
     this.save()
   }
 
-  /** Прошлый запуск умер, не убрав за собой (сторож не успел) — убрать сейчас. Плюс модули без файла — по имени. */
+  /** The previous run died without cleaning up (the guard didn't make it) — clean up now. Plus modules without a file — by name. */
   async restoreStale() {
     let st = null
-    try { st = JSON.parse(fs.readFileSync(this.statePath, 'utf8')) } catch { /* нет */ }
+    try { st = JSON.parse(fs.readFileSync(this.statePath, 'utf8')) } catch { /* none */ }
     if (st) {
       if (st.defaultChanged && st.realSink) await pactl('set-default-sink', st.realSink).catch(() => {})
       for (const m of [...(st.sys || []), ...(st.mic || [])].reverse()) await pactl('unload-module', String(m)).catch(() => {})
-      try { fs.unlinkSync(this.statePath) } catch { /* нет */ }
+      try { fs.unlinkSync(this.statePath) } catch { /* none */ }
     }
     const out = await pactl('list', 'short', 'modules').catch(() => '')
     for (const line of out.split('\n')) {
@@ -128,9 +128,9 @@ class LinuxRouter {
     }
   }
 
-  // ------------------------------------------------------------ мой голос
+  // ------------------------------------------------------------ my voice
 
-  /** Идемпотентно: окно движка может перезагрузиться — тогда уже созданный микрофон используется как есть */
+  /** Idempotent: the engine window may reload — then the already created microphone is used as is */
   async setupMic() {
     if (this.s.mic.length) {
       const out = await pactl('list', 'short', 'modules').catch(() => '')
@@ -147,7 +147,7 @@ class LinuxRouter {
     return { sinkLabel: SINK_LABEL, micLabel: MIC_LABEL }
   }
 
-  // ------------------------------------------------------------ звук компьютера
+  // ------------------------------------------------------------ computer sound
 
   isOwn(si) {
     const pids = this.ownPids()
@@ -163,12 +163,12 @@ class LinuxRouter {
     }
   }
 
-  /** Возвращает описания: настоящего выхода (куда играть результат) и монитора перехвата (что читать). */
+  /** Returns descriptions of the real output (where to play the result) and the capture monitor (what to read). */
   async interceptSys() {
     const s = this.s
     if (!s.sys.length) {
       s.realSink = (await pactl('get-default-sink')).trim()
-      if (!s.realSink || OURS.includes(s.realSink)) throw new Error('не найден настоящий выход звука')
+      if (!s.realSink || OURS.includes(s.realSink)) throw new Error('real audio output not found')
       this.save()
       await this.load('sys', 'module-null-sink', `sink_name=${IN_SINK}`,
         `sink_properties=device.description='${SPEAKER_LABEL}'`)
@@ -182,8 +182,8 @@ class LinuxRouter {
     return { realSinkLabel: await sinkDescription(s.realSink), monitorLabel: CAPTURE_LABEL }
   }
 
-  /** Перенести в перехват потоки, играющие в мой настоящий выход мимо него (начатые до перехвата или привязанные
-   *  к устройству). Потоки в другие устройства (второй выход, виртуальные устройства OBS и т. п.) не трогаем. */
+  /** Move into the capture the streams playing to my real output bypassing it (started before capture or bound
+   *  to the device). Streams to other devices (a second output, OBS virtual devices, etc.) are left alone. */
   async followStreams() {
     if (!this.s.sys.length) return 0
     await this.rescueOwn()
@@ -194,7 +194,7 @@ class LinuxRouter {
         await pactl('move-sink-input', si.id, IN_SINK)
         this.s.moved[si.id] = si.sink
         n++
-      } catch { /* поток мог только что закончиться */ }
+      } catch { /* the stream may have just ended */ }
     }
     if (n) this.save()
     return n
@@ -216,12 +216,12 @@ class LinuxRouter {
     this.save()
   }
 
-  // ------------------------------------------------------------ откат
+  // ------------------------------------------------------------ rollback
 
-  /** Сторож: ждёт, пока мой процесс жив; если он умер, а файл состояния остался — вернуть выход и выгрузить модули.
-   *  Потоки выгружаемого null sink PipeWire сам переносит на выход по умолчанию — поэтому сначала он. */
+  /** Guard: waits while my process is alive; if it dies and the state file remains — restore the output and unload the modules.
+   *  PipeWire itself moves streams of an unloaded null sink to the default output — so that goes first. */
   restartGuard() {
-    if (this.guard) { try { process.kill(this.guard.pid) } catch { /* уже */ } this.guard = null }
+    if (this.guard) { try { process.kill(this.guard.pid) } catch { /* already gone */ } this.guard = null }
     const ids = [...this.s.sys, ...this.s.mic].reverse().join(' ')
     if (!ids) return
     const setDefault = this.s.defaultChanged && this.s.realSink ? `pactl set-default-sink "$3" 2>/dev/null; ` : ''
@@ -234,14 +234,14 @@ class LinuxRouter {
     this.guard.unref()
   }
 
-  /** Синхронно — чтобы успеть в обработчике выхода. */
+  /** Synchronous — so it completes within the exit handler. */
   restoreSync() {
-    const run = (...a) => { try { execFileSync('pactl', a, { timeout: 5000, stdio: 'ignore' }) } catch { /* уже */ } }
+    const run = (...a) => { try { execFileSync('pactl', a, { timeout: 5000, stdio: 'ignore' }) } catch { /* already gone */ } }
     if (this.s.defaultChanged && this.s.realSink) run('set-default-sink', this.s.realSink)
     for (const m of [...this.s.sys, ...this.s.mic].reverse()) run('unload-module', String(m))
     this.s = { mic: [], sys: [], realSink: '', defaultChanged: false, moved: {} }
-    try { fs.unlinkSync(this.statePath) } catch { /* нет */ }
-    if (this.guard) { try { process.kill(this.guard.pid) } catch { /* уже */ } }
+    try { fs.unlinkSync(this.statePath) } catch { /* none */ }
+    if (this.guard) { try { process.kill(this.guard.pid) } catch { /* already gone */ } }
   }
 }
 

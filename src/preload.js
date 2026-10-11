@@ -1,10 +1,10 @@
 'use strict'
-// Один preload для движка и пультов: main пересылает команды пультов движку, состояние движка — пультам.
+// One preload for the engine and the controls: main forwards control commands to the engine, engine state to the controls.
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('holo', {
   platform: process.platform,
-  // пульты
+  // controls
   cmd: (c) => ipcRenderer.send('cmd', c),
   getState: () => ipcRenderer.invoke('state:get'),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
@@ -30,7 +30,7 @@ contextBridge.exposeInMainWorld('holo', {
   version: () => ipcRenderer.invoke('app:version'),
   update: () => ipcRenderer.invoke('app:update'),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, t) => cb(t)),
-  // движок
+  // engine
   routeMic: () => ipcRenderer.invoke('routing:mic'),
   routeSys: (on) => ipcRenderer.invoke('routing:sys', on),
   pushState: (s) => ipcRenderer.send('state', s),

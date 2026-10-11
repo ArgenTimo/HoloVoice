@@ -28,7 +28,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
 .muted { color: var(--muted); }
 [hidden] { display: none !important; }
 
-/* ---------------------------------------------------------------- рамка окна */
+/* ---------------------------------------------------------------- window frame */
 #app { height: 100%; display: flex; flex-direction: column; }
 .titlebar { -webkit-app-region: drag; display: flex; align-items: center; justify-content: space-between;
   height: 38px; flex: none; padding: 0 6px 0 14px; border-bottom: 1px solid var(--line); background: var(--bg2); }
@@ -42,14 +42,14 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
 #btn-pin.on { filter: none; opacity: 1; }
 #btn-close:hover { background: #e5484d; color: #fff; }
 
-/* ---------------------------------------------------------------- раскладка: дорожки | эффекты | настройки */
+/* ---------------------------------------------------------------- layout: lanes | effects | settings */
 .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 270px 1fr 320px; }
 .lanes { border-right: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
 .catalog { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .inspector { border-left: 1px solid var(--line); overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px;
   background: var(--bg2); }
 
-/* ---------------------------------------------------------------- карточка дорожки */
+/* ---------------------------------------------------------------- lane card */
 .lane-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 12px;
   display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .lane-card:hover { border-color: var(--line2); }
@@ -86,7 +86,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
 .lc-hint a { color: var(--sys); text-decoration: underline; cursor: pointer; }
 .lc-fxsel { display: none; }
 
-/* ---------------------------------------------------------------- каталог эффектов */
+/* ---------------------------------------------------------------- effects catalog */
 .cat-head { padding: 12px 16px 6px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .cat-head b { font-size: 15px; }
 .groups { flex: 1; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -106,7 +106,7 @@ body.lane-sys .tile.sel { border-color: var(--sys); background: #0f2f3a; }
 body.lane-sys .tile.sel.live { box-shadow: 0 0 0 1px var(--sys) inset, 0 6px 22px #22d3ee33; }
 .tile .mod-dot { position: absolute; top: 7px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2); }
 
-/* ---------------------------------------------------------------- инспектор эффекта */
+/* ---------------------------------------------------------------- effect inspector */
 .ins-head { display: flex; align-items: center; gap: 10px; }
 .ins-emoji { font-size: 30px; }
 .ins-title { font-size: 16px; font-weight: 700; }
@@ -134,7 +134,7 @@ details.all[open] { display: flex; flex-direction: column; gap: 10px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .prev-status { font-size: 12px; color: var(--muted); }
 
-/* ---------------------------------------------------------------- нижняя строка */
+/* ---------------------------------------------------------------- bottom bar */
 .bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--bg2); }
 .dev { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .dev select { max-width: 220px; }
@@ -148,7 +148,7 @@ details.all[open] { display: flex; flex-direction: column; gap: 10px; }
 .ver { color: var(--faint); font-size: 11px; }
 .upd { color: var(--muted); font-size: 11px; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---------------------------------------------------------------- окна поверх панели */
+/* ---------------------------------------------------------------- windows over the panel */
 .modal { position: fixed; inset: 0; background: #05060acc; display: grid; place-items: center; z-index: 10; }
 .sheet { background: var(--bg2); border: 1px solid var(--line2); border-radius: 14px; width: min(440px, 92vw); max-height: 86vh;
   display: flex; flex-direction: column; gap: 12px; padding: 16px; box-shadow: 0 20px 60px #000a; }
@@ -174,14 +174,14 @@ details.all[open] { display: flex; flex-direction: column; gap: 10px; }
 .pos-grid button { height: 38px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; font-size: 16px; }
 .pos-grid button.sel { border-color: var(--accent); background: #251f45; }
 
-/* ---------------------------------------------------------------- компактный режим: только карточки дорожек */
+/* ---------------------------------------------------------------- compact mode: lane cards only */
 body.compact .catalog, body.compact .inspector, body.compact .bar { display: none; }
 body.compact .layout { grid-template-columns: 1fr; }
 body.compact .lanes { border-right: 0; }
 body.compact .lc-ctrls, body.compact .lc-hint { display: none; }
 body.compact .lc-fxsel { display: block; width: 100%; }
 
-/* ---------------------------------------------------------------- виджет */
+/* ---------------------------------------------------------------- widget */
 body.widget #app { gap: 8px; padding: 0 12px 10px; height: auto; }
 body.widget .titlebar { height: 30px; margin: 0 -12px; padding: 0 6px 0 12px; }
 body.widget .brand { font-size: 12px; }
@@ -196,7 +196,7 @@ body.widget .brand { font-size: 12px; }
 .w-bar { grid-column: 2 / 4; height: 3px; background: var(--panel); border-radius: 2px; overflow: hidden; }
 .w-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), #eab308 70%, #ef4444); }
 
-/* ---------------------------------------------------------------- прокрутка в стиле приложения */
+/* ---------------------------------------------------------------- app-styled scrollbars */
 * { scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -204,7 +204,7 @@ body.widget .brand { font-size: 12px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-/* ---------------------------------------------------------------- язык */
+/* ---------------------------------------------------------------- language */
 .flag { display: block; border-radius: 2px; box-shadow: 0 0 0 1px #ffffff26; }
 .win-btns .lang-btn { display: grid; place-items: center; }
 .lang-menu { position: fixed; top: 40px; right: 120px; z-index: 20; background: var(--bg2); border: 1px solid var(--line2);
@@ -216,7 +216,7 @@ body.widget .brand { font-size: 12px; }
 .lang-menu button:hover { background: var(--panel); }
 .lang-menu button.sel { background: #251f45; }
 
-/* ---------------------------------------------------------------- свои эффекты */
+/* ---------------------------------------------------------------- custom effects */
 .tile .t-del { position: absolute; top: 4px; left: 6px; font-size: 11px; color: var(--faint); opacity: 0; padding: 2px 4px; border-radius: 4px; }
 .tile:hover .t-del { opacity: 1; }
 .tile .t-del:hover { color: #fff; background: #e5484d; }

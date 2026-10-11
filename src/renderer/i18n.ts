@@ -1,6 +1,6 @@
-// Локализация интерфейса: 20 самых распространённых языков + украинский, белорусский, польский.
-// Словари — src/locales/<код>.json (их же читает main для трея и обновления). Нет перевода — английский, затем русский.
-// Флаги — свои SVG: эмодзи-флаги Windows не показывает (вместо них буквы).
+// UI localization: the 20 most widely spoken languages + Ukrainian, Belarusian, Polish.
+// Dictionaries — src/locales/<code>.json (main reads them too, for the tray and updates). No translation — English, then Russian.
+// Flags are our own SVGs: Windows doesn't render emoji flags (shows letters instead).
 import ar from '../locales/ar.json'
 import be from '../locales/be.json'
 import bn from '../locales/bn.json'
@@ -29,7 +29,7 @@ type Dict = Record<string, string>
 const DICTS: Record<string, Dict> = { ar, be, bn, de, en, es, fr, hi, id, it, ja, ko, mr, pl, pt, ru, ta, te, tr, uk, ur, vi, zh }
 
 export interface Lang { code: string; name: string; flag: string; rtl?: boolean }
-/** Порядок — по числу говорящих, затем языки, добавленные по просьбе */
+/** Ordered by number of speakers, then languages added on request */
 export const LANGS: Lang[] = [
   { code: 'en', name: 'English', flag: 'gb' },
   { code: 'zh', name: '中文', flag: 'cn' },
@@ -69,14 +69,14 @@ export function t(key: string, vars?: Record<string, string | number>): string {
   return vars ? s.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? '')) : s
 }
 
-/** Тексты в разметке: data-i18n (текст), data-i18n-html (с разметкой), data-i18n-title (подсказка) */
+/** Texts in markup: data-i18n (text), data-i18n-html (with markup), data-i18n-title (tooltip) */
 export function applyStatic(root: ParentNode = document): void {
   root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((e) => { e.textContent = t(e.dataset.i18n!) })
   root.querySelectorAll<HTMLElement>('[data-i18n-html]').forEach((e) => { e.innerHTML = t(e.dataset.i18nHtml!) })
   root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((e) => { e.title = t(e.dataset.i18nTitle!) })
 }
 
-// ---------------------------------------------------------------- флаги (упрощённые, 3:2)
+// ---------------------------------------------------------------- flags (simplified, 3:2)
 
 const H = (c: string) => `<rect width="30" height="20" fill="${c}"/>`
 const hs = (...c: string[]) => c.map((x, i) => `<rect y="${(20 / c.length) * i}" width="30" height="${20 / c.length + 0.1}" fill="${x}"/>`).join('')
@@ -99,7 +99,7 @@ const FLAGS: Record<string, string> = {
   sa: H('#006C35') + '<rect x="7" y="12.5" width="16" height="1.4" fill="#fff"/><path d="M8,9 Q15,5 22,9" stroke="#fff" stroke-width="1.2" fill="none"/>',
   bd: H('#006A4E') + '<circle cx="13.5" cy="10" r="6" fill="#F42A41"/>',
   br: H('#009C3B') + '<polygon points="15,2.5 27,10 15,17.5 3,10" fill="#FFDF00"/><circle cx="15" cy="10" r="4.2" fill="#002776"/>',
-  ru: hs('#fff', '#3D6FD1', '#fff'), // бело-сине-белый — по просьбе пользователя
+  ru: hs('#fff', '#3D6FD1', '#fff'), // white-blue-white — at the user's request
   pk: H('#01411C') + '<rect width="7.5" height="20" fill="#fff"/><circle cx="19" cy="10" r="5" fill="#fff"/><circle cx="20.5" cy="8.8" r="4.3" fill="#01411C"/>' + star(22.5, 7, 1.6, '#fff'),
   id: hs('#CE1126', '#fff'),
   de: hs('#000', '#DD0000', '#FFCE00'),
@@ -110,7 +110,7 @@ const FLAGS: Record<string, string> = {
     + '<path d="M4,4 7,6.5M5,3 8,5.5M23,13.5 26,16M22,14.5 25,17M23,6.5 26,4M22,5.5 25,3M4,16 7,13.5M5,17 8,14.5" stroke="#000" stroke-width="0.9"/>',
   it: vs('#009246', '#fff', '#CE2B37'),
   ua: hs('#0057B7', '#FFD700'),
-  by: hs('#fff', '#C8312C', '#fff'), // бело-красно-белый — по просьбе пользователя
+  by: hs('#fff', '#C8312C', '#fff'), // white-red-white — at the user's request
   pl: hs('#fff', '#DC143C'),
 }
 export function flagSvg(code: string): string {

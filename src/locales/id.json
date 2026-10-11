@@ -299,5 +299,18 @@
   "ins.resetCustom": "Kembali ke pengaturan yang disimpan",
   "holo.others": "Aplikasi HOLO lainnya",
   "hk.set": "atur…",
-  "setup.later": "Tutup (selesaikan nanti)"
+  "setup.later": "Tutup (selesaikan nanti)",
+  "ins.style": "Style",
+  "var.demon.classic": "Classic",
+  "var.demon.classicTip": "An octave down with a rattling growl and a sub-octave undertone",
+  "var.demon.layered": "Layered",
+  "var.demon.layeredTip": "Your voice a bit lower with a parallel octave-down layer and a snarl — the most intelligible",
+  "var.demon.rattle": "Rattle",
+  "var.demon.rattleTip": "A crisp subharmonic rattle locked to your voice, like false vocal folds",
+  "var.demon.metal": "Metal",
+  "var.demon.metalTip": "A throbbing metallic texture (low ring modulation + fry)",
+  "var.demon.refined": "Hoarse",
+  "var.demon.refinedTip": "Heavy hoarseness that keeps the vowels clear",
+  "var.demon.monster": "Monster",
+  "var.demon.monsterTip": "Cinematic big monster: very deep, huge undertone, big room"
 }

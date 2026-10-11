@@ -2,7 +2,7 @@
 // the effect catalog for the selected lane in the center, the selected effect's settings and "Test with a recording" on the right,
 // devices at the bottom. Hotkeys and the on-screen hint are in windows on top of the panel.
 // No audio is processed here (see engine.ts).
-import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, isNeural, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
+import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, effectMain, effectVariant, fxLabel, groupLabel, isCustom, isNeural, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { CUSTOM_ICONS, DEFAULT_CUSTOM_ICON, applyIcons, icon, iconEl } from './icons'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type Speaker, type UiConfig } from './shared'
@@ -397,15 +397,33 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   status.hidden = true
   box.appendChild(status)
 
+  // styles (e.g. growl types): pick one, the knobs below start from it
+  const user = st?.S.lanes[lane].fx[effect]
+  if (info.variants?.length) {
+    const box2 = el('div', 'box')
+    box2.appendChild(el('div', 'box-title', t('ins.style')))
+    const seg = el('div', 'seg styles')
+    const cur = effectVariant(effect, user)?.id
+    for (const v of info.variants) {
+      const b = el('button', v.id === cur ? 'on' : '', t(`var.${effect}.${v.id}`))
+      b.title = t(`var.${effect}.${v.id}Tip`)
+      b.onclick = () => holo.cmd({ type: 'fxVariant', lane, effect, variant: v.id })
+      seg.appendChild(b)
+    }
+    box2.appendChild(seg)
+    box.appendChild(box2)
+  }
+
   const main = el('div', 'box')
   main.appendChild(el('div', 'box-title', t('ins.main')))
   // computer-sound track: voice-only parameters do nothing there, so they are not shown
   const visible = (k: ParamKey) => lane === 'mic' || !VOICE_ONLY.includes(k)
-  for (const k of info.main.filter(visible)) paramSlider(lane, effect, PARAM[k], main)
+  const mainKeys = effectMain(effect, user)
+  for (const k of mainKeys.filter(visible)) paramSlider(lane, effect, PARAM[k], main)
   const all = el('details', 'all')
   all.appendChild(el('summary', '', t('ins.all')))
   let group = ''
-  for (const d of PARAMS.filter((p) => !info.main.includes(p.key) && visible(p.key))) {
+  for (const d of PARAMS.filter((p) => !mainKeys.includes(p.key) && visible(p.key))) {
     if (d.group !== group) { group = d.group; all.appendChild(el('div', 'pgroup', groupLabel(group))) }
     paramSlider(lane, effect, d, all)
   }
@@ -489,14 +507,15 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
     mine.appendChild(del)
   }
   box.appendChild(mine)
-  shown = `${lane}:${effect}`
+  shown = `${lane}:${effect}:${st?.S.lanes[lane].fx[effect]?.variant ?? ''}`
 }
 
 function renderInspector(): void {
   if (!st) return
   const lane = ui.tab
   const cfg = st.S.lanes[lane]
-  if (shown !== `${lane}:${cfg.effect}`) buildInspector(lane, cfg.effect)
+  // rebuilt for another effect, lane or style (styles have their own main knobs)
+  if (shown !== `${lane}:${cfg.effect}:${cfg.fx[cfg.effect]?.variant ?? ''}`) buildInspector(lane, cfg.effect)
   const user = cfg.fx[cfg.effect]
   const full = effectFull(cfg.effect, user)
   for (const f of fxInputs) {

@@ -484,3 +484,7 @@ body.compact .lc-fx { display: none; }
 /* window buttons: app toggles | minimize, close */
 #btn-min { margin-left: 6px; position: relative; }
 #btn-min::before { content: ''; position: absolute; left: -5px; top: 7px; bottom: 7px; width: 1px; background: var(--line2); }
+
+/* effect styles (growl types…): a wrapping segmented control */
+.seg.styles { flex-wrap: wrap; }
+.seg.styles button { flex: 1 1 30%; padding: 5px 6px; }

@@ -61,6 +61,8 @@ export type Cmd =
   | { type: 'customRestore'; effect: CustomEffect }
   | { type: 'fxRestore'; lane: LaneId; effect: EffectId; user: EffectUser | undefined }
   | { type: 'favorite'; id: EffectId }
+  /** a style of an effect with styles (e.g. growl types); the knobs start from that style */
+  | { type: 'fxVariant'; lane: LaneId; effect: EffectId; variant: string }
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }

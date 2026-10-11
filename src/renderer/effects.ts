@@ -119,7 +119,11 @@ export interface EffectInfo {
   neural?: 'female' | 'male'
   /** level on the computer-sound track (see systemSoundTarget); without it the preset's level is used */
   sysLevel?: number
+  /** styles of the same effect (e.g. different growls): each replaces the preset; picked in the inspector.
+   *  Labels: t(`var.<effect>.<style id>`). The first one is the default. */
+  variants?: EffectVariant[]
 }
+export interface EffectVariant { id: string; preset: Partial<FxParams>; main?: ParamKey[] }
 
 export const EFFECTS: EffectInfo[] = [
   { id: 'clean', icon: 'mic',
@@ -147,7 +151,22 @@ export const EFFECTS: EffectInfo[] = [
     sysLevel: -7.8,
     preset: { psola: 1, pitch: -12, formant: -6, growl: 0.8, sub: 0.55, drive: 0.6, lowcut: 40, highcut: 6500, bass: 5, warmth: 3,
       presence: 2, comp: 0.6, reverb: 0.25, size: 0.6, level: 0.5 },
-    main: ['pitch', 'formant', 'growl', 'sub', 'drive', 'reverb'] },
+    main: ['pitch', 'formant', 'growl', 'sub', 'drive', 'reverb'],
+    // growl styles (labels var.demon.*): classic = the preset above
+    variants: [
+      { id: 'classic', preset: { psola: 1, pitch: -12, formant: -6, growl: 0.8, sub: 0.55, drive: 0.6, lowcut: 40, highcut: 6500, bass: 5, warmth: 3,
+      presence: 2, comp: 0.6, reverb: 0.25, size: 0.6, level: 0.5 } },
+      { id: 'layered', preset: { psola: 1, pitch: -5, formant: -3, octave: 0.7, grit: 0.5, rasp: 0.25, bass: 6, warmth: 2, lowcut: 40, highcut: 8000,
+        presence: 2, comp: 0.5, reverb: 0.15, size: 0.2, level: -3.5 }, main: ['pitch', 'formant', 'octave', 'grit', 'rasp', 'reverb'] },
+      { id: 'rattle', preset: { psola: 1, pitch: -7, formant: -4, fry: 0.9, sub: 0.3, rasp: 0.2, grit: 0.35, bass: 4, warmth: 2, lowcut: 40,
+        highcut: 7000, presence: 1.5, comp: 0.5, reverb: 0.15, size: 0.2, level: -0.5 }, main: ['pitch', 'formant', 'fry', 'sub', 'rasp', 'grit'] },
+      { id: 'metal', preset: { psola: 1, pitch: -6, formant: -4, ring: 0.45, ringHz: 45, fry: 0.5, rasp: 0.3, grit: 0.3, bass: 3, lowcut: 40,
+        highcut: 6500, comp: 0.5, reverb: 0.15, size: 0.2, level: 1.5 }, main: ['pitch', 'formant', 'ring', 'ringHz', 'fry', 'rasp'] },
+      { id: 'refined', preset: { psola: 1, pitch: -8, formant: -4.5, growl: 0.35, sub: 0.4, rasp: 0.45, fry: 0.4, grit: 0.4, drive: 0.2, bass: 6,
+        warmth: 2, lowcut: 40, highcut: 7000, presence: 2, comp: 0.6, reverb: 0.2, size: 0.3, level: -1.5 }, main: ['pitch', 'formant', 'rasp', 'fry', 'sub', 'grit'] },
+      { id: 'monster', preset: { psola: 1, pitch: -12, formant: -7, octave: 0.5, sub: 0.7, fry: 0.4, rasp: 0.35, grit: 0.3, drive: 0.3, bass: 6,
+        warmth: 3, lowcut: 35, highcut: 6000, comp: 0.6, reverb: 0.45, size: 0.8, level: 0 }, main: ['pitch', 'formant', 'octave', 'sub', 'fry', 'reverb'] },
+    ] },
   // divine / angelic: a calm, slightly lower voice wrapped in a quiet choir (octaves and a fifth) and a shimmering
   // cathedral tail; widened, airy, gently compressed
   { id: 'divine', icon: 'halo',
@@ -281,14 +300,25 @@ export function effectInfo(id: string): EffectInfo | undefined {
 export function allEffects(): EffectInfo[] { return [...EFFECTS, ...customInfo.values()] }
 
 /** User-saved settings for one effect (on top of the preset) */
-export interface EffectUser { p?: Partial<FxParams>; rampIn?: number; rampOut?: number }
+export interface EffectUser { p?: Partial<FxParams>; rampIn?: number; rampOut?: number; variant?: string }
 
 /** Full effect parameters: neutral ← preset ← user edits */
 export const NEURAL_FALLBACK: Record<'female' | 'male', BuiltinId> = { female: 'female', male: 'male' }
 export const isNeural = (id: EffectId): boolean => !!effectInfo(id)?.neural
 
+/** The chosen style of an effect (the first one if none chosen), or undefined for effects without styles */
+export function effectVariant(id: EffectId, user?: EffectUser): EffectVariant | undefined {
+  const v = effectInfo(id)?.variants
+  return v?.find((x) => x.id === user?.variant) ?? v?.[0]
+}
+
+/** The effect's main knobs (they can differ per style) */
+export function effectMain(id: EffectId, user?: EffectUser): ParamKey[] {
+  return effectVariant(id, user)?.main ?? effectInfo(id)?.main ?? EFFECT.clean.main
+}
+
 export function effectFull(id: EffectId, user?: EffectUser): FxParams {
-  return { ...NEUTRAL, ...(effectInfo(id)?.preset ?? {}), ...(user?.p ?? {}) }
+  return { ...NEUTRAL, ...(effectVariant(id, user)?.preset ?? effectInfo(id)?.preset ?? {}), ...(user?.p ?? {}) }
 }
 
 /** Between a and b at fraction t; frequencies on a log scale so it sounds even */

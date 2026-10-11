@@ -887,6 +887,14 @@ async function handle(c: Cmd): Promise<void> {
       if (S.lanes[c.lane].effect === c.effect) lanes[c.lane].update()
       break
     }
+    case 'fxVariant': {
+      const cfg = S.lanes[c.lane]
+      const u = (cfg.fx[c.effect] ??= {})
+      u.variant = c.variant
+      delete u.p // the knobs mean something else in another style
+      if (cfg.effect === c.effect) lanes[c.lane].update(lanes[c.lane].rampIn())
+      break
+    }
     case 'favorite': {
       const fav = new Set(S.favorites ?? [])
       if (fav.has(c.id)) fav.delete(c.id); else fav.add(c.id)

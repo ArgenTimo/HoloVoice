@@ -67,7 +67,7 @@ export type Cmd =
 /** input/output levels, %, and voice pitch: current and average, Hz (0 — no voice) */
 export interface Levels { mic: [number, number]; sys: [number, number]; f0: Record<LaneId, [number, number]> }
 
-export interface UiConfig { pinned: boolean; compact: boolean; tab: LaneId; widget: boolean; widgetPinned: boolean; lang: string }
+export interface UiConfig { onboarded?: boolean; pinned: boolean; compact: boolean; tab: LaneId; widget: boolean; widgetPinned: boolean; lang: string }
 
 export interface HotkeyInfo { map: Record<string, string>; failed: string[] }
 export type OsdPos = 'top' | 'top-left' | 'top-right' | 'bottom' | 'bottom-left' | 'bottom-right'
@@ -115,6 +115,9 @@ export interface HoloApi {
   /** Linux: the real output changed while computer sound is captured */
   onRealSink(cb: (r: { realSinkLabel: string }) => void): void
   // neural voices (optional GPU mode)
+  quit(): Promise<void>
+  openLogs(): Promise<string>
+  copyDiagnostics(): Promise<boolean>
   neuralCheck(force?: boolean): Promise<NeuralCheck>
   neuralStart(voice: string, rate: number): Promise<{ ok: boolean; error?: string }>
   neuralStop(): Promise<void>

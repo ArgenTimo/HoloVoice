@@ -166,6 +166,7 @@ function selectLane(id: LaneId): void {
   document.body.classList.toggle('lane-sys', id === 'sys')
   $('cat-lane').replaceChildren(labeled('', LANE_ICO[id], laneName(id), 16))
   renderLanes()
+  renderSetup()
   renderCatalog()
   renderInspector()
 }
@@ -677,10 +678,105 @@ async function buildOsd(): Promise<void> {
   $('osd-test').onclick = () => holo.testOsd()
 }
 
+let modalReturn: HTMLElement | null = null
 function openModal(id: string): void {
   const m = $(id)
+  modalReturn = document.activeElement as HTMLElement | null
   m.hidden = false
-  m.onclick = (e) => { if (e.target === m || (e.target as HTMLElement).closest('[data-close]')) m.hidden = true }
+  m.onclick = (e) => { if (e.target === m || (e.target as HTMLElement).closest('[data-close]')) closeModal(m) }
+  // keyboard users land inside the dialog
+  m.querySelector<HTMLElement>('button, input, select')?.focus()
+}
+function closeModal(m: HTMLElement): void {
+  m.hidden = true
+  modalReturn?.focus?.()
+  modalReturn = null
+}
+
+// ---------------------------------------------------------------- setup guide
+
+/** When the microphone last had a voice-like level (the guide's first check) */
+let micHeardAt = 0
+let avgPitch = 0
+
+/** Re-entrant checklist: microphone heard → virtual mic present → what to pick in the call app → try a voice.
+ *  Opens by itself on the first start; later from the app menu. Every check is live. */
+function openSetup(): void {
+  buildSetup()
+  openModal('modal-setup')
+}
+
+function buildSetup(): void {
+  const box = $('setup')
+  box.innerHTML = `
+    <header><b class="with-ico">${icon('settings', 18)}<span>${t('setup.title')}</span></b><button class="x" data-close>${icon('x', 18)}</button></header>
+    <p class="note">${t('setup.intro')}</p>
+    <ol class="steps">
+      <li id="st-mic"><div class="st-mark"></div><div class="st-body"><b>${t('setup.micT')}</b><div class="st-text"></div>
+        <div class="st-ctl"><div class="bar-m st-meter"><i id="st-meter"></i></div></div></div></li>
+      <li id="st-virt"><div class="st-mark"></div><div class="st-body"><b>${t('setup.virtT')}</b><div class="st-text"></div><div class="st-ctl"></div></div></li>
+      <li id="st-app"><div class="st-mark"></div><div class="st-body"><b>${t('setup.appT')}</b><div class="st-text"></div><div class="st-ctl"></div></div></li>
+      <li id="st-try"><div class="st-mark"></div><div class="st-body"><b>${t('setup.tryT')}</b><div class="st-text"></div><div class="st-ctl"></div></div></li>
+    </ol>
+    <footer><button class="btn primary" id="setup-done">${t('setup.done')}</button></footer>`
+  $('setup-done').onclick = async () => {
+    ui = await holo.setUi({ onboarded: true })
+    closeModal($('modal-setup'))
+  }
+  renderSetup()
+}
+
+function renderSetup(): void {
+  const m = document.getElementById('modal-setup')
+  if (!m || m.hidden || !st) return
+  const step = (id: string, state: 'ok' | 'todo' | 'info', text: string, ctl?: (box: HTMLElement) => void) => {
+    const li = $(id)
+    li.className = state
+    li.querySelector('.st-text')!.innerHTML = text
+    const box = li.querySelector<HTMLElement>('.st-ctl')!
+    if (ctl && box.dataset.sig !== state) { box.dataset.sig = state; box.innerHTML = ''; ctl(box) }
+  }
+  const win = holo.platform === 'win32'
+  const virtual = st.outs.find((d) => (win ? /CABLE Input/i.test(d.label) : /HoloVoice/.test(d.label)))
+  const micName = win ? 'CABLE Output' : 'HoloVoice-Microphone'
+  const heard = Date.now() - micHeardAt < 8000
+  const micLabel = st.mics.find((d) => d.id === st!.S.mic)?.label || t('dev.default')
+
+  step('st-mic', heard ? 'ok' : 'todo', heard ? t('setup.micOk', { mic: esc(micLabel) }) : t('setup.micSay', { mic: esc(micLabel) }))
+  step('st-virt', virtual ? 'ok' : 'todo',
+    virtual ? t('setup.virtOk', { dev: esc(virtual.label) }) : win ? t('setup.virtWin') : t('setup.virtLinux'),
+    (box) => {
+      if (virtual || !win) return
+      const b = el('button', 'btn primary', t('setup.virtGet'))
+      b.onclick = () => holo.open('https://vb-audio.com/Cable/')
+      box.append(b, el('span', 'st-wait', t('setup.virtWait')))
+    })
+  step('st-app', virtual ? 'info' : 'todo', t('setup.app', { mic: micName }), (box) => {
+    const b = el('button', 'btn', t('setup.copy'))
+    b.onclick = async () => { try { await navigator.clipboard.writeText(micName); toast(t('setup.copied', { mic: micName })) } catch { /* no clipboard */ } }
+    box.appendChild(b)
+  })
+  const suggest: Speaker | null = avgPitch > 0 ? (avgPitch < 145 ? 'male' : avgPitch > 175 ? 'female' : 'neutral') : null
+  step('st-try', st.S.monitor ? 'ok' : 'info',
+    t('setup.try') + (suggest ? `<br>${t('setup.voiceGuess', { hz: Math.round(avgPitch), v: t(SPEAKERS.find(([v]) => v === suggest)![1]) })}` : ''),
+    (box) => {
+      const mon = el('button', st!.S.monitor ? 'btn primary' : 'btn', t('dev.monitor'))
+      mon.setAttribute('aria-pressed', String(st!.S.monitor))
+      mon.onclick = () => holo.cmd({ type: 'monitor', on: !st!.S.monitor })
+      box.appendChild(mon)
+      for (const id of ['clean', 'demon', 'female', 'male', 'digital'] as EffectId[]) {
+        if (!effectInfo(id)) continue
+        const b = el('button', 'btn')
+        b.append(iconEl(iconOf(id), 14), el('span', '', fxLabel(id)))
+        b.onclick = () => holo.cmd({ type: 'effect', lane: 'mic', effect: id })
+        box.appendChild(b)
+      }
+      if (suggest && suggest !== st!.S.speaker) {
+        const b = el('button', 'btn primary', t('setup.voiceApply'))
+        b.onclick = () => holo.cmd({ type: 'speaker', value: suggest })
+        box.appendChild(b)
+      }
+    })
 }
 
 // ---------------------------------------------------------------- startup
@@ -724,8 +820,40 @@ const HOLO_PRODUCTS: { name: string; icon: string; desc: string; url?: string; c
   { name: 'HOLO Studio', icon: 'cube', desc: 'holo.studio' },
 ]
 
+/** A short message at the bottom of the panel, optionally with one action (e.g. "Undo") */
+let toastTimer = 0
+function toast(text: string, action?: { label: string; run: () => void }, ms = 4000): void {
+  let box = document.getElementById('toast')
+  if (!box) { box = el('div', 'toast'); box.id = 'toast'; box.setAttribute('role', 'status'); document.body.appendChild(box) }
+  box.replaceChildren(el('span', '', text))
+  if (action) {
+    const b = el('button', 'btn', action.label)
+    b.onclick = () => { action.run(); box!.classList.remove('show') }
+    box.appendChild(b)
+  }
+  box.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => box!.classList.remove('show'), ms)
+}
+
+/** The app menu (under the HoloVoice brand): setup, settings windows, updates, help — then the HOLO family */
 function buildHoloMenu(): void {
   const menu = $('holo-menu')
+  const item = (ico: string, label: string, run: () => void) => {
+    const b = el('button', 'menu-item')
+    b.append(iconEl(ico, 16), el('span', '', label))
+    b.onclick = () => { menu.hidden = true; run() }
+    menu.appendChild(b)
+  }
+  item('settings', t('menu.setup'), () => openSetup())
+  item('keyboard', t('btn.hotkeys'), () => openModal('modal-hk'))
+  item('monitor', t('btn.osd'), () => openModal('modal-osd'))
+  item('refresh', t('menu.update'), () => $<HTMLButtonElement>('btn-update').click())
+  menu.appendChild(el('div', 'menu-sep'))
+  item('eye', t('menu.logs'), () => holo.openLogs())
+  item('message', t('menu.diag'), async () => { await holo.copyDiagnostics(); toast(t('menu.diagDone')) })
+  item('power', t('menu.quit'), () => holo.quit())
+  menu.appendChild(el('div', 'menu-sep'))
   menu.appendChild(el('div', 'holo-head', t('holo.title')))
   for (const p of HOLO_PRODUCTS) {
     const item = el('button', 'holo-item' + (p.current ? ' current' : ''))
@@ -738,6 +866,7 @@ function buildHoloMenu(): void {
   }
   $('btn-holo').onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden }
   document.addEventListener('click', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('#holo-menu')) menu.hidden = true })
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { menu.hidden = true; $('lang-menu').hidden = true } })
 }
 
 async function main(): Promise<void> {
@@ -757,7 +886,7 @@ async function main(): Promise<void> {
   $('open-hk').onclick = () => openModal('modal-hk')
   $('open-osd').onclick = () => openModal('modal-osd')
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !recording) document.querySelectorAll<HTMLElement>('.modal').forEach((m) => { m.hidden = true })
+    if (e.key === 'Escape' && !recording) document.querySelectorAll<HTMLElement>('.modal:not([hidden])').forEach((m) => closeModal(m))
   })
   // links in hints (VB-Cable) open in the external browser
   document.addEventListener('click', (e) => {
@@ -791,18 +920,32 @@ async function main(): Promise<void> {
   renderHotkeys()
   await buildOsd()
 
-  holo.onState((s) => { st = s; render() })
+  // the setup guide opens by itself (once the engine is up) until it has been completed once
+  let guideChecked = false
+  const maybeGuide = () => {
+    if (guideChecked || !st?.ready || ui.compact) return
+    guideChecked = true
+    if (!ui.onboarded) openSetup()
+  }
+  holo.onState((s) => { st = s; render(); maybeGuide() })
+  let setupTick = 0
   holo.onLevels((l) => {
     for (const id of LANES) {
       $(`mi-${id}`).style.width = `${l[id][0]}%`
       $(`mo-${id}`).style.width = `${l[id][1]}%`
     }
     renderVoiceInfo(l)
+    if (l.mic[0] > 12) micHeardAt = Date.now()
+    if (l.f0.mic[1] > 0) avgPitch = l.f0.mic[1]
+    const meter = document.getElementById('st-meter')
+    if (meter) meter.style.width = `${l.mic[0]}%`
+    if (Date.now() - setupTick > 500) { setupTick = Date.now(); renderSetup() }
   })
   st = await holo.getState()
   selectLane(ui.tab)
   render()
   if (ui.compact) await setCompact(true)
+  maybeGuide()
 }
 
 main()

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('holo', {
   showPanel: () => ipcRenderer.invoke('panel:show'),
   minimize: () => ipcRenderer.invoke('win:minimize'),
   close: () => ipcRenderer.invoke('win:close'),
+  quit: () => ipcRenderer.invoke('app:quit'),
   setHeight: (h) => ipcRenderer.invoke('win:height', h),
   compact: (on, h) => ipcRenderer.invoke('win:compact', on, h),
   open: (url) => ipcRenderer.invoke('open', url),
@@ -28,6 +29,8 @@ contextBridge.exposeInMainWorld('holo', {
   onLang: (cb) => ipcRenderer.on('lang', (_e, code) => cb(code)),
   onOsd: (cb) => ipcRenderer.on('osd', (_e, msg) => cb(msg)),
   version: () => ipcRenderer.invoke('app:version'),
+  openLogs: () => ipcRenderer.invoke('diag:logs'),
+  copyDiagnostics: () => ipcRenderer.invoke('diag:copy'),
   update: () => ipcRenderer.invoke('app:update'),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, t) => cb(t)),
   // engine

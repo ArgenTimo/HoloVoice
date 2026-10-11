@@ -5,7 +5,7 @@
 //            to the tray and audio keeps running; if nothing is on — the whole app quits
 //   widget — desktop widget; when pinned it starts with the system (--widget) and does not depend on the panel
 //   osd    — hotkey toast and effect ramp bar; takes no focus and ignores the mouse (doesn't disturb games)
-const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, Notification, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, Notification, clipboard, nativeImage, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -14,6 +14,8 @@ const updater = require('./updater')
 const { Hotkeys } = require('./hotkeys')
 const { WinSysAudio } = require('./sysaudio-win')
 const neuralVc = require('./neural-vc')
+const log = require('./log')
+log.init()
 
 // ---------------------------------------------------------------- language (dictionaries shared with the windows: src/locales)
 const LANG_CODES = ['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja', 'mr', 'te', 'tr', 'ta', 'vi', 'ko', 'it', 'uk', 'be', 'pl']
@@ -53,7 +55,7 @@ const hotkeys = new Hotkeys(onHotkey, onHotkeyHold)
 
 // ---------------------------------------------------------------- window settings
 
-const UI_DEFAULTS = { pinned: false, trayNotice: false, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top', lang: null }
+const UI_DEFAULTS = { pinned: false, trayNotice: false, onboarded: false, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top', lang: null }
 let ui = { ...UI_DEFAULTS }
 const uiPath = () => path.join(app.getPath('userData'), 'ui.json')
 function loadUi() {
@@ -113,6 +115,7 @@ function start() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false, contextIsolation: true, sandbox: true },
   })
   engine.loadFile(PAGE('engine'))
+  log.attach('engine', engine.webContents)
   engine.on('closed', () => { engine = null; if (!quitting) app.quit() })
   // The engine renderer crashed: release what it held (the Windows helper keeps other apps turned down otherwise)
   // and start it again — settings are in its localStorage, so it comes back in the same state.
@@ -214,6 +217,7 @@ function showPanel() {
   })
   if (ui.pinned) panel.setAlwaysOnTop(true, 'screen-saver') // on top of everything, including fullscreen windows
   panel.loadFile(PAGE('index'))
+  log.attach('panel', panel.webContents)
   panel.on('close', (e) => {
     if (quitting) return
     if ((isActive() || widget) && tray) { // keep running in the background
@@ -261,6 +265,7 @@ function showWidget() {
   if (ui.widgetPinned) widget.setAlwaysOnTop(true, 'screen-saver')
   widget.setVisibleOnAllWorkspaces(true)
   widget.loadFile(PAGE('widget'))
+  log.attach('widget', widget.webContents)
   widget.on('moved', () => { ui.widgetBounds = widget.getBounds(); saveUi() })
   widget.on('close', (e) => { if (!quitting && ui.widget) e.preventDefault() }) // closes only by unpinning
   widget.on('closed', () => { widget = null })
@@ -489,6 +494,30 @@ ipcMain.handle('routing:sys', async (_e, on, rate) => {
     await r.releaseSys().catch(() => {})
     return { ok: false, platform: 'linux', error: String(e.message || e) }
   }
+})
+
+// ---------------------------------------------------------------- diagnostics
+
+ipcMain.handle('app:quit', () => quit())
+ipcMain.handle('diag:logs', () => shell.openPath(log.dir()))
+/** Everything useful for a bug report, to the clipboard: versions, what is on, hints, devices, recent log */
+ipcMain.handle('diag:copy', () => {
+  const plain = (h) => String(h ?? '').replace(/<[^>]+>/g, '').replace(/&#(\d+);/g, (_m, c) => String.fromCharCode(c))
+  const L = state?.S.lanes
+  const text = [
+    `HoloVoice ${app.getVersion()} — ${process.platform} ${os.release()} ${process.arch}, Electron ${process.versions.electron}`,
+    `session: ${process.env.XDG_SESSION_TYPE || '-'}, lang: ${ui.lang}`,
+    L ? `my voice: ${L.mic.enabled ? 'on' : 'off'} ${L.mic.effect}; computer sound: ${L.sys.enabled ? 'on' : 'off'} ${L.sys.effect}` : 'engine: no state',
+    state ? `hint mic: ${plain(state.hint.mic.html)}` : '',
+    state ? `hint sys: ${plain(state.hint.sys.html)}` : '',
+    state ? `mics: ${state.mics.map((d) => d.label).join(' | ')}` : '',
+    state ? `outputs: ${state.outs.map((d) => d.label).join(' | ')}` : '',
+    state?.neural ? `neural: ${JSON.stringify(state.neural)}` : '',
+    `hotkeys failed: ${hotkeys.failed.join(', ') || '-'}`,
+    '', '--- recent log ---', ...log.recent(),
+  ].filter((x) => x !== null).join('\n')
+  clipboard.writeText(text)
+  return true
 })
 
 // ---------------------------------------------------------------- neural voices (optional GPU mode)

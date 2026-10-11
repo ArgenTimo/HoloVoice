@@ -6,6 +6,7 @@
   "grp.characters": "キャラクター",
   "grp.neural": "ニューラル音声",
   "grp.atmo": "雰囲気",
+  "grp.devices": "デバイス",
   "win.widget": "デスクトップウィジェット：エフェクトの選択とオン/オフ、再起動後も残ります",
   "win.compact": "コンパクト / 全体",
   "win.pin": "常に手前に表示",
@@ -282,5 +283,14 @@
   "hk.wayland": "Wayland を使用中です。ここではアプリがグローバルキーを取得できないため、これらのショートカットは HoloVoice のウィンドウにフォーカスがあるときだけ動作します。システムのショートカット（設定 → キーボード → カスタムショートカット）に <code>holovoice --toggle mic</code>、<code>holovoice --effect mic:demon</code>、<code>holovoice --next mic</code> のようなコマンドを追加してください。",
   "app.loading": "オーディオを起動中…",
   "setup.menuAdd": "HoloVoice をアプリケーションメニューに追加",
-  "setup.menuDone": "追加しました — HoloVoice がアプリケーションメニューに表示され、ターミナルで holovoice コマンドが使えます"
+  "setup.menuDone": "追加しました — HoloVoice がアプリケーションメニューに表示され、ターミナルで holovoice コマンドが使えます",
+  "fx.telephone": "電話",
+  "fx.megaphone": "メガホン",
+  "fx.stadium": "スタジアムアナウンサー",
+  "fx.narrator": "予告編の声",
+  "fx.helium": "ヘリウム",
+  "fx.oldman": "老人",
+  "fx.zombie": "ゾンビ",
+  "fx.alien": "宇宙人",
+  "fx.underwater": "水中"
 }

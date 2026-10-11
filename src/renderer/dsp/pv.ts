@@ -103,6 +103,8 @@ export class PhaseVocoder {
   private cim: Float32Array
   private rover: number
   private frames = 0
+  private nrFrames = 0 // frames that updated the noise estimate (digital silence does not count)
+  private wasIdle = true // the first frame after idle starts from a clean slate (no stale overlap-add, fresh phases)
   private vibPhase = 0
   private readonly lifter: number
   private readonly scale: number
@@ -155,7 +157,7 @@ export class PhaseVocoder {
       this.rover++
       if (this.rover >= n) {
         this.rover = latency
-        if (this.idle) { this.outFifo.fill(0, 0, this.hop); this.inFifo.copyWithin(0, this.hop, n) }
+        if (this.idle) { this.outFifo.fill(0, 0, this.hop); this.inFifo.copyWithin(0, this.hop, n); this.wasIdle = true }
         else this.frame()
       }
     }
@@ -186,14 +188,23 @@ export class PhaseVocoder {
     const d = this.denoise
     const over = 1 + 1.5 * d
     const floor = 10 ** (-(24 * d) / 20) // down to −24 dB
-    const first = this.frames < 10
+    // digital silence (a closed gate, a muted device) says nothing about the noise: without this the minimum
+    // decayed to subnormals there and could never rise again, so noise reduction stayed off after the first pause
+    let total = 0
+    for (let k = 0; k < anaMag.length; k++) total += anaMag[k] * anaMag[k]
+    const update = total > 1e-10
+    if (update) this.nrFrames++
+    const first = this.nrFrames < 10
     for (let k = 0; k < anaMag.length; k++) {
       const m = anaMag[k]
-      const P = (power[k] = power[k] * 0.7 + m * m * 0.3)
-      if (first) { pmin[k] = Math.max(pmin[k], P); noise[k] = Math.max(noise[k], P) }
-      else {
-        pmin[k] = P < pmin[k] ? P : pmin[k] * 1.0012 // ~+1 dB/s
-        if (P < 4 * pmin[k]) noise[k] = noise[k] * 0.96 + P * 0.04
+      let P = power[k]
+      if (update) {
+        P = power[k] = power[k] * 0.7 + m * m * 0.3
+        if (first) { pmin[k] = Math.max(pmin[k], P, 1e-12); noise[k] = Math.max(noise[k], P) }
+        else {
+          pmin[k] = P < pmin[k] ? Math.max(P, 1e-12) : pmin[k] * 1.0012 + 1e-13 // ~+1 dB/s
+          if (P < 4 * pmin[k]) noise[k] = noise[k] * 0.96 + P * 0.04
+        }
       }
       const g = Math.max(floor, 1 - (over * noise[k]) / (P + 1e-20))
       gain[k] = gain[k] * 0.5 + g * 0.5
@@ -207,6 +218,18 @@ export class PhaseVocoder {
     this.frames++
     for (let k = 0; k < n; k++) { re[k] = this.inFifo[k] * win[k]; im[k] = 0 }
     this.fft.run(re, im, false)
+    // back from idle: what is left in the overlap-add buffer is audio from before the pause, and the phases are
+    // stale — start clean and take this frame's phases as the reference (bins at their centre frequencies)
+    const fresh = this.wasIdle
+    if (fresh) {
+      this.wasIdle = false
+      this.accum.fill(0)
+      for (let k = 0; k <= half; k++) {
+        const ph = Math.atan2(im[k], re[k])
+        this.lastPhase[k] = ph - k * expct
+        this.sumPhase[k] = ph - k * expct
+      }
+    }
 
     // analysis: magnitude, phase and true frequency of each bin (in bins)
     for (let k = 0; k <= half; k++) {

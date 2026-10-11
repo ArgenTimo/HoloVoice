@@ -6,6 +6,7 @@
   "grp.characters": "किरदार",
   "grp.neural": "न्यूरल आवाज़ें",
   "grp.atmo": "माहौल",
+  "grp.devices": "उपकरण",
   "win.widget": "डेस्कटॉप विजेट: इफ़ेक्ट चुनें और चालू/बंद करें, रीस्टार्ट के बाद भी रहता है",
   "win.compact": "छोटा / पूरा",
   "win.pin": "हमेशा सबसे ऊपर",
@@ -282,5 +283,14 @@
   "hk.wayland": "आप Wayland पर हैं: यहाँ ऐप्स ग्लोबल कुंजियाँ नहीं पकड़ सकते, इसलिए ये हॉटकी तभी काम करती हैं जब HoloVoice की विंडो फ़ोकस में हो। सिस्टम शॉर्टकट जोड़ें (सेटिंग्स → कीबोर्ड → कस्टम शॉर्टकट) इन जैसी कमांड के साथ: <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>।",
   "app.loading": "ऑडियो शुरू हो रहा है…",
   "setup.menuAdd": "HoloVoice को ऐप्लिकेशन मेन्यू में जोड़ें",
-  "setup.menuDone": "जोड़ दिया — HoloVoice ऐप्लिकेशन मेन्यू में है, और holovoice कमांड टर्मिनल में काम करती है"
+  "setup.menuDone": "जोड़ दिया — HoloVoice ऐप्लिकेशन मेन्यू में है, और holovoice कमांड टर्मिनल में काम करती है",
+  "fx.telephone": "टेलीफ़ोन",
+  "fx.megaphone": "मेगाफ़ोन",
+  "fx.stadium": "स्टेडियम उद्घोषक",
+  "fx.narrator": "ट्रेलर की आवाज़",
+  "fx.helium": "हीलियम",
+  "fx.oldman": "बूढ़ा आदमी",
+  "fx.zombie": "ज़ॉम्बी",
+  "fx.alien": "एलियन",
+  "fx.underwater": "पानी के नीचे"
 }

@@ -6,6 +6,7 @@
   "grp.characters": "Characters",
   "grp.neural": "Neural voices",
   "grp.atmo": "Atmosphere",
+  "grp.devices": "Devices",
   "win.widget": "Desktop widget: pick effects and switch them on/off, stays after reboot",
   "win.compact": "Compact / full",
   "win.pin": "Always on top",
@@ -282,5 +283,14 @@
   "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Starting audio…",
   "setup.menuAdd": "Add HoloVoice to the applications menu",
-  "setup.menuDone": "Added — HoloVoice is in the applications menu, and the holovoice command works in the terminal"
+  "setup.menuDone": "Added — HoloVoice is in the applications menu, and the holovoice command works in the terminal",
+  "fx.telephone": "Telephone",
+  "fx.megaphone": "Megaphone",
+  "fx.stadium": "Stadium announcer",
+  "fx.narrator": "Trailer voice",
+  "fx.helium": "Helium",
+  "fx.oldman": "Old man",
+  "fx.zombie": "Zombie",
+  "fx.alien": "Alien",
+  "fx.underwater": "Underwater"
 }

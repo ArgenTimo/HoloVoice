@@ -6,6 +6,7 @@
   "grp.characters": "الشخصيات",
   "grp.neural": "أصوات عصبية",
   "grp.atmo": "الأجواء",
+  "grp.devices": "أجهزة",
   "win.widget": "أداة سطح المكتب: اختيار المؤثرات وتشغيلها/إيقافها، تبقى بعد إعادة التشغيل",
   "win.compact": "مضغوط / كامل",
   "win.pin": "دائمًا في الأعلى",
@@ -282,5 +283,14 @@
   "hk.wayland": "أنت تستخدم Wayland: لا تستطيع التطبيقات هنا التقاط المفاتيح العامة، لذا تعمل هذه الاختصارات فقط عندما تكون نافذة HoloVoice في المقدمة. أضف اختصارات نظام (الإعدادات ← لوحة المفاتيح ← اختصارات مخصصة) بأوامر مثل <code>holovoice --toggle mic</code> و<code>holovoice --effect mic:demon</code> و<code>holovoice --next mic</code>.",
   "app.loading": "جارٍ تشغيل الصوت…",
   "setup.menuAdd": "إضافة HoloVoice إلى قائمة التطبيقات",
-  "setup.menuDone": "تمت الإضافة — HoloVoice موجود في قائمة التطبيقات، والأمر holovoice يعمل في الطرفية"
+  "setup.menuDone": "تمت الإضافة — HoloVoice موجود في قائمة التطبيقات، والأمر holovoice يعمل في الطرفية",
+  "fx.telephone": "هاتف",
+  "fx.megaphone": "مكبّر صوت",
+  "fx.stadium": "مذيع ملعب",
+  "fx.narrator": "صوت إعلان فيلم",
+  "fx.helium": "هيليوم",
+  "fx.oldman": "رجل عجوز",
+  "fx.zombie": "زومبي",
+  "fx.alien": "كائن فضائي",
+  "fx.underwater": "تحت الماء"
 }

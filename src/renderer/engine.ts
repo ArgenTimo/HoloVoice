@@ -8,7 +8,7 @@
 // Each lane has its own AudioContext: they use different output devices.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, customs, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, isNeural, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
+import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, customs, effectFull, effectInfo, effectTarget, isCustom, isNeural, setCustom, systemSoundTarget, type BuiltinId, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type NeuralState, type Settings, type Speaker } from './shared'
 
 const isWin = holo.platform === 'win32'
@@ -138,6 +138,15 @@ class Lane {
     makeup.connect(this.tap)
     this.outGain.gain.value = this.cfg.gain / 100
     this.runGate()
+    // the output device failed (a Bluetooth speaker went away mid-play): bind the output again and keep going;
+    // where the device is gone for good, the device refresh picks another one
+    c.addEventListener('error', () => {
+      console.warn(`${id}: audio device error — rebinding the output`)
+      setTimeout(() => {
+        this.setSink(this.sink || '').then(() => this.ctx.resume()).catch(() => {})
+        refreshDevices()
+      }, 500)
+    })
   }
 
   get cfg(): LaneSettings { return S.lanes[this.id] }
@@ -237,10 +246,8 @@ class Lane {
     }
     // computer sound: "Clean" means untouched (its preset is voice EQ/enhancement) plus only the user's own edits
     const fx = effectInfo(c.effect)?.neural ? NEURAL_FALLBACK[effectInfo(c.effect)!.neural!] : c.effect // no neural on this lane
-    const p = fx === 'clean'
-      ? interpolate(NEUTRAL, { ...NEUTRAL, ...(c.fx.clean?.p ?? {}) }, c.amount / 100)
-      : effectTarget(fx, c.fx[fx], c.amount / 100)
-    return forSystemSound(p)
+    // per-effect level for this lane: untouched sound is the reference here (no compressor), not "Clean"
+    return systemSoundTarget(fx, c.fx[fx], c.amount / 100)
   }
 
   /** Smoothly transition to the settings over seconds: fade-in, fade-out, switching between effects */
@@ -262,9 +269,12 @@ class Lane {
 
   /** id 'none' — render without playing anywhere (the chain, meters and self-monitoring keep working) */
   async setSink(id: string): Promise<boolean> {
+    this.sink = id
     const sink = id === 'none' ? { type: 'none' } : id === 'default' ? '' : id
     try { await (this.ctx as unknown as { setSinkId?: (s: unknown) => Promise<void> }).setSinkId?.(sink); return true } catch (e) { console.warn('setSinkId', e); return false }
   }
+  /** the output this lane should play to (re-applied after a device error) */
+  private sink = ''
 
   level(which: 'in' | 'out', buf: Float32Array): number {
     const an = which === 'in' ? this.anIn : this.anOut

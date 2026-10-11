@@ -6,6 +6,7 @@
   "grp.characters": "Figuren",
   "grp.neural": "Neuronale Stimmen",
   "grp.atmo": "Atmosphäre",
+  "grp.devices": "Geräte",
   "win.widget": "Desktop-Widget: Effekte wählen und ein-/ausschalten, bleibt nach Neustart",
   "win.compact": "Kompakt / vollständig",
   "win.pin": "Immer im Vordergrund",
@@ -282,5 +283,14 @@
   "hk.wayland": "Du nutzt Wayland: Hier können Apps keine globalen Tasten abfangen, daher funktionieren diese Kürzel nur, solange ein HoloVoice-Fenster im Fokus ist. Lege Systemkürzel an (Einstellungen → Tastatur → Eigene Tastenkombinationen) mit Befehlen wie <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Audio wird gestartet…",
   "setup.menuAdd": "HoloVoice zum Anwendungsmenü hinzufügen",
-  "setup.menuDone": "Hinzugefügt — HoloVoice ist im Anwendungsmenü, und der Befehl holovoice funktioniert im Terminal"
+  "setup.menuDone": "Hinzugefügt — HoloVoice ist im Anwendungsmenü, und der Befehl holovoice funktioniert im Terminal",
+  "fx.telephone": "Telefon",
+  "fx.megaphone": "Megafon",
+  "fx.stadium": "Stadionsprecher",
+  "fx.narrator": "Trailer-Stimme",
+  "fx.helium": "Helium",
+  "fx.oldman": "Alter Mann",
+  "fx.zombie": "Zombie",
+  "fx.alien": "Alien",
+  "fx.underwater": "Unter Wasser"
 }

@@ -6,6 +6,7 @@
   "grp.characters": "Персонажи",
   "grp.neural": "Нейросетевые голоса",
   "grp.atmo": "Атмосфера",
+  "grp.devices": "Устройства",
   "win.widget": "Виджет на рабочий стол: выбор эффектов и вкл/выкл, остаётся после перезагрузки",
   "win.compact": "Компактно / полностью",
   "win.pin": "Поверх всех окон",
@@ -282,5 +283,14 @@
   "hk.wayland": "У вас Wayland: здесь программы не могут перехватывать глобальные клавиши, поэтому сочетания работают, только пока окно HoloVoice в фокусе. Добавьте системные сочетания (Настройки → Клавиатура → Свои сочетания) с командами вроде <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Запуск звука…",
   "setup.menuAdd": "Добавить HoloVoice в меню приложений",
-  "setup.menuDone": "Готово — HoloVoice есть в меню приложений, а команда holovoice работает в терминале"
+  "setup.menuDone": "Готово — HoloVoice есть в меню приложений, а команда holovoice работает в терминале",
+  "fx.telephone": "Телефон",
+  "fx.megaphone": "Мегафон",
+  "fx.stadium": "Диктор стадиона",
+  "fx.narrator": "Голос трейлера",
+  "fx.helium": "Гелий",
+  "fx.oldman": "Старик",
+  "fx.zombie": "Зомби",
+  "fx.alien": "Пришелец",
+  "fx.underwater": "Под водой"
 }

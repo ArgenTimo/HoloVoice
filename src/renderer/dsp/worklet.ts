@@ -259,9 +259,14 @@ class Channel {
   ps: Psola
   psBuf = new Float32Array(128)
   psMix = 0 // 0 = vocoder/dry, 1 = PSOLA
-  delay: Float32Array // dry signal delayed by the vocoder latency
+  /** common latency of all three paths (dry, vocoder, PSOLA), so crossfades between them don't comb-filter */
+  readonly latency: number
+  delay: Float32Array // dry signal delayed by the common latency
   di = 0
   pvBuf = new Float32Array(128)
+  // vocoder output delayed by (latency − vocoder latency): with a short FFT ("fast") PSOLA needs more lookahead
+  pvDelay: Float32Array | null
+  pdi = 0
   mix = 0 // 0 = dry, 1 = vocoder
   hold = 0
   held = 0
@@ -269,9 +274,11 @@ class Channel {
   halo = new Halo(sampleRate)
   constructor(n: number) {
     this.pv = new PhaseVocoder(n, 8, sampleRate)
-    this.delay = new Float32Array(this.pv.latency)
     // PSOLA looks ahead one and a half periods: at least ~29 ms so low voices (down to ~75 Hz) aren't clipped
-    this.ps = new Psola(sampleRate, Math.max(this.pv.latency, Math.round(sampleRate * 0.029)))
+    this.latency = Math.max(this.pv.latency, Math.round(sampleRate * 0.029))
+    this.delay = new Float32Array(this.latency)
+    this.pvDelay = this.latency > this.pv.latency ? new Float32Array(this.latency - this.pv.latency) : null
+    this.ps = new Psola(sampleRate, this.latency)
   }
 }
 
@@ -331,6 +338,8 @@ class HoloVoice extends AudioWorkletProcessor {
   constructor(options: { processorOptions?: { fftSize?: number } }) {
     super(options)
     this.n = options.processorOptions?.fftSize ?? 2048
+    // channels are big (~0.7 MB of buffers): allocate them here, not on the audio thread inside process()
+    this.ch.push(new Channel(this.n), new Channel(this.n))
     this.warmup()
   }
 
@@ -363,8 +372,12 @@ class HoloVoice extends AudioWorkletProcessor {
     const growl = params.growl[0], sub = params.sub[0], halo = params.halo[0]
     const fry = params.fry[0], rasp = params.rasp[0], octave = params.octave[0], steps = params.steps[0]
 
-    // speaker pitch from the first channel
+    // speaker pitch from the first channel. YIN is the costliest part when nothing else runs: full rate only when a
+    // parameter needs the pitch, otherwise a slow rate that still feeds the panel's "your voice ≈ … Hz"
     const tr = this.tracker
+    const needF0 = autoTarget > 0.001 || tune > 0.001 || mono > 0.001 || steps > 0.001 || psola > 0.001 ||
+      growl > 0.001 || sub > 0.001 || fry > 0.001 || rasp > 0.001 || octave > 0.001
+    tr.every = needF0 ? 256 : 2048
     if (input[0]) tr.push(input[0])
     // shift: manual + toward the target pitch (based on average pitch, so intonation is kept)
     let semis = pitch
@@ -382,7 +395,7 @@ class HoloVoice extends AudioWorkletProcessor {
         do this.stepSemis = STEP_LEVELS[Math.floor(this.stepRnd() * STEP_LEVELS.length)]
         while (this.stepSemis === prev)
         this.stepLeft = Math.round(sampleRate * (0.12 + 0.1 * this.stepRnd()))
-        this.dipWait = this.ch[0]?.ps.latency ?? 0
+        this.dipWait = this.ch[0]?.latency ?? 0
       }
       this.stepVoiced = voiced
     }
@@ -438,11 +451,20 @@ class HoloVoice extends AudioWorkletProcessor {
       // the vocoder computes only when needed (or still audible in a crossfade); otherwise idle
       pv.idle = !active && st.mix < 0.001
       pv.process(x, st.pvBuf)
+      const pd = st.pvDelay
+      if (pd) {
+        for (let i = 0; i < x.length; i++) {
+          const v = pd[st.pdi]
+          pd[st.pdi] = st.pvBuf[i]
+          st.pdi = st.pdi + 1 === pd.length ? 0 : st.pdi + 1
+          st.pvBuf[i] = v
+        }
+      }
       if (psola > 0.001 || st.psMix > 0.001) {
         st.ps.ratio = 2 ** ((semis + vibrato * 0.8 * Math.sin(this.vibPhase)) / 12)
         st.ps.formant = 2 ** (fmt / 12)
         st.ps.process(x, st.psBuf, tr.f0)
-      }
+      } else st.ps.feed(x)
       const target = active ? 1 : 0
       const a = this.smooth
       for (let i = 0; i < x.length; i++) {
@@ -511,7 +533,9 @@ registerProcessor('holo-tap', HoloTap)
 
 // "holo-feed": plays interleaved stereo float32 chunks posted to its port (Windows computer sound from
 // holo-sysaudio). A small jitter buffer: starts after ~40 ms, re-primes after an underrun, and drops the
-// excess if the helper's clock runs ahead.
+// excess if the helper's clock runs ahead. Underruns fade out over what is left (and fade back in after
+// re-priming); dropping the excess crossfades from the old read position to the new one — no clicks.
+const FEED_FADE = Math.round(0.003 * sampleRate)
 class HoloFeed extends AudioWorkletProcessor {
   // processorOptions: channels (2 — interleaved stereo, 1 — mono to every output channel), start/max — seconds
   private readonly ch: number
@@ -521,6 +545,10 @@ class HoloFeed extends AudioWorkletProcessor {
   private primed = false
   private readonly start: number
   private readonly max: number
+  private gain = 0 // fade-in after (re)priming, 0..1
+  private jumpTo = -1 // pending read position after dropping the excess (crossfaded in process)
+  private xf = 0 // crossfade samples left
+  private xr = 0 // old read position during the crossfade
   constructor(options?: { processorOptions?: { channels?: number; start?: number; max?: number } }) {
     super(options)
     const o = options?.processorOptions ?? {}
@@ -540,33 +568,65 @@ class HoloFeed extends AudioWorkletProcessor {
   private push(x: Float32Array): void {
     const N = this.ring.length
     for (let i = 0; i < x.length; i++) { this.ring[this.w] = x[i]; this.w = (this.w + 1) % N }
-    if (this.frames > this.max) { this.r = (this.w - this.ch * this.start + N) % N; this.drops++ }
+    if (this.frames > this.max && this.xf === 0) {
+      // too far behind: jump ahead to `start` frames before the write position, crossfading in process()
+      if (!this.primed) this.r = (this.w - this.ch * this.start + N) % N
+      else { if (this.jumpTo < 0) this.drops++; this.jumpTo = (this.w - this.ch * this.start + N) % N }
+    }
+  }
+  /** one output frame from read position p (advanced), mono or stereo */
+  private read(p: number, out: Float32Array[], i: number, g: number, add: boolean): number {
+    const N = this.ring.length
+    if (this.ch === 2) {
+      const L = this.ring[p] * g, R = this.ring[p + 1] * g
+      if (add) { out[0][i] += L; if (out[1]) out[1][i] += R } else { out[0][i] = L; if (out[1]) out[1][i] = R }
+      return (p + 2) % N
+    }
+    const v = this.ring[p] * g
+    for (let c = 0; c < out.length; c++) out[c][i] = add ? out[c][i] + v : v
+    return (p + 1) % N
   }
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const out = outputs[0]
     const n = out[0].length
-    if (!this.primed) { if (this.frames < this.start) return true; this.primed = true }
-    if (this.frames < n) { this.primed = false; this.underruns++; return true }
-    const N = this.ring.length
-    if (this.ch === 2) {
-      const [L, R] = out
+    if (!this.primed) {
+      if (this.frames < this.start) return true
+      this.primed = true
+      this.gain = 0
+    }
+    if (this.jumpTo >= 0) { this.xr = this.r; this.r = this.jumpTo; this.jumpTo = -1; this.xf = FEED_FADE }
+    const have = this.frames
+    if (have < n + FEED_FADE) {
+      // (about to) run dry: play what is left of this block with a fade-out, then silence until re-primed
+      const m = Math.min(n, have)
       for (let i = 0; i < n; i++) {
-        L[i] = this.ring[this.r]
-        if (R) R[i] = this.ring[this.r + 1]
-        this.r = (this.r + 2) % N
+        if (i < m) this.r = this.read(this.r, out, i, this.gain * (1 - (i + 1) / m), false)
+        else for (let c = 0; c < out.length; c++) out[c][i] = 0
       }
-    } else {
-      const L = out[0]
-      for (let i = 0; i < n; i++) { L[i] = this.ring[this.r]; this.r = (this.r + 1) % N }
-      for (let c = 1; c < out.length; c++) out[c].set(L)
+      this.primed = false
+      this.xf = 0
+      this.underruns++
+      return true
+    }
+    const step = 1 / FEED_FADE
+    for (let i = 0; i < n; i++) {
+      if (this.gain < 1) this.gain = Math.min(1, this.gain + step)
+      if (this.xf > 0) {
+        const a = this.xf / FEED_FADE // weight of the old position
+        this.xr = this.read(this.xr, out, i, this.gain * a, false)
+        this.r = this.read(this.r, out, i, this.gain * (1 - a), true)
+        this.xf--
+      } else this.r = this.read(this.r, out, i, this.gain, false)
     }
     return true
   }
 }
 
 // "holo-stream": sends its (mono) input out through the port in 10 ms chunks — the microphone for the neural voice
+// One reused buffer, posted without a transfer list: the browser serializes a copy natively, so no JS objects are
+// allocated on the audio thread (the old version allocated a fresh array every 10 ms → GC pressure there)
 class HoloStream extends AudioWorkletProcessor {
-  private buf = new Float32Array(Math.round(sampleRate / 100))
+  private readonly buf = new Float32Array(Math.round(sampleRate / 100))
   private n = 0
   process(inputs: Float32Array[][]): boolean {
     const x = inputs[0]?.[0]
@@ -574,8 +634,7 @@ class HoloStream extends AudioWorkletProcessor {
     for (let i = 0; i < x.length; i++) {
       this.buf[this.n++] = x[i]
       if (this.n === this.buf.length) {
-        this.port.postMessage(this.buf.buffer, [this.buf.buffer])
-        this.buf = new Float32Array(this.buf.length)
+        this.port.postMessage(this.buf.buffer)
         this.n = 0
       }
     }

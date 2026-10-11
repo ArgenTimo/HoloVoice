@@ -14,6 +14,32 @@ interface Target { p: AudioParam; map: (v: number) => number; exp?: boolean }
 
 const dbToGain = (d: number) => 10 ** (d / 20)
 
+/** Make-up gain (dB) that Chromium's DynamicsCompressorNode adds on its own (Web Audio spec: the inverse of the
+ *  static curve's gain at 0 dBFS, raised to 0.6). Mirrors DynamicsCompressorKernel (knee curve, k found by bisection
+ *  on the slope at the knee's end); matches measured gains to 0.01 dB. The rig cancels it with a gain after each
+ *  compressor, so the de-esser really reduces sibilance and the compressor evens out loudness without raising it. */
+export function compressorMakeupDb(thrDb: number, kneeDb: number, ratio: number): number {
+  if (ratio <= 1 || thrDb >= 0) return 0
+  const lin = (d: number) => 10 ** (d / 20)
+  const db = (x: number) => (x > 0 ? 20 * Math.log10(x) : -1000)
+  const lt = lin(thrDb)
+  const curve = (x: number, k: number) => (x < lt ? x : lt + (1 - Math.exp(-k * (x - lt))) / k)
+  const slope = (x: number, k: number) => {
+    if (x < lt) return 1
+    const x2 = x * 1.001
+    return (db(curve(x2, k)) - db(curve(x, k))) / (db(x2) - db(x))
+  }
+  const kt = lin(thrDb + kneeDb)
+  let lo = 0.1, hi = 10000, k = 5
+  for (let i = 0; i < 15; i++) {
+    if (slope(kt, k) < 1 / ratio) hi = k
+    else lo = k
+    k = Math.sqrt(lo * hi)
+  }
+  const y = kt > 1 ? curve(1, k) : lin(db(curve(kt, k)) + (0 - db(kt)) / ratio)
+  return -0.6 * db(y)
+}
+
 function impulse(ctx: BaseAudioContext, seconds: number, decay: number, seed: number): AudioBuffer {
   const n = Math.round(ctx.sampleRate * seconds)
   const ir = ctx.createBuffer(2, n, ctx.sampleRate)
@@ -62,6 +88,9 @@ export class VoiceRig {
     }
 
     // drive: mix of clean and tanh(6x); loudness is evened out after saturation
+    // CPU: every side chain (shapers with 4x oversampling, filters, delays) starts with a gate gain that is exactly 0
+    // when its amount is 0 — Chromium then propagates silence and skips the nodes behind it
+    const gate = (key: ParamKey) => { const g = gain(0); bind(key, g.gain, (v) => (v > 0 ? 1 : 0)); return g }
     const driveIn = gain(), driveDry = gain(), drivePre = gain(6), driveWet = gain(0)
     const shaper = c.createWaveShaper()
     const curve = new Float32Array(4096)
@@ -70,7 +99,7 @@ export class VoiceRig {
     shaper.oversample = '4x'
     voice.connect(driveIn)
     driveIn.connect(driveDry)
-    driveIn.connect(drivePre).connect(shaper).connect(driveWet)
+    driveIn.connect(gate('drive')).connect(drivePre).connect(shaper).connect(driveWet)
     bind('drive', driveDry.gain, (v) => 1 - v)
     bind('drive', driveWet.gain, (v) => v * 0.35)
 
@@ -87,7 +116,7 @@ export class VoiceRig {
     const carrier = lfo(60)
     carrier.connect(ringVca.gain)
     ringIn.connect(ringDry)
-    ringIn.connect(ringVca).connect(ringWet)
+    ringIn.connect(gate('ring')).connect(ringVca).connect(ringWet)
     bind('ring', ringDry.gain, (v) => 1 - v)
     bind('ring', ringWet.gain, (v) => v * 1.4)
     bind('ringHz', carrier.frequency, (v) => v, true)
@@ -98,7 +127,7 @@ export class VoiceRig {
     const bass = biq('lowshelf', 180), warmth = biq('peaking', 280, 0.8), mud = biq('peaking', 480, 1.1)
     const presence = biq('peaking', 3200, 0.8), air = biq('highshelf', 10000)
     ringDry.connect(lowcut); ringWet.connect(lowcut)
-    voice.connect(biq('highpass', 400)).connect(biq('highpass', 400)).connect(gritPre).connect(gritShaper)
+    voice.connect(gate('grit')).connect(biq('highpass', 400)).connect(biq('highpass', 400)).connect(gritPre).connect(gritShaper)
       .connect(biq('lowpass', 3000)).connect(biq('lowpass', 3000)).connect(gritWet).connect(ringIn)
     bind('grit', gritWet.gain, (v) => v * 0.3)
     lowcut.connect(highcut).connect(bass).connect(warmth).connect(mud).connect(presence).connect(air)
@@ -117,33 +146,36 @@ export class VoiceRig {
     for (let i = 0; i < ec.length; i++) ec[i] = Math.tanh((i / (ec.length - 1)) * 2 - 1)
     excShaper.curve = ec
     air.connect(enh)
-    air.connect(biq('highpass', 3000)).connect(excPre).connect(excShaper).connect(biq('highpass', 2500)).connect(excGain).connect(enh)
+    air.connect(gate('excite')).connect(biq('highpass', 3000)).connect(excPre).connect(excShaper).connect(biq('highpass', 2500)).connect(excGain).connect(enh)
     bind('excite', excGain.gain, (v) => v * 0.3)
 
     // de-esser: the band above 5.5 kHz (4th-order Linkwitz–Riley crossover, flat when summed) is compressed separately
     const deLow = biq('lowpass', 5500), deLow2 = biq('lowpass', 5500), deHigh = biq('highpass', 5500), deHigh2 = biq('highpass', 5500)
     const deComp = c.createDynamicsCompressor()
     deComp.knee.value = 3; deComp.attack.value = 0.001; deComp.release.value = 0.06
-    const deOut = gain()
+    const deOut = gain(), deTrim = gain()
     enh.connect(deLow).connect(deLow2).connect(deOut)
-    enh.connect(deHigh).connect(deHigh2).connect(deComp).connect(deOut)
+    enh.connect(deHigh).connect(deHigh2).connect(deComp).connect(deTrim).connect(deOut)
     bind('deess', deComp.threshold, (v) => -45 * v)
     bind('deess', deComp.ratio, (v) => 1 + 11 * v)
+    bind('deess', deTrim.gain, (v) => dbToGain(-compressorMakeupDb(-45 * v, 3, 1 + 11 * v)))
 
     // compressor: even loudness, the voice sounds "closer"
     const comp = c.createDynamicsCompressor()
     comp.knee.value = 10; comp.attack.value = 0.005; comp.release.value = 0.15
-    deOut.connect(comp)
+    const compTrim = gain()
+    deOut.connect(comp).connect(compTrim)
     bind('comp', comp.threshold, (v) => -32 * v)
     bind('comp', comp.ratio, (v) => 1 + 4 * v)
+    bind('comp', compTrim.gain, (v) => dbToGain(-compressorMakeupDb(-32 * v, 10, 1 + 4 * v)))
 
     // tape wow: a delay modulated slowly (wow) and quickly (flutter)
     const wowDry = gain(), wowWet = gain(0), wowDelay = c.createDelay(0.1), wowDepth = gain(0), flutDepth = gain(0)
     wowDelay.delayTime.value = 0.012
     lfo(0.55).connect(wowDepth).connect(wowDelay.delayTime)
     lfo(6.5).connect(flutDepth).connect(wowDelay.delayTime)
-    comp.connect(wowDry)
-    comp.connect(wowDelay).connect(wowWet)
+    compTrim.connect(wowDry)
+    compTrim.connect(gate('wow')).connect(wowDelay).connect(wowWet)
     bind('wow', wowDry.gain, (v) => 1 - v)
     bind('wow', wowWet.gain, (v) => v)
     bind('wow', wowDepth.gain, (v) => v * 0.0035)
@@ -152,12 +184,14 @@ export class VoiceRig {
     // chorus: two copies with different base delays and modulation rates
     const chorusIn = gain(), chorusWet = gain(0)
     wowDry.connect(chorusIn); wowWet.connect(chorusIn)
+    const chorusGate = gate('chorus'), dblGate = gate('double')
+    chorusIn.connect(chorusGate); chorusIn.connect(dblGate)
     for (const [base, rate] of [[0.018, 1], [0.025, 1.37]] as const) {
       const dl = c.createDelay(0.1); dl.delayTime.value = base
       const o = lfo(0.8 * rate); const depth = gain(0.004)
       o.connect(depth).connect(dl.delayTime)
       bind('chorusRate', o.frequency, (v) => v * rate, true)
-      chorusIn.connect(dl).connect(chorusWet)
+      chorusGate.connect(dl).connect(chorusWet)
     }
     bind('chorus', chorusWet.gain, (v) => v * 0.6)
 
@@ -172,7 +206,7 @@ export class VoiceRig {
       const depth = gain(0.0012)
       lfo(hz).connect(depth).connect(dl.delayTime)
       const panner = c.createStereoPanner(); panner.pan.value = pan
-      chorusIn.connect(dl).connect(panner).connect(dblGain)
+      dblGate.connect(dl).connect(panner).connect(dblGain)
     }
     dblGain.connect(trem)
     bind('double', dblGain.gain, (v) => v * 0.5)
@@ -211,7 +245,7 @@ export class VoiceRig {
     const noise = c.createBufferSource(); noise.buffer = buf; noise.loop = true; noise.start(); this.sources.push(noise)
     const noiseLevel = gain(0)
     this.noiseGate = gain(1)
-    noise.connect(biq('highpass', 1500)).connect(noiseLevel).connect(this.noiseGate).connect(level)
+    noise.connect(noiseLevel).connect(biq('highpass', 1500)).connect(this.noiseGate).connect(level)
     bind('noise', noiseLevel.gain, (v) => v * 0.05)
   }
 
@@ -228,6 +262,9 @@ export class VoiceRig {
       if (seconds < 0.03 || Math.abs(cur - v) < 1e-6) {
         p.setValueAtTime(cur, now)
         p.setTargetAtTime(v, now, 0.015)
+        // land exactly on the target (8 time constants later the jump is ~0.03% of the change): a setTarget never
+        // reaches it, and gate gains must become exactly 0 for Chromium to idle the side chains behind them
+        p.setValueAtTime(v, now + 0.12)
         return
       }
       const n = Math.max(2, Math.ceil(seconds * 50))

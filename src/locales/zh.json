@@ -6,6 +6,7 @@
   "grp.characters": "角色",
   "grp.neural": "神经网络声音",
   "grp.atmo": "氛围",
+  "grp.devices": "设备",
   "win.widget": "桌面小组件：选择效果并开关，重启后保留",
   "win.compact": "紧凑 / 完整",
   "win.pin": "窗口置顶",
@@ -282,5 +283,14 @@
   "hk.wayland": "你正在使用 Wayland：这里的应用无法捕获全局按键，所以这些快捷键仅在 HoloVoice 窗口获得焦点时有效。请在系统中添加快捷键（设置 → 键盘 → 自定义快捷键），使用如下命令：<code>holovoice --toggle mic</code>、<code>holovoice --effect mic:demon</code>、<code>holovoice --next mic</code>。",
   "app.loading": "正在启动音频…",
   "setup.menuAdd": "将 HoloVoice 添加到应用程序菜单",
-  "setup.menuDone": "已添加 — HoloVoice 已在应用程序菜单中，终端里也可以使用 holovoice 命令"
+  "setup.menuDone": "已添加 — HoloVoice 已在应用程序菜单中，终端里也可以使用 holovoice 命令",
+  "fx.telephone": "电话",
+  "fx.megaphone": "扩音器",
+  "fx.stadium": "体育场播报员",
+  "fx.narrator": "预告片配音",
+  "fx.helium": "氦气",
+  "fx.oldman": "老人",
+  "fx.zombie": "僵尸",
+  "fx.alien": "外星人",
+  "fx.underwater": "水下"
 }

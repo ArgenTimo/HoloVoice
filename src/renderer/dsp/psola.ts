@@ -65,8 +65,30 @@ export class Psola {
     this.nextSyn = 0
   }
 
-  /** f0 is the current input pitch (0 = unvoiced) */
-  process(input: Float32Array, output: Float32Array, f0: number): void {
+  private idle = false
+
+  /** While PSOLA is not in use: keep the input history fresh (cheap), so when it is switched back on it doesn't
+   *  play ~30 ms of audio from before the pause; synthesis restarts from a clean slate (see restart) */
+  feed(input: Float32Array): void {
+    this.idle = true
+    this.store(input)
+  }
+
+  /** Back from idle: drop old grains, window sums and marks; analysis resumes just before the output point */
+  private restart(): void {
+    this.idle = false
+    this.y.fill(0)
+    this.w.fill(0)
+    this.mCount = 0
+    this.mHead = 0
+    this.voicedRun = false
+    this.wasVoiced = false
+    this.lastPeriod = 0
+    this.lastMark = Math.max(0, this.t - this.latency - this.tu)
+    this.nextSyn = 0
+  }
+
+  private store(input: Float32Array): void {
     const n = input.length
     for (let i = 0; i < n; i++) {
       const v = input[i]
@@ -80,6 +102,13 @@ export class Psola {
       this.env[k] = this.envS
     }
     this.t += n
+  }
+
+  /** f0 is the current input pitch (0 = unvoiced) */
+  process(input: Float32Array, output: Float32Array, f0: number): void {
+    const n = input.length
+    if (this.idle) this.restart()
+    this.store(input)
     this.analyze(f0)
     this.synthesize(this.t - this.latency)
     // output is divided by the window sum, otherwise loudness pulsates at the pitch rate ("buzzing"). When lowering pitch

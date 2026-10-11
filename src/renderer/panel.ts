@@ -15,9 +15,10 @@ const laneName = (id: LaneId) => t(`lane.${id}`)
 const LANE_ICO: Record<LaneId, string> = { mic: 'mic', sys: 'speaker' }
 
 const BUILTIN_GROUPS: [string, EffectId[]][] = [
-  ['grp.voices', ['clean', 'male', 'female', 'child', 'autotune', 'giant', 'chipmunk', 'whisper']],
-  ['grp.characters', ['demon', 'divine', 'tts', 'ghost', 'digital', 'smolder']],
-  ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'vhs', 'radio', 'cave']],
+  ['grp.voices', ['clean', 'male', 'female', 'child', 'oldman', 'narrator', 'autotune', 'giant', 'chipmunk', 'helium', 'whisper']],
+  ['grp.characters', ['demon', 'divine', 'zombie', 'alien', 'digital', 'ghost', 'tts', 'smolder']],
+  ['grp.devices', ['telephone', 'radio', 'megaphone', 'vhs']],
+  ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'stadium', 'cave', 'underwater']],
 ]
 /** Catalog groups: built-in + "My effects", if any */
 function groups(): [string, EffectId[]][] {

@@ -6,6 +6,7 @@
   "grp.characters": "Personagens",
   "grp.neural": "Vozes neurais",
   "grp.atmo": "Atmosfera",
+  "grp.devices": "Dispositivos",
   "win.widget": "Widget na área de trabalho: escolher efeitos e ligá-los/desligá-los, permanece após reiniciar",
   "win.compact": "Compacto / completo",
   "win.pin": "Sempre no topo",
@@ -282,5 +283,14 @@
   "hk.wayland": "Você está no Wayland: aqui os apps não conseguem capturar teclas globais, então estes atalhos só funcionam enquanto uma janela do HoloVoice estiver em foco. Adicione atalhos do sistema (Configurações → Teclado → Atalhos personalizados) com comandos como <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Iniciando o áudio…",
   "setup.menuAdd": "Adicionar o HoloVoice ao menu de aplicativos",
-  "setup.menuDone": "Pronto — o HoloVoice está no menu de aplicativos, e o comando holovoice funciona no terminal"
+  "setup.menuDone": "Pronto — o HoloVoice está no menu de aplicativos, e o comando holovoice funciona no terminal",
+  "fx.telephone": "Telefone",
+  "fx.megaphone": "Megafone",
+  "fx.stadium": "Locutor de estádio",
+  "fx.narrator": "Voz de trailer",
+  "fx.helium": "Hélio",
+  "fx.oldman": "Idoso",
+  "fx.zombie": "Zumbi",
+  "fx.alien": "Alienígena",
+  "fx.underwater": "Debaixo d’água"
 }

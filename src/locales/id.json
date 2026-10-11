@@ -6,6 +6,7 @@
   "grp.characters": "Karakter",
   "grp.neural": "Suara neural",
   "grp.atmo": "Suasana",
+  "grp.devices": "Perangkat",
   "win.widget": "Widget desktop: pilih efek dan nyalakan/matikan, tetap ada setelah dinyalakan ulang",
   "win.compact": "Ringkas / lengkap",
   "win.pin": "Selalu di atas",
@@ -282,5 +283,14 @@
   "hk.wayland": "Anda memakai Wayland: di sini aplikasi tidak bisa menangkap tombol global, jadi pintasan ini hanya berfungsi saat jendela HoloVoice sedang aktif. Tambahkan pintasan sistem (Pengaturan → Papan Ketik → Pintasan khusus) dengan perintah seperti <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Memulai audio…",
   "setup.menuAdd": "Tambahkan HoloVoice ke menu aplikasi",
-  "setup.menuDone": "Ditambahkan — HoloVoice ada di menu aplikasi, dan perintah holovoice berfungsi di terminal"
+  "setup.menuDone": "Ditambahkan — HoloVoice ada di menu aplikasi, dan perintah holovoice berfungsi di terminal",
+  "fx.telephone": "Telepon",
+  "fx.megaphone": "Megafon",
+  "fx.stadium": "Penyiar stadion",
+  "fx.narrator": "Suara trailer",
+  "fx.helium": "Helium",
+  "fx.oldman": "Kakek",
+  "fx.zombie": "Zombi",
+  "fx.alien": "Alien",
+  "fx.underwater": "Bawah air"
 }

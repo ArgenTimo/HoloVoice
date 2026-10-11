@@ -6,6 +6,7 @@
   "grp.characters": "पात्रे",
   "grp.neural": "न्यूरल आवाज",
   "grp.atmo": "वातावरण",
+  "grp.devices": "उपकरणे",
   "win.widget": "डेस्कटॉप विजेट: इफेक्ट निवडा आणि चालू/बंद करा, रीस्टार्टनंतरही राहते",
   "win.compact": "लहान / पूर्ण",
   "win.pin": "नेहमी वर",
@@ -282,5 +283,14 @@
   "hk.wayland": "तुम्ही Wayland वर आहात: इथे अ‍ॅप्स ग्लोबल की पकडू शकत नाहीत, त्यामुळे या हॉटकी फक्त HoloVoice विंडो फोकसमध्ये असतानाच काम करतात. सिस्टम शॉर्टकट जोडा (सेटिंग्ज → कीबोर्ड → कस्टम शॉर्टकट) अशा कमांडसह: <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "आवाज सुरू होत आहे…",
   "setup.menuAdd": "HoloVoice अ‍ॅप्लिकेशन मेनूमध्ये जोडा",
-  "setup.menuDone": "जोडले — HoloVoice अ‍ॅप्लिकेशन मेनूमध्ये आहे, आणि टर्मिनलमध्ये holovoice कमांड काम करते"
+  "setup.menuDone": "जोडले — HoloVoice अ‍ॅप्लिकेशन मेनूमध्ये आहे, आणि टर्मिनलमध्ये holovoice कमांड काम करते",
+  "fx.telephone": "टेलिफोन",
+  "fx.megaphone": "मेगाफोन",
+  "fx.stadium": "स्टेडियम निवेदक",
+  "fx.narrator": "ट्रेलरचा आवाज",
+  "fx.helium": "हेलियम",
+  "fx.oldman": "म्हातारा",
+  "fx.zombie": "झोम्बी",
+  "fx.alien": "परग्रहवासी",
+  "fx.underwater": "पाण्याखाली"
 }

@@ -6,6 +6,7 @@
   "grp.characters": "Nhân vật",
   "grp.neural": "Giọng nơ-ron",
   "grp.atmo": "Không khí",
+  "grp.devices": "Thiết bị",
   "win.widget": "Tiện ích màn hình: chọn hiệu ứng và bật/tắt, giữ lại sau khi khởi động lại",
   "win.compact": "Thu gọn / đầy đủ",
   "win.pin": "Luôn ở trên cùng",
@@ -282,5 +283,14 @@
   "hk.wayland": "Bạn đang dùng Wayland: ở đây ứng dụng không thể bắt phím toàn cục, nên các phím tắt này chỉ hoạt động khi cửa sổ HoloVoice đang được chọn. Hãy thêm phím tắt hệ thống (Cài đặt → Bàn phím → Phím tắt tùy chỉnh) với các lệnh như <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Đang khởi động âm thanh…",
   "setup.menuAdd": "Thêm HoloVoice vào menu ứng dụng",
-  "setup.menuDone": "Đã thêm — HoloVoice đã có trong menu ứng dụng, và lệnh holovoice hoạt động trong terminal"
+  "setup.menuDone": "Đã thêm — HoloVoice đã có trong menu ứng dụng, và lệnh holovoice hoạt động trong terminal",
+  "fx.telephone": "Điện thoại",
+  "fx.megaphone": "Loa phóng thanh",
+  "fx.stadium": "Bình luận viên sân vận động",
+  "fx.narrator": "Giọng trailer",
+  "fx.helium": "Heli",
+  "fx.oldman": "Ông già",
+  "fx.zombie": "Thây ma",
+  "fx.alien": "Người ngoài hành tinh",
+  "fx.underwater": "Dưới nước"
 }

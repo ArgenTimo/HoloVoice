@@ -6,6 +6,7 @@
   "grp.characters": "Postacie",
   "grp.neural": "Głosy neuronowe",
   "grp.atmo": "Atmosfera",
+  "grp.devices": "Urządzenia",
   "win.widget": "Widżet na pulpit: wybór efektów i wł./wył., zostaje po ponownym uruchomieniu",
   "win.compact": "Kompaktowo / pełny widok",
   "win.pin": "Zawsze na wierzchu",
@@ -282,5 +283,14 @@
   "hk.wayland": "Używasz Wayland: tutaj aplikacje nie mogą przechwytywać globalnych klawiszy, więc skróty działają tylko wtedy, gdy okno HoloVoice jest aktywne. Dodaj skróty systemowe (Ustawienia → Klawiatura → Własne skróty) z poleceniami takimi jak <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Uruchamianie dźwięku…",
   "setup.menuAdd": "Dodaj HoloVoice do menu aplikacji",
-  "setup.menuDone": "Dodano — HoloVoice jest w menu aplikacji, a polecenie holovoice działa w terminalu"
+  "setup.menuDone": "Dodano — HoloVoice jest w menu aplikacji, a polecenie holovoice działa w terminalu",
+  "fx.telephone": "Telefon",
+  "fx.megaphone": "Megafon",
+  "fx.stadium": "Spiker stadionowy",
+  "fx.narrator": "Głos z trailera",
+  "fx.helium": "Hel",
+  "fx.oldman": "Staruszek",
+  "fx.zombie": "Zombie",
+  "fx.alien": "Kosmita",
+  "fx.underwater": "Pod wodą"
 }

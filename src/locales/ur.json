@@ -6,6 +6,7 @@
   "grp.characters": "کردار",
   "grp.neural": "نیورل آوازیں",
   "grp.atmo": "ماحول",
+  "grp.devices": "آلات",
   "win.widget": "ڈیسک ٹاپ ویجٹ: ایفیکٹ چنیں اور آن/آف کریں، ری اسٹارٹ کے بعد بھی رہتا ہے",
   "win.compact": "مختصر / مکمل",
   "win.pin": "ہمیشہ سب سے اوپر",
@@ -282,5 +283,14 @@
   "hk.wayland": "آپ Wayland پر ہیں: یہاں ایپس عالمی کیز نہیں پکڑ سکتیں، اس لیے یہ ہاٹ کیز صرف تب کام کرتی ہیں جب HoloVoice کی ونڈو فوکس میں ہو۔ سسٹم شارٹ کٹس شامل کریں (ترتیبات ← کی بورڈ ← حسب ضرورت شارٹ کٹس) ایسی کمانڈز کے ساتھ: <code>holovoice --toggle mic</code>، <code>holovoice --effect mic:demon</code>، <code>holovoice --next mic</code>۔",
   "app.loading": "آواز شروع ہو رہی ہے…",
   "setup.menuAdd": "HoloVoice کو ایپلیکیشنز مینو میں شامل کریں",
-  "setup.menuDone": "شامل ہو گیا — HoloVoice ایپلیکیشنز مینو میں ہے، اور holovoice کمانڈ ٹرمینل میں کام کرتی ہے"
+  "setup.menuDone": "شامل ہو گیا — HoloVoice ایپلیکیشنز مینو میں ہے، اور holovoice کمانڈ ٹرمینل میں کام کرتی ہے",
+  "fx.telephone": "ٹیلیفون",
+  "fx.megaphone": "میگافون",
+  "fx.stadium": "اسٹیڈیم اناؤنسر",
+  "fx.narrator": "ٹریلر کی آواز",
+  "fx.helium": "ہیلیم",
+  "fx.oldman": "بوڑھا آدمی",
+  "fx.zombie": "زومبی",
+  "fx.alien": "خلائی مخلوق",
+  "fx.underwater": "پانی کے اندر"
 }

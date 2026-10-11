@@ -6,6 +6,7 @@
   "grp.characters": "Personaggi",
   "grp.neural": "Voci neurali",
   "grp.atmo": "Atmosfera",
+  "grp.devices": "Dispositivi",
   "win.widget": "Widget sul desktop: scegli gli effetti e attivali/disattivali, resta dopo il riavvio",
   "win.compact": "Compatto / completo",
   "win.pin": "Sempre in primo piano",
@@ -282,5 +283,14 @@
   "hk.wayland": "Sei su Wayland: qui le app non possono intercettare i tasti globali, quindi queste scorciatoie funzionano solo quando una finestra di HoloVoice è in primo piano. Aggiungi scorciatoie di sistema (Impostazioni → Tastiera → Scorciatoie personalizzate) con comandi come <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "Avvio dell'audio…",
   "setup.menuAdd": "Aggiungi HoloVoice al menu delle applicazioni",
-  "setup.menuDone": "Fatto — HoloVoice è nel menu delle applicazioni e il comando holovoice funziona nel terminale"
+  "setup.menuDone": "Fatto — HoloVoice è nel menu delle applicazioni e il comando holovoice funziona nel terminale",
+  "fx.telephone": "Telefono",
+  "fx.megaphone": "Megafono",
+  "fx.stadium": "Speaker da stadio",
+  "fx.narrator": "Voce da trailer",
+  "fx.helium": "Elio",
+  "fx.oldman": "Anziano",
+  "fx.zombie": "Zombie",
+  "fx.alien": "Alieno",
+  "fx.underwater": "Sott’acqua"
 }

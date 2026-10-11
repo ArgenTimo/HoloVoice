@@ -6,6 +6,7 @@
   "grp.characters": "పాత్రలు",
   "grp.neural": "న్యూరల్ స్వరాలు",
   "grp.atmo": "వాతావరణం",
+  "grp.devices": "పరికరాలు",
   "win.widget": "డెస్క్‌టాప్ విడ్జెట్: ఎఫెక్ట్‌ల ఎంపిక మరియు ఆన్/ఆఫ్, రీస్టార్ట్ తర్వాత కూడా ఉంటుంది",
   "win.compact": "కుదించిన / పూర్తి",
   "win.pin": "ఎల్లప్పుడూ పైన",
@@ -282,5 +283,14 @@
   "hk.wayland": "మీరు Wayland లో ఉన్నారు: ఇక్కడ యాప్‌లు గ్లోబల్ కీలను పట్టుకోలేవు, కాబట్టి ఈ హాట్‌కీలు HoloVoice విండో ఫోకస్‌లో ఉన్నప్పుడే పని చేస్తాయి. సిస్టమ్ షార్ట్‌కట్‌లు జోడించండి (సెట్టింగ్‌లు → కీబోర్డ్ → కస్టమ్ షార్ట్‌కట్‌లు) ఇలాంటి కమాండ్‌లతో: <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
   "app.loading": "ఆడియో ప్రారంభమవుతోంది…",
   "setup.menuAdd": "HoloVoice ను అప్లికేషన్‌ల మెనూకు జోడించు",
-  "setup.menuDone": "జోడించబడింది — HoloVoice అప్లికేషన్‌ల మెనూలో ఉంది, holovoice కమాండ్ టెర్మినల్‌లో పని చేస్తుంది"
+  "setup.menuDone": "జోడించబడింది — HoloVoice అప్లికేషన్‌ల మెనూలో ఉంది, holovoice కమాండ్ టెర్మినల్‌లో పని చేస్తుంది",
+  "fx.telephone": "టెలిఫోన్",
+  "fx.megaphone": "మెగాఫోన్",
+  "fx.stadium": "స్టేడియం అనౌన్సర్",
+  "fx.narrator": "ట్రైలర్ స్వరం",
+  "fx.helium": "హీలియం",
+  "fx.oldman": "వృద్ధుడు",
+  "fx.zombie": "జాంబీ",
+  "fx.alien": "గ్రహాంతరవాసి",
+  "fx.underwater": "నీటి అడుగున"
 }

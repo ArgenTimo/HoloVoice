@@ -34,7 +34,10 @@ export class PitchTracker {
   private hn = 0
   private since2 = 0
 
-  constructor(sampleRate: number, private readonly every = 256) {
+  /** analysis interval, samples (the worklet slows it down when nothing needs the pitch) */
+  every = 256
+
+  constructor(sampleRate: number) {
     this.decim = Math.max(1, Math.round(sampleRate / 12000))
     this.rate = sampleRate / this.decim
     this.minLag = Math.floor(this.rate / 900)
@@ -117,11 +120,12 @@ export class PitchTracker {
     if (this.hn < this.hist.length) this.hn++
     if (this.hn >= 40 && (++this.since2 >= 8 || this.avg <= 0)) {
       this.since2 = 0
-      // no allocations on the audio thread (GC pauses caused crackling)
-      const v = this.sorted.subarray(0, this.hn)
-      v.set(this.hist.subarray(0, this.hn))
+      // no allocations on the audio thread (GC pauses caused crackling), not even subarray views: unused slots
+      // are +∞ and sort to the end
+      const v = this.sorted, hn = this.hn
+      for (let i = 0; i < v.length; i++) v[i] = i < hn ? this.hist[i] : Infinity
       v.sort()
-      this.avg = v[this.hn >> 1]
+      this.avg = v[hn >> 1]
     }
     void dt
   }

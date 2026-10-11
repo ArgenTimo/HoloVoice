@@ -6,6 +6,7 @@
   "grp.characters": "Karakterler",
   "grp.neural": "Nöral sesler",
   "grp.atmo": "Atmosfer",
+  "grp.devices": "Cihazlar",
   "win.widget": "Masaüstü widget'ı: efekt seçme ve açma/kapama, yeniden başlatmadan sonra kalır",
   "win.compact": "Kompakt / tam",
   "win.pin": "Her zaman üstte",
@@ -282,5 +283,14 @@
   "hk.wayland": "Wayland kullanıyorsunuz: burada uygulamalar genel tuşları yakalayamaz, bu yüzden bu kısayollar yalnızca bir HoloVoice penceresi odaktayken çalışır. <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code> gibi komutlarla sistem kısayolları ekleyin (Ayarlar → Klavye → Özel kısayollar).",
   "app.loading": "Ses başlatılıyor…",
   "setup.menuAdd": "HoloVoice'u uygulamalar menüsüne ekle",
-  "setup.menuDone": "Eklendi — HoloVoice uygulamalar menüsünde ve holovoice komutu terminalde çalışıyor"
+  "setup.menuDone": "Eklendi — HoloVoice uygulamalar menüsünde ve holovoice komutu terminalde çalışıyor",
+  "fx.telephone": "Telefon",
+  "fx.megaphone": "Megafon",
+  "fx.stadium": "Stadyum spikeri",
+  "fx.narrator": "Fragman sesi",
+  "fx.helium": "Helyum",
+  "fx.oldman": "Yaşlı adam",
+  "fx.zombie": "Zombi",
+  "fx.alien": "Uzaylı",
+  "fx.underwater": "Su altı"
 }

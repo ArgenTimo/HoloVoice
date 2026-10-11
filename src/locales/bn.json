@@ -6,6 +6,7 @@
   "grp.characters": "চরিত্র",
   "grp.neural": "নিউরাল কণ্ঠ",
   "grp.atmo": "পরিবেশ",
+  "grp.devices": "ডিভাইস",
   "win.widget": "ডেস্কটপ উইজেট: ইফেক্ট বাছাই ও চালু/বন্ধ, রিস্টার্টের পরেও থাকে",
   "win.compact": "ছোট / পূর্ণ",
   "win.pin": "সবসময় উপরে",
@@ -282,5 +283,14 @@
   "hk.wayland": "আপনি Wayland-এ আছেন: এখানে অ্যাপ গ্লোবাল কী ধরতে পারে না, তাই এই হটকি শুধু HoloVoice উইন্ডো ফোকাসে থাকলে কাজ করে। সিস্টেম শর্টকাট যোগ করুন (সেটিংস → কীবোর্ড → কাস্টম শর্টকাট) এরকম কমান্ড দিয়ে: <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>।",
   "app.loading": "শব্দ চালু হচ্ছে…",
   "setup.menuAdd": "HoloVoice অ্যাপ্লিকেশন মেনুতে যোগ করুন",
-  "setup.menuDone": "যোগ হয়েছে — HoloVoice অ্যাপ্লিকেশন মেনুতে আছে, আর টার্মিনালে holovoice কমান্ড কাজ করে"
+  "setup.menuDone": "যোগ হয়েছে — HoloVoice অ্যাপ্লিকেশন মেনুতে আছে, আর টার্মিনালে holovoice কমান্ড কাজ করে",
+  "fx.telephone": "টেলিফোন",
+  "fx.megaphone": "মেগাফোন",
+  "fx.stadium": "স্টেডিয়াম ঘোষক",
+  "fx.narrator": "ট্রেলারের কণ্ঠ",
+  "fx.helium": "হিলিয়াম",
+  "fx.oldman": "বৃদ্ধ",
+  "fx.zombie": "জম্বি",
+  "fx.alien": "এলিয়েন",
+  "fx.underwater": "পানির নিচে"
 }

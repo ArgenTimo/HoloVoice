@@ -174,8 +174,10 @@ export const EFFECTS: EffectInfo[] = [
     main: ['pitch', 'formant', 'reverb'] },
   { id: 'chipmunk', icon: 'acorn', preset: { psola: 1, pitch: 12, formant: 12, lowcut: 200, level: -1.5 },
     main: ['pitch', 'formant'] },
-  { id: 'whisper', icon: 'wind', preset: { whisper: 1, lowcut: 300, presence: 3, air: 4, level: 6 },
-    main: ['whisper', 'air', 'reverb'] },
+  // a real whisper: no pitch at all (noise shaped by the voice's formants), breathy highs, no low end, close and dry
+  { id: 'whisper', icon: 'wind',
+    preset: { whisper: 1, denoise: 0.4, lowcut: 350, bass: -4, warmth: -2, presence: 5, air: 4, deess: 0.25, comp: 0.7, level: 3.5 },
+    main: ['whisper', 'presence', 'air', 'denoise'] },
   { id: 'radio', icon: 'radio', preset: { lowcut: 500, highcut: 3200, drive: 0.5, presence: 6, noise: 0.2, crush: 0.15, level: -7.5 },
     main: ['drive', 'noise', 'lowcut', 'highcut'] },
   { id: 'cave', icon: 'cave', preset: { reverb: 0.8, size: 1, echo: 0.3, echoTime: 0.45, echoFb: 0.3, bass: 2, level: -1.5 },

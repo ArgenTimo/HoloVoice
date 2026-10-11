@@ -3,7 +3,9 @@
 // Timbre: spectral envelope via the cepstrum. The source is "whitened" (divided by the envelope), pitch-shifted,
 // then multiplied by the envelope stretched by formant. formant = 1 keeps the timbre (another person's voice,
 // not a sped-up tape); formant = pitch is the classic "chipmunk".
-// robot: identical synthesis phases every frame (monotone robot at the frame rate, sampleRate / hop); whisper: random phases.
+// robot: identical synthesis phases every frame (monotone robot at the frame rate, sampleRate / hop).
+// whisper: unvoiced excitation — the harmonic magnitudes are replaced by the smooth cepstral envelope (formants
+// only, no pitch left) with random phases every hop: noise shaped like the vowel, the way a real whisper is made.
 // Phases are locked to spectral peaks (Laroche–Dolson) for a cleaner voice; noise reduction and vibrato live here too.
 // Latency = N − hop samples.
 
@@ -86,6 +88,8 @@ export class PhaseVocoder {
   private synPh: Float32Array
   private synBest: Float32Array
   private env: Float32Array
+  private envS: Float32Array // envelope after the formant shift (the one the output is shaped with)
+  private wGain = 0 // whisper: envelope → spectrum level, smoothed over frames
   private noise: Float32Array
   private power: Float32Array
   private pmin: Float32Array
@@ -123,6 +127,7 @@ export class PhaseVocoder {
     this.synPh = new Float32Array(h)
     this.synBest = new Float32Array(h)
     this.env = new Float32Array(h)
+    this.envS = new Float32Array(h)
     this.noise = new Float32Array(h)
     this.power = new Float32Array(h)
     this.pmin = new Float32Array(h)
@@ -224,7 +229,8 @@ export class PhaseVocoder {
     }
     const formant = this.formant
     const shaping = Math.abs(pitch - 1) > 1e-4 || Math.abs(formant - 1) > 1e-4
-    if (shaping) this.envelope()
+    const whisper = this.whisper
+    if (shaping || whisper > 0.001) this.envelope()
 
     // spectral peaks; each bin belongs to the nearest peak
     let np = 0
@@ -272,11 +278,23 @@ export class PhaseVocoder {
         const i0 = Math.floor(src)
         const e = i0 >= half ? env[half] * 0.1 : env[i0] + (env[i0 + 1] - env[i0]) * (src - i0)
         synMag[j] *= e
+        this.envS[j] = e
       }
+    } else if (whisper > 0.001) this.envS.set(env)
+    if (whisper > 0.001) {
+      // the log-domain envelope sits below the harmonic peaks: scale it to the frame's power, so loudness is kept
+      const envS = this.envS
+      let ps = 0, pe = 0
+      for (let j = 0; j <= half; j++) { ps += synMag[j] * synMag[j]; pe += envS[j] * envS[j] }
+      const g = Math.sqrt(ps / (pe + 1e-20))
+      this.wGain = this.wGain > 0 ? this.wGain * 0.5 + g * 0.5 : g
+      // the magnitude blend grows as whisper² — small amounts (breathiness in other effects) stay mostly voiced
+      const w2 = whisper * whisper, wg = w2 * this.wGain
+      for (let j = 0; j <= half; j++) synMag[j] = synMag[j] * (1 - w2) + wg * envS[j]
     }
 
     // synthesis
-    const robot = this.robot, whisper = this.whisper
+    const robot = this.robot
     for (let k = 0; k <= half; k++) {
       let ph = synMag[k] > 0 ? synPh[k] : this.sumPhase[k] + k * expct
       ph -= TWO_PI * Math.floor(ph / TWO_PI)

@@ -367,6 +367,8 @@ static int probeEndpoint(int ms) {
   bool isFloat = mix->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
     (mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE && mix->wBitsPerSample == 32);
   double sum = 0; size_t count = 0;
+  // 10 ms blocks: how many are near-silent (dropouts) — printed after the RMS
+  std::vector<double> blocks; double blockSum = 0; size_t blockN = 0; const size_t blockLen = mix->nSamplesPerSec / 100 * mix->nChannels;
   ULONGLONG end = GetTickCount64() + ms;
   while (GetTickCount64() < end) {
     Sleep(10);
@@ -377,7 +379,11 @@ static int probeEndpoint(int ms) {
       size_t n = size_t(frames) * mix->nChannels;
       if (!(fl & AUDCLNT_BUFFERFLAGS_SILENT) && isFloat) {
         auto f = reinterpret_cast<const float*>(data);
-        for (size_t i = 0; i < n; i++) sum += double(f[i]) * f[i];
+        for (size_t i = 0; i < n; i++) {
+          sum += double(f[i]) * f[i];
+          blockSum += double(f[i]) * f[i];
+          if (++blockN == blockLen) { blocks.push_back(std::sqrt(blockSum / blockN)); blockSum = 0; blockN = 0; }
+        }
       }
       count += n;
       cap->ReleaseBuffer(frames);
@@ -385,7 +391,10 @@ static int probeEndpoint(int ms) {
   }
   client->Stop();
   CoTaskMemFree(mix);
-  printf("%.6f\n", count ? std::sqrt(sum / count) : 0.0);
+  double rms = count ? std::sqrt(sum / count) : 0.0;
+  size_t quiet = 0;
+  for (double b : blocks) if (b < rms * 0.1) quiet++;
+  printf("%.6f %zu/%zu\n", rms, quiet, blocks.size());
   return 0;
 }
 

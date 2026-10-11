@@ -19,7 +19,9 @@ with wave.open(TONE, 'wb') as w:
 
 def probe(ms=1000):
     out = subprocess.run([EXE, '--probe-endpoint', str(ms)], capture_output=True, text=True, timeout=30)
-    try: return float(out.stdout.strip())
+    parts = out.stdout.split()
+    if len(parts) > 1: print('  probe', out.stdout.strip(), '(rms, near-silent 10 ms blocks)', flush=True)
+    try: return float(parts[0])
     except ValueError: print('probe error:', out.stderr); return -1.0
 
 def ev(expr):

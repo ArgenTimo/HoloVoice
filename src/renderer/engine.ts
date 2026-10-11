@@ -193,6 +193,8 @@ class Lane {
 }
 
 const lanes: Record<LaneId, Lane> = { mic: new Lane('mic'), sys: new Lane('sys') }
+// diagnostics from DevTools: window.__hv.lanes.sys.rig.current, .ctx.state, .stream …
+;(window as unknown as { __hv: unknown }).__hv = { lanes, get S() { return S } }
 
 // ---------------------------------------------------------------- проверить на записи
 

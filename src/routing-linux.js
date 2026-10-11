@@ -28,6 +28,15 @@ const IN_CAP = 'holovoice_in_cap'
 const CAPTURE_LABEL = 'HoloVoice-system-sound' // Chromium не показывает мониторы — читаем через remap-source
 const OURS = [OUT_SINK, IN_SINK]
 
+/** Is `pid` our process or a child of it (renderers, audio service)? Walks /proc parent links. */
+function descendsFrom(pid, root) {
+  for (let p = pid, i = 0; p > 1 && i < 8; i++) {
+    if (p === root) return true
+    try { p = Number(fs.readFileSync(`/proc/${p}/stat`, 'utf8').split(') ')[1].split(' ')[1]) } catch { return false }
+  }
+  return false
+}
+
 function pactl(...args) {
   return new Promise((resolve, reject) => {
     execFile('pactl', args, { timeout: 10000 }, (err, stdout, stderr) => {
@@ -142,7 +151,16 @@ class LinuxRouter {
 
   isOwn(si) {
     const pids = this.ownPids()
-    return pids.has(si.pid) || [...this.s.mic, ...this.s.sys].includes(Number(si.owner))
+    return pids.has(si.pid) || descendsFrom(si.pid, process.pid) || [...this.s.mic, ...this.s.sys].includes(Number(si.owner))
+  }
+
+  /** Our own playback must never sit inside the interception: it would play back into our own input and nothing
+   *  would reach the headphones (seen after turning the computer-sound track off and on again). Move it back. */
+  async rescueOwn() {
+    if (!this.s.realSink) return
+    for (const si of await sinkInputs().catch(() => [])) {
+      if (si.sink === IN_SINK && this.isOwn(si)) await pactl('move-sink-input', si.id, this.s.realSink).catch(() => {})
+    }
   }
 
   /** Возвращает описания: настоящего выхода (куда играть результат) и монитора перехвата (что читать). */
@@ -168,6 +186,7 @@ class LinuxRouter {
    *  к устройству). Потоки в другие устройства (второй выход, виртуальные устройства OBS и т. п.) не трогаем. */
   async followStreams() {
     if (!this.s.sys.length) return 0
+    await this.rescueOwn()
     let n = 0
     for (const si of await sinkInputs()) {
       if (si.sink !== this.s.realSink || this.isOwn(si)) continue

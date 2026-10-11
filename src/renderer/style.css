@@ -148,7 +148,7 @@ details.all > summary::after { content: ''; width: 6px; height: 6px; border: sol
 details.all[open] > summary::after { transform: rotate(45deg); margin-top: -4px; }
 details.all > summary:hover { color: var(--text); }
 details.all[open] { display: flex; flex-direction: column; gap: 10px; }
-.pgroup { color: var(--sys); font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; margin-top: 4px; }
+.pgroup { color: var(--accent-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; margin-top: 4px; }
 .row-btns { display: flex; gap: 6px; }
 .row-btns .btn { padding: 6px 10px; white-space: nowrap; }
 .btn { border: 1px solid var(--line2); background: var(--panel2); border-radius: 8px; padding: 6px 12px;

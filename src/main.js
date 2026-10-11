@@ -265,7 +265,7 @@ function showPanel() {
   panel.on('moved', keep)
 }
 
-const PANEL_W = 1080, PANEL_H = 700, PANEL_MIN_W = 880, PANEL_MIN_H = 560
+const PANEL_W = 1180, PANEL_H = 720, PANEL_MIN_W = 880, PANEL_MIN_H = 560
 let panelCompact = false
 
 /** Compact mode — lane cards only: a narrow window sized to the content height; switching back restores the previous size */

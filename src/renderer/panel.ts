@@ -23,6 +23,8 @@ const BUILTIN_GROUPS: [string, EffectId[]][] = [
 function groups(): [string, EffectId[]][] {
   const mine = customs().map((c) => c.id)
   const out = [...BUILTIN_GROUPS]
+  const fav = (st?.S.favorites ?? []).filter((id) => effectInfo(id as EffectId)) as EffectId[]
+  if (fav.length) out.unshift(['grp.fav', fav])
   // neural voices: only with the optional GPU mode installed, only for "My voice" (hidden on the other tab by CSS)
   if (st?.neural?.available) out.splice(1, 0, ['grp.neural', ['neural_female', 'neural_male']])
   if (mine.length) out.push(['grp.custom', mine])
@@ -31,7 +33,7 @@ function groups(): [string, EffectId[]][] {
 const esc = (x: string) => x.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 /** Signature of the custom effect set: when it changes, the catalog, lists and hotkeys are rebuilt */
 let customSig = ''
-const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|') + (st?.neural?.available ? '|neural' : '')
+const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|') + (st?.neural?.available ? '|neural' : '') + `|${(st?.S.favorites ?? []).join(',')}`
 const iconOf = (id: EffectId) => effectInfo(id)?.icon ?? DEFAULT_CUSTOM_ICON
 /** Icon + text in one element; text goes through textContent (custom effect names are user input) */
 const labeled = (cls: string, ico: string, text: string, size = 16) => {
@@ -185,10 +187,16 @@ function buildCatalog(): void {
       tile.dataset.effect = id
       tile.append(iconEl(iconOf(id), 24, 't-icon'), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
       tile.onclick = () => holo.cmd({ type: 'effect', lane: ui.tab, effect: id })
+      tile.dataset.name = fxLabel(id).toLowerCase()
+      const fav = !!st?.S.favorites?.includes(id)
+      const star = iconEl('star', 13, 't-fav' + (fav ? ' on' : ''))
+      star.title = t(fav ? 'cat.unfav' : 'cat.fav')
+      star.onclick = (e) => { e.stopPropagation(); holo.cmd({ type: 'favorite', id }) }
+      tile.appendChild(star)
       if (isCustom(id)) {
         const del = iconEl('x', 12, 't-del')
         del.title = t('ins.delete')
-        del.onclick = (e) => { e.stopPropagation(); holo.cmd({ type: 'customDelete', id }) }
+        del.onclick = (e) => { e.stopPropagation(); deleteCustom(id) }
         tile.appendChild(del)
       }
       tiles.appendChild(tile)
@@ -196,6 +204,28 @@ function buildCatalog(): void {
     g.appendChild(tiles)
     box.appendChild(g)
   }
+  filterCatalog()
+}
+
+/** Deleting a custom effect can be undone for a few seconds */
+function deleteCustom(id: EffectId): void {
+  const copy = st?.S.custom.find((c) => c.id === id)
+  holo.cmd({ type: 'customDelete', id })
+  if (copy) toast(t('ins.deleted', { name: copy.name }), { label: t('undo'), run: () => holo.cmd({ type: 'customRestore', effect: copy }) }, 6000)
+}
+
+/** Catalog search: tiles whose name contains the text; empty groups hide */
+function filterCatalog(): void {
+  const q = ($<HTMLInputElement>('cat-search').value || '').trim().toLowerCase()
+  document.querySelectorAll<HTMLElement>('#groups .group').forEach((g) => {
+    let any = false
+    g.querySelectorAll<HTMLElement>('.tile').forEach((tile) => {
+      const hit = !q || tile.dataset.name!.includes(q)
+      tile.hidden = !hit
+      any ||= hit
+    })
+    g.hidden = !any
+  })
 }
 
 function renderCatalog(): void {
@@ -282,14 +312,6 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   status.hidden = true
   box.appendChild(status)
 
-  const ramp = el('div', 'box')
-  ramp.appendChild(el('div', 'box-title', t('ins.transition')))
-  const ramps = el('div', 'ramps')
-  rampSlider(lane, effect, 'rampIn', t('ins.rampIn'), ramps)
-  rampSlider(lane, effect, 'rampOut', t('ins.rampOut'), ramps)
-  ramp.appendChild(ramps)
-  box.appendChild(ramp)
-
   const main = el('div', 'box')
   main.appendChild(el('div', 'box-title', t('ins.main')))
   // computer-sound track: voice-only parameters do nothing there, so they are not shown
@@ -305,39 +327,16 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   main.appendChild(all)
   const btns = el('div', 'row-btns')
   const reset = el('button', 'btn', t('ins.reset'))
-  reset.onclick = () => holo.cmd({ type: 'fxReset', lane, effect })
+  reset.onclick = () => {
+    const before = st?.S.lanes[lane].fx[effect]
+    holo.cmd({ type: 'fxReset', lane, effect })
+    if (before) toast(t('ins.wasReset'), { label: t('undo'), run: () => holo.cmd({ type: 'fxRestore', lane, effect, user: before }) }, 6000)
+  }
   btns.appendChild(reset)
   main.appendChild(btns)
   box.appendChild(main)
 
-  // custom effect: save the current settings under a custom name
-  const mine = el('div', 'box')
-  mine.appendChild(labeled('box-title', 'save', t('ins.saveTitle'), 14))
-  mine.appendChild(el('div', 'prev-status', t('ins.saveHint')))
-  let pick: string = isCustom(effect) ? iconOf(effect) : DEFAULT_CUSTOM_ICON
-  const icons = el('div', 'icon-row')
-  for (const name of CUSTOM_ICONS) {
-    const b = el('button', 'icon-btn' + (name === pick ? ' sel' : ''))
-    b.innerHTML = icon(name, 16)
-    b.onclick = () => { pick = name; icons.querySelectorAll('.icon-btn').forEach((x) => x.classList.toggle('sel', x === b)) }
-    icons.appendChild(b)
-  }
-  const row = el('div', 'row-btns')
-  const name = el('input', 'name-input')
-  name.type = 'text'; name.maxLength = 40; name.placeholder = t('ins.saveName')
-  name.value = fxLabel(effect)
-  const save = el('button', 'btn primary', t('ins.save'))
-  save.onclick = () => holo.cmd({ type: 'customSave', lane, name: name.value, icon: pick })
-  name.onkeydown = (e) => { if (e.key === 'Enter') save.click() }
-  row.append(name, save)
-  mine.append(icons, row)
-  if (isCustom(effect)) {
-    const del = el('button', 'btn', t('ins.delete'))
-    del.onclick = () => holo.cmd({ type: 'customDelete', id: effect })
-    mine.appendChild(del)
-  }
-  box.appendChild(mine)
-
+  // the quickest way to hear an effect without a call: right under its knobs
   if (lane === 'mic') {
     const p = el('div', 'box')
     p.appendChild(labeled('box-title', 'headphones', t('pv.title'), 14))
@@ -361,6 +360,49 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
     p.appendChild(ps)
     box.appendChild(p)
   }
+
+  // fade-in / fade-out: folded — most people never touch it
+  const ramp = el('details', 'box fold')
+  const rs = el('summary', 'box-title', t('ins.transition'))
+  const rIn = Number(st?.S.lanes[lane].fx[effect]?.rampIn ?? 0), rOut = Number(st?.S.lanes[lane].fx[effect]?.rampOut ?? 0)
+  if (rIn || rOut) rs.appendChild(el('span', 'fold-val', `${rIn}s / ${rOut}s`))
+  ramp.appendChild(rs)
+  const ramps = el('div', 'ramps')
+  rampSlider(lane, effect, 'rampIn', t('ins.rampIn'), ramps)
+  rampSlider(lane, effect, 'rampOut', t('ins.rampOut'), ramps)
+  ramp.appendChild(ramps)
+  box.appendChild(ramp)
+
+  // save as my own effect: folded too
+  const mine = el('details', 'box fold')
+  const ms = el('summary', 'box-title')
+  ms.innerHTML = `${icon('save', 14)}<span>${t('ins.saveTitle')}</span>`
+  mine.appendChild(ms)
+  mine.appendChild(el('div', 'prev-status', t('ins.saveHint')))
+  let pick: string = isCustom(effect) ? iconOf(effect) : DEFAULT_CUSTOM_ICON
+  const icons = el('div', 'icon-row')
+  for (const name of CUSTOM_ICONS) {
+    const b = el('button', 'icon-btn' + (name === pick ? ' sel' : ''))
+    b.innerHTML = icon(name, 16)
+    b.onclick = () => { pick = name; icons.querySelectorAll('.icon-btn').forEach((x) => x.classList.toggle('sel', x === b)) }
+    icons.appendChild(b)
+  }
+  const row = el('div', 'row-btns')
+  const name = el('input', 'name-input')
+  name.type = 'text'; name.maxLength = 40; name.placeholder = t('ins.saveName')
+  // a built-in effect's copy gets "(mine)" — otherwise two effects with the same name
+  name.value = isCustom(effect) ? fxLabel(effect) : t('ins.mineName', { name: fxLabel(effect) })
+  const save = el('button', 'btn primary', t('ins.save'))
+  save.onclick = () => holo.cmd({ type: 'customSave', lane, name: name.value, icon: pick })
+  name.onkeydown = (e) => { if (e.key === 'Enter') save.click() }
+  row.append(name, save)
+  mine.append(icons, row)
+  if (isCustom(effect)) {
+    const del = el('button', 'btn', t('ins.delete'))
+    del.onclick = () => deleteCustom(effect)
+    mine.appendChild(del)
+  }
+  box.appendChild(mine)
   shown = `${lane}:${effect}`
 }
 
@@ -913,6 +955,8 @@ async function main(): Promise<void> {
     upd.disabled = false
   }
 
+  $<HTMLInputElement>('cat-search').oninput = filterCatalog
+  $<HTMLInputElement>('cat-search').onkeydown = (e) => { if (e.key === 'Escape') { (e.target as HTMLInputElement).value = ''; filterCatalog() } }
   buildLanes()
   // devices (in the "My voice" card)
   const mon = $<HTMLInputElement>('monitor'), monVol = $<HTMLInputElement>('monitor-vol')

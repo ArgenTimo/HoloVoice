@@ -51,7 +51,8 @@ function loadSettings(): Settings {
     return l
   }
   const speaker = (['neutral', 'male', 'female'] as const).includes(raw.speaker as Speaker) ? raw.speaker! : 'neutral'
-  return { ...DEFAULTS, ...raw, speaker, custom: customs(),
+  const favorites = Array.isArray(raw.favorites) ? raw.favorites.filter((x) => typeof x === 'string' && !!effectInfo(x as EffectId)) : []
+  return { ...DEFAULTS, ...raw, speaker, favorites, custom: customs(),
     monitorVol: num(raw.monitorVol, 0, 100, DEFAULTS.monitorVol), monitor: raw.monitor === true,
     mic: typeof raw.mic === 'string' ? raw.mic : 'default', out: typeof raw.out === 'string' ? raw.out : '',
     lanes: { mic: lane('mic'), sys: lane('sys') } }
@@ -681,7 +682,10 @@ async function handle(c: Cmd): Promise<void> {
       const cfg = S.lanes[c.lane]
       if (c.action === 'toggle') return handle({ type: 'toggle', lane: c.lane })
       if (c.action === 'next' || c.action === 'prev') {
-        const list = allEffects().filter((e) => !e.neural || (neural.available && c.lane === 'mic') || e.id === cfg.effect)
+        let list = allEffects().filter((e) => !e.neural || (neural.available && c.lane === 'mic') || e.id === cfg.effect)
+        // with two or more favorites, next/previous walks through them only
+        const fav = list.filter((e) => S.favorites?.includes(e.id))
+        if (fav.length >= 2) list = fav.some((e) => e.id === cfg.effect) ? fav : [...fav, ...list.filter((e) => e.id === cfg.effect)]
         const i = list.findIndex((e) => e.id === cfg.effect)
         const n = list.length
         const next = list[(i + (c.action === 'next' ? 1 : n - 1)) % n].id
@@ -751,12 +755,30 @@ async function handle(c: Cmd): Promise<void> {
     }
     case 'customDelete': {
       S.custom = S.custom.filter((x) => x.id !== c.id)
+      S.favorites = (S.favorites ?? []).filter((x) => x !== c.id)
       setCustom(S.custom)
       for (const id of ['mic', 'sys'] as LaneId[]) {
         const cfg = S.lanes[id]
         delete cfg.fx[c.id]
         if (cfg.effect === c.id) { cfg.effect = 'clean'; lanes[id].update() }
       }
+      break
+    }
+    case 'customRestore': {
+      if (!S.custom.some((x) => x.id === c.effect.id)) S.custom.push(c.effect)
+      setCustom(S.custom)
+      break
+    }
+    case 'fxRestore': {
+      if (c.user) S.lanes[c.lane].fx[c.effect] = c.user
+      else delete S.lanes[c.lane].fx[c.effect]
+      if (S.lanes[c.lane].effect === c.effect) lanes[c.lane].update()
+      break
+    }
+    case 'favorite': {
+      const fav = new Set(S.favorites ?? [])
+      if (fav.has(c.id)) fav.delete(c.id); else fav.add(c.id)
+      S.favorites = [...fav]
       break
     }
     case 'record': await startRecording(); return

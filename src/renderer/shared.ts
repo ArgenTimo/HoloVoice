@@ -18,6 +18,8 @@ export interface Settings {
   outManual?: boolean
   /** the user's own voice: effects with a fixed pitch/formant shift adjust to it (neutral — as designed) */
   speaker: Speaker
+  /** effects marked with a star: shown first in the catalog */
+  favorites?: string[]
   custom: CustomEffect[] // custom effects
 }
 export type Speaker = 'neutral' | 'male' | 'female'
@@ -55,6 +57,10 @@ export type Cmd =
   | { type: 'record' } | { type: 'play' } | { type: 'stopPreview' }
   | { type: 'customSave'; lane: LaneId; name: string; icon: string }
   | { type: 'customDelete'; id: EffectId }
+  /** undo of a delete: the effect comes back as it was */
+  | { type: 'customRestore'; effect: CustomEffect }
+  | { type: 'fxRestore'; lane: LaneId; effect: EffectId; user: EffectUser | undefined }
+  | { type: 'favorite'; id: EffectId }
   | { type: 'mic' | 'out'; id: string }
   | { type: 'monitor'; on: boolean }
   | { type: 'monitorVol'; value: number }

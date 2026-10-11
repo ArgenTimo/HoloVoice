@@ -275,5 +275,13 @@
   "upd.noNpm": "Can’t update this copy: npm isn’t available here. Run “git pull && npm ci && npm run build:renderer” in its folder.",
   "upd.offline": "No connection to the update server — check the internet and try again.",
   "upd.notReady": "A new version is still being published — try again in a few minutes.",
-  "upd.limit": "The update server asks to wait a little — try again later."
+  "upd.limit": "The update server asks to wait a little — try again later.",
+  "grp.fav": "Favorites",
+  "cat.fav": "Add to favorites — shown first; next/previous hotkeys walk through favorites",
+  "cat.unfav": "Remove from favorites",
+  "cat.search": "Search effects",
+  "undo": "Undo",
+  "ins.deleted": "“{name}” deleted",
+  "ins.wasReset": "Effect settings reset",
+  "ins.mineName": "{name} (mine)"
 }

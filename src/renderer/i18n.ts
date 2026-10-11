@@ -74,6 +74,7 @@ export function applyStatic(root: ParentNode = document): void {
   root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((e) => { e.textContent = t(e.dataset.i18n!) })
   root.querySelectorAll<HTMLElement>('[data-i18n-html]').forEach((e) => { e.innerHTML = t(e.dataset.i18nHtml!) })
   root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((e) => { e.title = t(e.dataset.i18nTitle!) })
+  root.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach((e) => { e.placeholder = t(e.dataset.i18nPlaceholder!) })
 }
 
 // ---------------------------------------------------------------- flags (simplified, 3:2)

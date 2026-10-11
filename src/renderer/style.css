@@ -364,3 +364,21 @@ li.info > .st-mark { border-color: var(--accent); }
 .lc-hint, .ins-info { user-select: text; }
 /* "Update to X" — a newer version is waiting */
 .ghost.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* catalog search and favorites */
+.cat-head { display: flex; align-items: center; gap: 6px; }
+#cat-search { width: 180px; max-width: 40%; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: 12.5px; }
+#cat-search:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.t-fav { position: absolute; top: 6px; left: 6px; color: var(--faint); opacity: 0; transition: opacity .12s; cursor: pointer; }
+.tile:hover .t-fav, .tile:focus-visible .t-fav, .t-fav.on { opacity: 1; }
+.t-fav.on { color: #fbbf24; }
+.t-fav.on svg { fill: currentColor; }
+.t-fav:hover { color: #fbbf24; }
+/* folded inspector boxes (transition, save as my own) */
+details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after { content: ''; width: 6px; height: 6px; margin-left: auto; border: solid var(--muted); border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg); transition: transform .15s; }
+details.fold[open] > summary::after { transform: rotate(45deg); }
+details.fold[open] > summary { margin-bottom: 8px; }
+.fold-val { color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; margin-left: 4px; }

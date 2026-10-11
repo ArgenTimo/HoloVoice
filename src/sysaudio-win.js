@@ -24,7 +24,8 @@ class WinSysAudio {
   /** Undo what a killed helper left (other apps turned down) */
   static restore() {
     const exe = exePath()
-    if (exe) execFile(exe, ['--restore'], { windowsHide: true }, () => {})
+    // keeps watching for 2 minutes: apps not running yet get their volume back when they start
+    if (exe) execFile(exe, ['--restore', '--wait', '120'], { windowsHide: true, timeout: 130000 }, () => {})
   }
 
   start(rate) {

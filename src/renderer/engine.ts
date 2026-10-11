@@ -8,7 +8,7 @@
 // Each lane has its own AudioContext: they use different output devices.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, customs, effectFull, effectInfo, effectTarget, isCustom, isNeural, setCustom, systemSoundTarget, type BuiltinId, type EffectId, type FxParams } from './effects'
+import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, customs, effectFull, effectInfo, effectTarget, effectVariant, isCustom, isNeural, setCustom, systemSoundTarget, type BuiltinId, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type NeuralState, type Settings, type Speaker } from './shared'
 
 const isWin = holo.platform === 'win32'
@@ -665,7 +665,7 @@ holo.onRealSink(async ({ realSinkLabel }) => {
 
 // ---------------------------------------------------------------- neural voices
 
-let neuralGender: 'female' | 'male' | null = null // the voice the sidecar runs (or is loading)
+let neuralGender: string | null = null // the voice file the sidecar runs (or is loading): female, female2, male…
 let neuralStopTimer = 0
 let neuralOffTimer = 0
 
@@ -680,7 +680,9 @@ function neuralSwitch(on: boolean): void {
 /** Bring the sidecar in line with the "My voice" lane: started for a neural effect, stopped a while after leaving it */
 async function syncNeural(): Promise<void> {
   const c = S.lanes.mic
-  const want = neural.available && c.enabled ? effectInfo(c.effect)?.neural ?? null : null
+  // the voice: the effect's chosen timbre (its style id names the voice file), else the plain gender voice
+  const g = effectInfo(c.effect)?.neural
+  const want = neural.available && c.enabled && g ? (effectVariant(c.effect, c.fx[c.effect])?.id ?? g) : null
   if (want) {
     clearTimeout(neuralOffTimer)
     clearTimeout(neuralStopTimer)

@@ -44,6 +44,18 @@ for _ in range(60):
 time.sleep(3)
 base = probe(); check('tone audible, app running, lane off', base > 0.02, '%.4f' % base)
 
+# reference: a plain oscillator from the same Electron renderer, no HoloVoice processing (are gaps ours or the VM's?)
+tone.kill(); time.sleep(0.5)
+ev("(() => { const c = new AudioContext({ latencyHint: 0.025 }); const o = c.createOscillator(); const g = c.createGain(); g.gain.value = 0.3; o.connect(g).connect(c.destination); o.start(); window.__ref = c; return c.sampleRate })()")
+time.sleep(1); ref = probe(3000)
+ev("__ref.close()")
+check('reference oscillator from Electron', ref > 0.02, '%.4f' % ref)
+ev("(() => { const l = __hv.lanes.mic; return l.ctx.suspend().then(() => 'mic lane suspended') })()")
+time.sleep(0.5)
+tone = subprocess.Popen([sys.executable, '-c',
+    'import winsound,time;winsound.PlaySound(r"%s",winsound.SND_FILENAME|winsound.SND_LOOP|winsound.SND_ASYNC);time.sleep(300)' % TONE])
+time.sleep(1.5)
+
 for cycle in (1, 2, 3):
     ev("__hv.handle({ type: 'effect', lane: 'sys', effect: 'clean' })")
     ev("__hv.handle({ type: 'toggle', lane: 'sys', on: true })")

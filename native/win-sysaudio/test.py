@@ -3,8 +3,12 @@
 #   1. the helper captures the tone at its original level and quality while the user doesn't hear the original,
 #   2. the original comes back after the helper stops (and after "--restore" if it was killed),
 #   3. the excluded process tree is not captured,
-#   4. an app changing its own volume during capture stays inaudible and is followed.
-import math, struct, subprocess, sys, threading, time, wave, os
+#   4. an app changing its own volume during capture stays inaudible and is followed,
+#   5. logoff/shutdown (WM_ENDSESSION to the hidden window) restores before the end-session handler returns,
+#   6. "--restore --wait" restores an app that starts only after the restore began, then exits early,
+#   7. the exe carries its version information.
+import ctypes, math, struct, subprocess, sys, threading, time, wave, os
+from ctypes import wintypes
 
 EXE = sys.argv[1]
 TONE = os.path.abspath('tone.wav')
@@ -119,6 +123,104 @@ check('killed helper leaves it quiet (expected)', stuck < 0.002, '%.4f' % stuck)
 r = subprocess.run([EXE, '--restore'], timeout=20, capture_output=True, text=True); print(r.stderr.strip())
 rest = probe()
 check('--restore brings it back', abs(rest - base) < base * 0.1, '%.4f' % rest)
+
+
+STATE = os.path.join(os.environ['LOCALAPPDATA'], 'HoloVoice', 'attenuated-sessions.txt')
+def state_lines():
+    try:
+        with open(STATE, encoding='utf-8', errors='replace') as f: return [l for l in f.read().splitlines() if l.strip()]
+    except FileNotFoundError: return []
+
+user32 = ctypes.WinDLL('user32', use_last_error=True)
+user32.FindWindowExW.restype = wintypes.HWND
+user32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+user32.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM, wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t)]
+user32.SendMessageTimeoutW.restype = ctypes.c_size_t
+WM_QUERYENDSESSION, WM_ENDSESSION, ENDSESSION_LOGOFF, SMTO_BLOCK = 0x11, 0x16, 0x80000000, 0x1
+
+def helper_window(pid):
+    hwnd = None
+    while True:
+        hwnd = user32.FindWindowExW(None, hwnd, 'HoloVoiceSysaudioHelper', None)
+        if not hwnd: return None
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid: return hwnd
+
+def send(hwnd, msg, wp, lp, timeout_ms):
+    res = ctypes.c_size_t(0)
+    ok = user32.SendMessageTimeoutW(hwnd, msg, wp, lp, SMTO_BLOCK, timeout_ms, ctypes.byref(res))
+    return ok, res.value
+
+# 5. logoff: the end-session messages reach the hidden window; the volume is back when WM_ENDSESSION returns
+h = Helper(dummy.pid); time.sleep(1.5)
+check('quiet before end-session', probe() < 0.002)
+hwnd = helper_window(h.p.pid)
+check('hidden end-session window exists', bool(hwnd))
+if hwnd:
+    ok, res = send(hwnd, WM_QUERYENDSESSION, 0, ENDSESSION_LOGOFF, 3000)
+    check('WM_QUERYENDSESSION allows the logoff', ok and res == 1, 'ok=%s result=%s' % (ok, res))
+    t0 = time.time()
+    ok, res = send(hwnd, WM_ENDSESSION, 1, ENDSESSION_LOGOFF, 8000)
+    took = time.time() - t0
+    check('WM_ENDSESSION handled within the wait', bool(ok) and took < 5, '%.2f s' % took)
+    back = probe()  # no extra delay: the restore must be done before the handler returned
+    check('volume back when WM_ENDSESSION returns', abs(back - base) < base * 0.1, '%.4f' % back)
+    try: h.p.wait(5); exited = True
+    except subprocess.TimeoutExpired: exited = False
+    check('helper exits after WM_ENDSESSION (stdin still open)', exited and h.p.returncode == 0, str(h.p.returncode))
+    check('state file empty after end-session', not state_lines(), repr(state_lines()))
+    print('helper log:', h.err, flush=True)
+if h.p.poll() is None: h.p.kill(); h.p.wait()
+subprocess.run([EXE, '--restore'], timeout=20)
+time.sleep(0.3)
+
+# 6. --restore --wait: the app is not running when the restore starts and comes back later
+h = Helper(dummy.pid); time.sleep(1.5)
+h.p.kill(); h.p.wait()
+check('state file lists the killed run', len(state_lines()) >= 1, repr(state_lines()))
+tone.kill(); tone.wait(); time.sleep(1.0)
+r = subprocess.run([EXE, '--restore'], timeout=20, capture_output=True, text=True)
+check('plain --restore keeps entries of apps not running', len(state_lines()) >= 1, repr(state_lines()) + ' ' + r.stderr.strip())
+tone = player(); time.sleep(1.5)
+stuck2 = probe()
+print('  info: a new process of the same app starts at the remembered level: %.6f' % stuck2, flush=True)
+tone.kill(); tone.wait(); time.sleep(1.0)
+t0 = time.time()
+w = subprocess.Popen([EXE, '--restore', '--wait', '30'], stderr=subprocess.PIPE, text=True)
+time.sleep(3.0)
+check('--restore --wait keeps waiting while the app is absent', w.poll() is None)
+tone = player()
+heard_again = -1.0
+for _ in range(8):
+    time.sleep(1.0)
+    heard_again = probe(500)
+    if abs(heard_again - base) < base * 0.1: break
+check('--restore --wait restores the app once it starts', abs(heard_again - base) < base * 0.1, '%.4f' % heard_again)
+try: w.wait(10); werr = w.stderr.read().strip()
+except subprocess.TimeoutExpired: werr = '(still running)'
+took = time.time() - t0
+check('--restore --wait exits early once the state is empty', w.returncode == 0 and took < 25, '%.1f s, rc %s, %s' % (took, w.returncode, werr))
+check('state file empty after --restore --wait', not state_lines(), repr(state_lines()))
+
+# 6b. a waiting restore leaves the state to a capture that is running
+h = Helper(dummy.pid); time.sleep(1.5)
+r = subprocess.run([EXE, '--restore', '--wait', '10'], timeout=30, capture_output=True, text=True)
+check('--restore defers to a running capture', probe() < 0.002 and 'capture running' in r.stderr, r.stderr.strip())
+h.stop()
+check('original back after the capture stops', abs(probe() - base) < base * 0.1)
+
+# 7. version information
+ver = ctypes.WinDLL('version')
+size = ver.GetFileVersionInfoSizeW(os.path.abspath(EXE), None)
+desc = ''
+if size:
+    buf = ctypes.create_string_buffer(size)
+    ver.GetFileVersionInfoW(os.path.abspath(EXE), 0, size, buf)
+    ptr = ctypes.c_wchar_p(); n = wintypes.UINT()
+    if ver.VerQueryValueW(buf, '\\StringFileInfo\\040904b0\\FileDescription', ctypes.byref(ptr), ctypes.byref(n)): desc = ptr.value
+check('version info present', desc == 'HoloVoice computer sound helper', repr(desc))
 
 tone.kill(); dummy.kill()
 sys.exit(1 if fails else 0)

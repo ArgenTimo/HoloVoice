@@ -35,7 +35,9 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
       - if: runner.os == 'Windows'
         working-directory: native/win-sysaudio
-        run: cl /nologo /EHsc /O2 /MT /std:c++17 /utf-8 holo-sysaudio.cpp /link /SUBSYSTEM:CONSOLE
+        run: |
+          rc /nologo holo-sysaudio.rc
+          cl /nologo /EHsc /O2 /MT /std:c++17 /utf-8 holo-sysaudio.cpp holo-sysaudio.res /link /SUBSYSTEM:CONSOLE /MANIFEST:NO
       - run: npx electron-builder ${{ matrix.target }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

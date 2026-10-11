@@ -11,10 +11,15 @@
 // (or by "--restore").
 //
 //   holo-sysaudio.exe <excludePid> [--rate 48000] [--atten 0.0001] [--no-mute]   capture
-//   holo-sysaudio.exe --restore                  only undo what a previous run left
+//   holo-sysaudio.exe --restore [--wait <s>]     only undo what a previous run left; with --wait, keep polling
+//                                                for up to <s> seconds for apps that aren't running yet
 //   holo-sysaudio.exe --probe-endpoint <ms>      (tests) RMS of what the default output actually plays
 //
 // Diagnostics go to stderr as single lines.
+//
+// Logoff/shutdown: a console process that loads user32 gets no CTRL_LOGOFF/CTRL_SHUTDOWN events, so a hidden
+// top-level window (class kWindowClass) receives WM_QUERYENDSESSION/WM_ENDSESSION and restores the volumes before
+// Windows terminates the process.
 
 #include <windows.h>
 #include <mmdeviceapi.h>
@@ -41,11 +46,19 @@
 #pragma comment(lib, "mmdevapi.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "user32.lib")
 
 using Microsoft::WRL::ComPtr;
 
 static const GUID kHoloContext = { 0x6f1c2a77, 0x3d2b, 0x4c55, { 0x9a, 0x1e, 0x48, 0x6f, 0x6c, 0x6f, 0x56, 0x63 } };
 static std::atomic<bool> g_running{ true };
+// Signaled when nothing is (or no longer) turned down by this process: the capture resets it while it runs.
+static HANDLE g_restored = CreateEventW(nullptr, TRUE, TRUE, nullptr);
+// Held by a capture for its whole run and briefly by "--restore" while it touches the state file, so a restore
+// never undoes what a running capture just turned down.
+static const wchar_t kStateMutex[] = L"Local\\HoloVoiceSysaudioState";
+static const wchar_t kWindowClass[] = L"HoloVoiceSysaudioHelper";
+static const DWORD kShutdownWaitMs = 4000;
 
 static void logf(const char* fmt, ...) {
   va_list a; va_start(a, fmt); vfprintf(stderr, fmt, a); va_end(a);
@@ -181,9 +194,10 @@ static std::vector<Session> allSessions() {
 }
 
 // Undo what an earlier run left (it crashed or was killed): sessions still at our level get their volume back.
-static void restoreState() {
+// Returns how many entries are left (apps not running now).
+static size_t restoreState() {
   auto st = readState();
-  if (st.empty()) return;
+  if (st.empty()) return 0;
   auto left = st;
   for (auto& s : allSessions()) {
     auto it = st.find(s.id);
@@ -193,7 +207,33 @@ static void restoreState() {
     left.erase(s.id);
     logf("restored pid=%lu", s.pid);
   }
-  writeState(left); // apps that aren't running now are restored next time
+  writeState(left); // apps that aren't running now are restored next time (or by a waiting --restore)
+  return left.size();
+}
+
+// Acquires the state mutex within ms; an abandoned one (a killed capture) counts as acquired.
+static bool lockState(HANDLE m, DWORD ms) {
+  DWORD r = WaitForSingleObject(m, ms);
+  return r == WAIT_OBJECT_0 || r == WAIT_ABANDONED;
+}
+
+// "--restore [--wait s]": restores what is running now; with a wait, polls every 2 s so apps restored as they
+// start. Ends early when the state file is empty, or when a capture runs (it owns the state then).
+static int restoreCommand(int waitSeconds) {
+  HANDLE m = CreateMutexW(nullptr, FALSE, kStateMutex);
+  ULONGLONG end = GetTickCount64() + ULONGLONG(waitSeconds > 0 ? waitSeconds : 0) * 1000;
+  for (bool first = true;; first = false) {
+    // a capture holding the lock restores everything itself when it ends (a killed one leaves it abandoned)
+    bool locked = m && lockState(m, first ? 1000 : 0);
+    if (m && !locked) { logf("capture running: restore left to it"); break; }
+    size_t left = restoreState();
+    if (locked) ReleaseMutex(m);
+    if (!left) break;
+    if (!g_running || GetTickCount64() + 2000 > end) { logf("left %zu", left); break; }
+    Sleep(2000);
+  }
+  if (m) CloseHandle(m);
+  return 0;
 }
 
 class Attenuator {
@@ -341,7 +381,48 @@ static DWORD WINAPI stdinWatch(LPVOID) {
   return 0;
 }
 
-static BOOL WINAPI onCtrl(DWORD) { g_running = false; return TRUE; }
+// Stops the capture and waits (bounded) until it has given the volumes back.
+static void stopAndWaitRestored() {
+  g_running = false;
+  WaitForSingleObject(g_restored, kShutdownWaitMs);
+}
+
+static BOOL WINAPI onCtrl(DWORD type) {
+  if (type == CTRL_CLOSE_EVENT || type == CTRL_LOGOFF_EVENT || type == CTRL_SHUTDOWN_EVENT) {
+    // the process is terminated as soon as this returns
+    stopAndWaitRestored();
+    return TRUE;
+  }
+  g_running = false;
+  return TRUE;
+}
+
+static LRESULT CALLBACK sessionWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+  switch (msg) {
+  case WM_QUERYENDSESSION:
+    return TRUE;
+  case WM_ENDSESSION:
+    // the session really ends: Windows may terminate us any time after this returns
+    if (wp) { logf("session ending"); stopAndWaitRestored(); }
+    return 0;
+  }
+  return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+// A hidden top-level window (message-only windows don't get the end-session messages) with its own loop.
+static DWORD WINAPI sessionWindowThread(LPVOID) {
+  WNDCLASSW wc = {};
+  wc.lpfnWndProc = sessionWndProc;
+  wc.hInstance = GetModuleHandleW(nullptr);
+  wc.lpszClassName = kWindowClass;
+  if (!RegisterClassW(&wc)) { logf("error window class %lu", GetLastError()); return 1; }
+  HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, kWindowClass, L"holo-sysaudio", WS_POPUP, 0, 0, 0, 0,
+                              nullptr, nullptr, wc.hInstance, nullptr);
+  if (!hwnd) { logf("error window %lu", GetLastError()); return 1; }
+  MSG msg;
+  while (GetMessageW(&msg, nullptr, 0, 0) > 0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+  return 0;
+}
 
 static int capture(DWORD pid, bool mute) {
   ComPtr<IAudioClient> client;
@@ -450,9 +531,13 @@ int wmain(int argc, wchar_t** argv) {
   _setmode(_fileno(stdout), _O_BINARY);
   if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) { logf("error com"); return 2; }
   SetConsoleCtrlHandler(onCtrl, TRUE);
-  if (argc >= 2 && !wcscmp(argv[1], L"--restore")) { restoreState(); return 0; }
+  if (argc >= 2 && !wcscmp(argv[1], L"--restore")) {
+    int wait = 0;
+    if (argc >= 4 && !wcscmp(argv[2], L"--wait")) wait = _wtoi(argv[3]);
+    return restoreCommand(wait);
+  }
   if (argc >= 3 && !wcscmp(argv[1], L"--probe-endpoint")) return probeEndpoint(_wtoi(argv[2]));
-  if (argc < 2) { logf("usage: holo-sysaudio <excludePid> [--rate N] [--no-mute] | --restore"); return 1; }
+  if (argc < 2) { logf("usage: holo-sysaudio <excludePid> [--rate N] [--no-mute] | --restore [--wait S]"); return 1; }
   DWORD pid = wcstoul(argv[1], nullptr, 10);
   bool mute = true;
   for (int i = 2; i < argc; i++) {
@@ -462,9 +547,17 @@ int wmain(int argc, wchar_t** argv) {
   }
   if (g_rate < 8000 || g_rate > 192000) g_rate = 48000;
   if (!(g_atten > 0.f && g_atten <= 1.f)) g_atten = 0.0001f;
+  // nothing may end the process between turning sessions down and giving them back without waiting for it
+  ResetEvent(g_restored);
+  HANDLE m = CreateMutexW(nullptr, FALSE, kStateMutex);
+  bool locked = m && lockState(m, 3000);
+  if (m && !locked) logf("state lock busy");
   restoreState();
+  CreateThread(nullptr, 0, sessionWindowThread, nullptr, 0, nullptr);
   CreateThread(nullptr, 0, stdinWatch, nullptr, 0, nullptr);
   int rc = capture(pid, mute);
+  if (locked) ReleaseMutex(m);
+  SetEvent(g_restored);
   CoUninitialize();
   return rc;
 }

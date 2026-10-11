@@ -1,5 +1,7 @@
 # Every push to main (or master) → build the Windows installer and Linux AppImage → GitHub Release.
 # The "Update" button in an installed HoloVoice fetches the new version from here (electron-updater).
+# Both builds upload into a DRAFT release; it is published only when both succeeded, so users never see
+# a "latest" release without the Windows installer or latest.yml.
 name: release
 on:
   push:
@@ -10,6 +12,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -36,3 +39,19 @@ jobs:
       - run: npx electron-builder ${{ matrix.target }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: publish the draft, with release notes and a stable installer name
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v1.0.${{ github.run_number }}
+        run: |
+          git log -1 --pretty=%B | grep -v '^Co-Authored-By' > notes.md
+          gh release download "$TAG" -p 'HoloVoice-Setup-*.exe' -D out
+          cp out/HoloVoice-Setup-*.exe out/HoloVoice-Setup.exe
+          gh release upload "$TAG" out/HoloVoice-Setup.exe --clobber
+          gh release edit "$TAG" --draft=false --latest --notes-file notes.md

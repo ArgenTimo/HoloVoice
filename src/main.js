@@ -89,11 +89,21 @@ function start() {
   })
   engine.loadFile(PAGE('engine'))
   engine.on('closed', () => { engine = null; if (!quitting) app.quit() })
+  // The engine renderer crashed: release what it held (the Windows helper keeps other apps turned down otherwise)
+  // and start it again — settings are in its localStorage, so it comes back in the same state.
+  engine.webContents.on('render-process-gone', (_e, d) => {
+    console.error('engine gone:', d.reason)
+    winSys?.stop()
+    neural?.stop()
+    if (!quitting && d.reason !== 'clean-exit') setTimeout(() => engine?.webContents.reload(), 1000)
+  })
 
   createTray()
   if (ui.widget) showWidget()
   if (!fromAutostart) showPanel()
-  setAutostart(ui.widget)
+  // Linux: refresh the autostart entry's paths (an AppImage may have moved). Windows: only when the user toggles
+  // the widget — re-registering on every start would undo turning it off in Task Manager.
+  if (process.platform === 'linux' && ui.widget) setAutostart(true)
 
   hotkeys.load(ui.hotkeys)
   hotkeys.apply()

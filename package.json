@@ -21,6 +21,7 @@
       "output": "release"
     },
     "npmRebuild": false,
+    "afterPack": "build/after-pack.js",
     "asarUnpack": [
       "node_modules/uiohook-napi/**"
     ],
@@ -57,14 +58,15 @@
       "createStartMenuShortcut": true,
       "shortcutName": "HoloVoice",
       "runAfterFinish": true,
-      "artifactName": "HoloVoice-Setup-${version}.exe"
+      "artifactName": "HoloVoice-Setup-${version}.exe",
+      "include": "build/installer.nsh"
     },
     "publish": [
       {
         "provider": "github",
         "owner": "ArgenTimo",
         "repo": "HoloVoice",
-        "releaseType": "release"
+        "releaseType": "draft"
       }
     ]
   },

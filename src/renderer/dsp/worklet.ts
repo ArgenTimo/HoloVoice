@@ -208,3 +208,40 @@ class HoloTap extends AudioWorkletProcessor {
 }
 
 registerProcessor('holo-tap', HoloTap)
+
+// "holo-feed": plays interleaved stereo float32 chunks posted to its port (Windows computer sound from
+// holo-sysaudio). A small jitter buffer: starts after ~40 ms, re-primes after an underrun, and drops the
+// excess if the helper's clock runs ahead.
+class HoloFeed extends AudioWorkletProcessor {
+  private ring = new Float32Array(2 * 48000)
+  private r = 0
+  private w = 0
+  private primed = false
+  private readonly start = Math.round(0.04 * sampleRate)
+  private readonly max = Math.round(0.15 * sampleRate)
+  constructor(options?: unknown) {
+    super(options)
+    this.port.onmessage = (e: MessageEvent) => this.push(new Float32Array(e.data as ArrayBuffer))
+  }
+  private get frames(): number { return (this.w - this.r + this.ring.length) % this.ring.length / 2 }
+  private push(x: Float32Array): void {
+    const N = this.ring.length
+    for (let i = 0; i < x.length; i++) { this.ring[this.w] = x[i]; this.w = (this.w + 1) % N }
+    if (this.frames > this.max) this.r = (this.w - 2 * this.start + N) % N
+  }
+  process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    const [L, R] = outputs[0]
+    const n = L.length
+    if (!this.primed) { if (this.frames < this.start) return true; this.primed = true }
+    if (this.frames < n) { this.primed = false; return true }
+    const N = this.ring.length
+    for (let i = 0; i < n; i++) {
+      L[i] = this.ring[this.r]
+      R[i] = this.ring[this.r + 1]
+      this.r = (this.r + 2) % N
+    }
+    return true
+  }
+}
+
+registerProcessor('holo-feed', HoloFeed)

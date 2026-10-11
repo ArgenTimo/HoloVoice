@@ -73,6 +73,8 @@ class Lane {
   readonly tap: MediaStreamAudioDestinationNode // for self-monitoring
   stream: MediaStream | null = null
   src: MediaStreamAudioSourceNode | null = null
+  /** Windows computer sound: PCM pushed from holo-sysaudio */
+  feed: AudioWorkletNode | null = null
   rig: VoiceRig | null = null
   /** voice pitch from the vocoder: current and average, Hz */
   f0: [number, number] = [0, 0]
@@ -114,17 +116,30 @@ class Lane {
   setStream(stream: MediaStream | null): void {
     this.stream?.getTracks().forEach((t) => t.stop())
     this.src?.disconnect()
+    this.feed?.disconnect()
+    this.feed = null
     this.stream = stream
     this.src = stream ? this.ctx.createMediaStreamSource(stream) : null
     this.src?.connect(this.inGain)
   }
 
+  /** Input from pushed PCM chunks instead of a MediaStream (see "holo-feed" in the worklet) */
+  async setFeed(): Promise<void> {
+    this.setStream(null)
+    await this.loadWorklet()
+    this.feed = new AudioWorkletNode(this.ctx, 'holo-feed', { numberOfInputs: 0, outputChannelCount: [2] })
+    this.feed.connect(this.inGain)
+  }
+
+  private async loadWorklet(): Promise<void> {
+    if (this.loaded) return
+    await this.ctx.audioWorklet.addModule(new URL('../../dist/dsp/worklet.js', location.href).href)
+    this.loaded = true
+  }
+
   /** Load the vocoder and build the chain (and rebuild it on quality change — with the same parameters, without a pause) */
   async makeRig(): Promise<void> {
-    if (!this.loaded) {
-      await this.ctx.audioWorklet.addModule(new URL('../../dist/dsp/worklet.js', location.href).href)
-      this.loaded = true
-    }
+    await this.loadWorklet()
     const fftSize = this.cfg.quality === 'fast' ? 1024 : 2048
     const rig = new VoiceRig(this.ctx, new AudioWorkletNode(this.ctx, 'holo-voice', { processorOptions: { fftSize } }))
     rig.voice.port.onmessage = (e: MessageEvent) => { this.f0 = [e.data.f0, e.data.avg] }
@@ -193,8 +208,8 @@ class Lane {
 }
 
 const lanes: Record<LaneId, Lane> = { mic: new Lane('mic'), sys: new Lane('sys') }
-// diagnostics from DevTools: window.__hv.lanes.sys.rig.current, .ctx.state, .stream …
-;(window as unknown as { __hv: unknown }).__hv = { lanes, get S() { return S } }
+// diagnostics from DevTools (and the Windows CI test): window.__hv.lanes.sys.rig.current, .ctx.state, .stream, handle(cmd) …
+;(window as unknown as { __hv: unknown }).__hv = { lanes, handle, get S() { return S }, get sysHint() { return hint.sys } }
 
 // ---------------------------------------------------------------- test with a recording
 
@@ -375,13 +390,13 @@ async function applySys(on: boolean): Promise<void> {
     return
   }
   try {
-    let stream: MediaStream
+    let stream: MediaStream | null = null
     if (isWin) {
-      // system loopback; a video track is required by getDisplayMedia, so we stop it right away
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-      stream.getVideoTracks().forEach((t) => { t.stop(); stream.removeTrack(t) })
-      if (!stream.getAudioTracks().length) throw new Error('the system provided no audio')
+      // holo-sysaudio captures every app except us and turns them down; PCM arrives via onSysAudio
       await lane.setSink('')
+      await lane.setFeed()
+      const r = await holo.routeSys(true, lane.ctx.sampleRate)
+      if (!r.ok) throw new Error(r.error ?? 'holo-sysaudio')
     } else {
       const r = await holo.routeSys(true)
       if (!r.ok) throw new Error(r.error ?? 'pactl')
@@ -397,7 +412,7 @@ async function applySys(on: boolean): Promise<void> {
       } })
     }
     lane.rig?.apply(NEUTRAL, 0) // captured audio starts as is — then the effect fades in
-    lane.setStream(stream)
+    if (stream) lane.setStream(stream)
     await lane.ctx.resume()
     lane.update(lane.rampIn())
     sysActive = true
@@ -410,6 +425,23 @@ async function applySys(on: boolean): Promise<void> {
     await holo.routeSys(false).catch(() => {})
     updateSysHint(String((e as Error)?.message ?? e))
   }
+}
+
+if (isWin) {
+  holo.onSysAudio((pcm) => {
+    const buf = pcm.slice().buffer // own, aligned copy for Float32Array
+    lanes.sys.feed?.port.postMessage(buf, [buf])
+  })
+  // the helper stopped by itself: same as a failed start
+  holo.onSysEnd((error) => {
+    if (!sysActive) return
+    S.lanes.sys.enabled = false
+    sysWanted = false
+    sysActive = false
+    lanes.sys.setStream(null)
+    updateSysHint(error)
+    publish()
+  })
 }
 
 // ---------------------------------------------------------------- self-monitoring

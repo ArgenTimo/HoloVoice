@@ -3,3 +3,6 @@ dist/
 release/
 *.log
 listen/
+native/win-sysaudio/*.exe
+native/win-sysaudio/*.obj
+native/win-sysaudio/tone.wav

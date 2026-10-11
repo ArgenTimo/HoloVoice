@@ -5,13 +5,14 @@
 //            to the tray and audio keeps running; if nothing is on — the whole app quits
 //   widget — desktop widget; when pinned it starts with the system (--widget) and does not depend on the panel
 //   osd    — hotkey toast and effect ramp bar; takes no focus and ignores the mouse (doesn't disturb games)
-const { app, BrowserWindow, ipcMain, shell, session, desktopCapturer, Tray, Menu, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, nativeImage, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { LinuxRouter } = require('./routing-linux')
 const updater = require('./updater')
 const { Hotkeys } = require('./hotkeys')
+const { WinSysAudio } = require('./sysaudio-win')
 
 // ---------------------------------------------------------------- language (dictionaries shared with the windows: src/locales)
 const LANG_CODES = ['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja', 'mr', 'te', 'tr', 'ta', 'vi', 'ko', 'it', 'uk', 'be', 'pl']
@@ -79,12 +80,7 @@ function start() {
   // Microphone and output device selection — no prompts (the app is local)
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(true))
   session.defaultSession.setPermissionCheckHandler(() => true)
-  // Windows: computer sound — system loopback with the original muted (video isn't needed, but it can't be omitted)
-  session.defaultSession.setDisplayMediaRequestHandler((_req, cb) => {
-    desktopCapturer.getSources({ types: ['screen'] })
-      .then((sources) => cb({ video: sources[0], audio: 'loopbackWithMute' }))
-      .catch(() => cb({}))
-  })
+  if (process.platform === 'win32') WinSysAudio.restore()
 
   engine = new BrowserWindow({
     show: false,
@@ -392,7 +388,20 @@ ipcMain.handle('routing:mic', async () => {
   }
 })
 
-ipcMain.handle('routing:sys', async (_e, on) => {
+// Windows: PCM from the helper straight to the engine
+let winSys = null
+function getWinSys() {
+  return (winSys ??= new WinSysAudio(
+    (buf) => engine?.webContents.send('sysaudio', buf),
+    (error) => engine?.webContents.send('sysaudio:end', error),
+  ))
+}
+
+ipcMain.handle('routing:sys', async (_e, on, rate) => {
+  if (process.platform === 'win32') {
+    if (!on) { getWinSys().stop(); return { ok: true, platform: 'win32' } }
+    return { platform: 'win32', ...(await getWinSys().start(rate)) }
+  }
   if (process.platform !== 'linux') return { ok: true, platform: process.platform }
   const r = getRouter()
   clearInterval(followTimer)
@@ -413,6 +422,7 @@ ipcMain.handle('routing:sys', async (_e, on) => {
 
 function cleanup() {
   clearInterval(followTimer)
+  winSys?.stop()
   hotkeys.dispose()
   if (router) { router.restoreSync(); router = null }
 }

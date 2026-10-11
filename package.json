@@ -34,7 +34,13 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "native/win-sysaudio/holo-sysaudio.exe",
+          "to": "holo-sysaudio.exe"
+        }
+      ]
     },
     "appImage": {
       "artifactName": "HoloVoice-${version}.AppImage"

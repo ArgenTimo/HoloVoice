@@ -32,7 +32,9 @@ contextBridge.exposeInMainWorld('holo', {
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, t) => cb(t)),
   // engine
   routeMic: () => ipcRenderer.invoke('routing:mic'),
-  routeSys: (on) => ipcRenderer.invoke('routing:sys', on),
+  routeSys: (on, rate) => ipcRenderer.invoke('routing:sys', on, rate),
+  onSysAudio: (cb) => ipcRenderer.on('sysaudio', (_e, buf) => cb(buf)),
+  onSysEnd: (cb) => ipcRenderer.on('sysaudio:end', (_e, err) => cb(err)),
   pushState: (s) => ipcRenderer.send('state', s),
   pushLevels: (l) => ipcRenderer.send('levels', l),
   pushRamp: (r) => ipcRenderer.send('ramp', r),

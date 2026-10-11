@@ -48,6 +48,10 @@ async function main(): Promise<void> {
     sel.onchange = () => holo.cmd({ type: 'effect', lane: id, effect: sel.value as EffectId })
     row.querySelector<HTMLButtonElement>('.w-sw')!.onclick = () => holo.cmd({ type: 'toggle', lane: id })
   }
+  // switch tooltips name the current on/off shortcuts
+  holo.getHotkeys().then((h) => {
+    for (const id of ['mic', 'sys'] as LaneId[]) rows[id].querySelector<HTMLButtonElement>('.w-sw')!.title = h.map[`${id}:toggle`] || ''
+  }).catch(() => {})
   holo.onState(render)
   holo.onLevels((l) => {
     for (const id of ['mic', 'sys'] as LaneId[]) rows[id].querySelector<HTMLElement>('.w-bar i')!.style.width = `${l[id][1]}%`

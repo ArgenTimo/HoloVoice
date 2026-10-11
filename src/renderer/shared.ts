@@ -14,6 +14,8 @@ export interface LaneSettings {
 export interface Settings {
   lanes: Record<LaneId, LaneSettings>
   mic: string; out: string; monitor: boolean; monitorVol: number
+  /** the user picked a physical output for "My voice" on purpose; otherwise the voice never goes to speakers */
+  outManual?: boolean
   /** the user's own voice: effects with a fixed pitch/formant shift adjust to it (neutral — as designed) */
   speaker: Speaker
   custom: CustomEffect[] // custom effects
@@ -35,6 +37,8 @@ export interface EngineState {
   ready: boolean
   preview: Preview
   neural: NeuralState
+  /** built-in effects in catalog order that make sense right now (for the tray menu) */
+  effects: string[]
 }
 /** "Test with a recording": record your voice and play it back through the "My voice" lane effect */
 export interface Preview { recording: boolean; ready: boolean; playing: boolean; seconds: number

@@ -8,7 +8,7 @@
 // Each lane has its own AudioContext: they use different output devices.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { NEURAL_FALLBACK, NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, isNeural, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
+import { EFFECTS, NEURAL_FALLBACK, NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, isNeural, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
 import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type NeuralState, type Settings, type Speaker } from './shared'
 
 const isWin = holo.platform === 'win32'
@@ -50,7 +50,8 @@ const neural: NeuralState = { available: false, gpu: '', status: 'off', latencyM
 function publish(): void {
   try { localStorage.setItem(KEY, JSON.stringify(S)) } catch { /* not critical */ }
   const dev = (d: MediaDeviceInfo) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? t('dev.default') : d.deviceId.slice(0, 8)) })
-  const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview, neural }
+  const effects = EFFECTS.filter((e) => !e.neural || neural.available).map((e) => e.id)
+  const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview, neural, effects }
   holo.pushState(st)
 }
 
@@ -208,8 +209,10 @@ class Lane {
   rampIn(effect: EffectId = this.cfg.effect): number { return this.cfg.fx[effect]?.rampIn ?? 0 }
   rampOut(effect: EffectId = this.cfg.effect): number { return this.cfg.fx[effect]?.rampOut ?? 0 }
 
+  /** id 'none' — render without playing anywhere (the chain, meters and self-monitoring keep working) */
   async setSink(id: string): Promise<void> {
-    try { await this.ctx.setSinkId?.(id === 'default' ? '' : id) } catch (e) { console.warn('setSinkId', e) }
+    const sink = id === 'none' ? { type: 'none' } : id === 'default' ? '' : id
+    try { await (this.ctx as unknown as { setSinkId?: (s: unknown) => Promise<void> }).setSinkId?.(sink) } catch (e) { console.warn('setSinkId', e) }
   }
 
   level(which: 'in' | 'out', buf: Float32Array): number {
@@ -362,36 +365,59 @@ async function openMic(): Promise<void> {
   lanes.mic.setStream(stream)
 }
 
+/** The virtual microphone's input side: HoloVoice-feed on Linux, CABLE Input (VB-Cable) etc. on Windows */
+function virtualOut(): MediaDeviceInfo | undefined {
+  return outs.find((d) => (micRoute.ok && micRoute.sinkLabel ? d.label === micRoute.sinkLabel : isVirtualOut(d.label)))
+}
+const outLabelOf = (id: string) => outs.find((d) => d.deviceId === id)?.label ?? ''
+/** Where "My voice" actually plays: the virtual mic, or an output the user chose — never speakers by itself
+ *  (a laptop mic next to its speakers howls; the user hears himself via "Hear myself" instead). */
+let micSink = ''
+async function applyMicOut(): Promise<void> {
+  const target = isVirtualOut(outLabelOf(S.out)) || S.outManual ? S.out : 'none'
+  if (target === micSink) return
+  micSink = target
+  await lanes.mic.setSink(target)
+}
+
 async function refreshDevices(): Promise<void> {
   await listDevices()
   const pick = (items: MediaDeviceInfo[], v: string) => (items.some((d) => d.deviceId === v) ? v : items[0]?.deviceId ?? 'default')
   const mic = pick(mics, S.mic)
-  const out = pick(outs, S.out)
   if (mic !== S.mic) { S.mic = mic; await openMic() }
-  if (out !== S.out) { S.out = out; await lanes.mic.setSink(out) }
+  // a virtual cable that appears (VB-Cable just installed, PipeWire restarted) is taken at once — no restart needed
+  const virt = virtualOut()
+  if (virt && !S.outManual) S.out = virt.deviceId
+  else S.out = pick(outs, S.out)
+  await applyMicOut()
   updateMicHint()
   publish()
 }
 
+/** Placeholder for the lane's on/off hotkey: the controllers fill it from the current bindings (the engine doesn't know them) */
+const HK = (lane: LaneId) => `<b data-hk="${lane}:toggle"></b>`
+
 function updateMicHint(): void {
-  const outLabel = outs.find((d) => d.deviceId === S.out)?.label ?? ''
+  const outLabel = outLabelOf(S.out)
   if (isVirtualOut(outLabel)) {
     const mic = /HoloVoice/.test(outLabel) ? 'HoloVoice-Microphone'
       : /CABLE/.test(outLabel) ? 'CABLE Output (VB-Audio Virtual Cable)' : t('hint.cableOut')
-    hint.mic = { warn: false, html: t('hint.micOk', { mic }) }
+    hint.mic = { warn: false, html: t('hint.micOk', { mic, key: HK('mic') }) }
   } else if (isWin && !outs.some((d) => /CABLE Input/i.test(d.label))) {
     hint.mic = { warn: true, html: t('hint.noCable') }
   } else if (holo.platform === 'linux' && !micRoute.ok) {
     hint.mic = { warn: true, html: t('hint.routeFail', { err: esc(micRoute.error ?? ''), out: esc(outLabel) }) }
-  } else {
+  } else if (S.outManual) {
     hint.mic = { warn: true, html: t('hint.local', { out: esc(outLabel || t('dev.default')) }) }
+  } else {
+    hint.mic = { warn: true, html: t('hint.noVirtual') }
   }
 }
 
 function updateSysHint(err = ''): void {
   if (err) { hint.sys = { warn: true, html: t('hint.sysFail', { err: esc(err) }) }; return }
   hint.sys = { warn: false, html: S.lanes.sys.enabled
-    ? t('hint.sysOn') + (isWin ? `<br><i>${t('hint.sysWin')}</i>` : '')
+    ? t('hint.sysOn', { key: HK('sys') }) + (isWin ? `<br><i>${t('hint.sysWin')}</i>` : '')
     : t('hint.sysOff') }
 }
 
@@ -682,7 +708,7 @@ async function handle(c: Cmd): Promise<void> {
     case 'play': await playPreview(); return
     case 'stopPreview': stopPreview(); break
     case 'mic': S.mic = c.id; await openMic(); break
-    case 'out': S.out = c.id; await lanes.mic.setSink(c.id); updateMicHint(); break
+    case 'out': S.out = c.id; S.outManual = !isVirtualOut(outLabelOf(c.id)); await applyMicOut(); updateMicHint(); break
     case 'monitor': S.monitor = c.on; await applyMonitor(); break
     case 'monitorVol': S.monitorVol = c.value; await applyMonitor(); break
     case 'speaker': S.speaker = c.value; lanes.mic.update(); previewFollow(); break
@@ -704,14 +730,12 @@ async function main(): Promise<void> {
   let micError = ''
   try { await openMic() } catch (e) { micError = String((e as Error)?.message ?? e) }
   micRoute = await holo.routeMic()
-  const virt = micRoute.ok && micRoute.sinkLabel
-    ? await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
-    : await findDevice('audiooutput', (l) => /CABLE Input/i.test(l), 1)
-  // At startup the voice always goes to the virtual microphone, if present (the null sink id changes between runs)
-  if (virt) S.out = virt.deviceId
-  await lanes.mic.setSink(S.out)
-  lanes.mic.update(0) // at startup — immediately, no fade-in or bar
+  // the HoloVoice sink may take a moment to show up in the device list
+  if (micRoute.ok && micRoute.sinkLabel) await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
+  // At startup the voice goes to the virtual microphone if there is one (the null sink id changes between runs)
+  if (virtualOut()) S.outManual = false
   await refreshDevices()
+  lanes.mic.update(0) // at startup — immediately, no fade-in or bar
   await lanes.mic.ctx.resume()
 
   // computer audio — if it was on last time

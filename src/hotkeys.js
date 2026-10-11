@@ -18,15 +18,18 @@ const HOLD_MS = 250 // a press longer than this is a hold
 const debug = process.env.HOLO_HK_DEBUG ? (...a) => console.log('[hotkeys]', ...a) : () => {}
 
 function defaults() {
+  // Windows: Ctrl+Alt is AltGr — Ctrl+Alt+digit/=/- would steal {, [, @, \\ … on German, French, Polish, Turkish
+  // layouts in every app. Alt+Shift+key types nothing there (Alt+Shift alone switches the layout, with a key it doesn't).
+  const m = process.platform === 'win32' ? 'Alt+Shift' : 'Ctrl+Alt'
   const d = {
-    'mic:toggle': 'Ctrl+Alt+V', 'sys:toggle': 'Ctrl+Alt+B',
-    'mic:next': 'Ctrl+Alt+=', 'mic:prev': 'Ctrl+Alt+-',
+    'mic:toggle': `${m}+V`, 'sys:toggle': `${m}+B`,
+    'mic:next': `${m}+=`, 'mic:prev': `${m}+-`,
     'sys:next': 'Ctrl+Shift+F12', 'sys:prev': 'Ctrl+Shift+F11',
   }
-  // My voice — Ctrl+Alt+0…9 (0 — clean). Computer sound — Ctrl+Shift+F1…F10 (F10 — clean): Shift with a digit
+  // My voice — <mod>+0…9 (0 — clean). Computer sound — Ctrl+Shift+F1…F10 (F10 — clean): Shift with a digit
   // on X11 produces a different symbol ("!"), and such a shortcut fires as if without Shift. Ice, wire, VHS — no shortcuts.
   VOICE.forEach((fx, i) => {
-    d[`mic:${fx}`] = `Ctrl+Alt+${i}`
+    d[`mic:${fx}`] = `${m}+${i}`
     d[`sys:${fx}`] = `Ctrl+Shift+F${i === 0 ? 10 : i}`
   })
   return d

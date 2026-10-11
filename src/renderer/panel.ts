@@ -56,6 +56,18 @@ const LANE_SLIDERS: { key: 'amount' | 'gain' | 'gate'; min: number; max: number;
 ]
 const laneInputs: { lane: LaneId; key: 'amount' | 'gain' | 'gate'; input: HTMLInputElement; val: HTMLElement; fmt: (v: number) => string }[] = []
 
+/** "My voice" card: where the voice comes from and goes to, hearing yourself, your own voice type */
+const micDevices = () => `
+      <div class="lc-devs">
+        <label class="dev-row" title="${t('dev.mic')}"><span>${t('dev.micL')}</span><select id="mic"></select></label>
+        <label class="dev-row" title="${t('dev.out')}"><span>${t('dev.outL')}</span><select id="out"></select></label>
+        <div class="dev-row" title="${t('dev.monitorTip')}">
+          <label class="check"><input type="checkbox" id="monitor"><span>${t('dev.monitor')}</span></label>
+          <input type="range" id="monitor-vol" min="0" max="100" step="1" title="${t('dev.monitorVol')}"><b id="monitor-val"></b>
+        </div>
+        <div class="dev-row stack" title="${t('dev.speakerTip')}"><span>${t('speaker.title')}</span><div class="seg" id="speaker" role="radiogroup"></div></div>
+      </div>`
+
 function buildLanes(): void {
   const box = $('lanes')
   for (const id of LANES) {
@@ -66,7 +78,7 @@ function buildLanes(): void {
       <div class="lc-head">
         <div class="lc-ico">${icon(LANE_ICO[id], 20)}</div>
         <div class="lc-title"><div class="lc-name">${laneName(id)}</div><div class="lc-fx" id="fx-${id}"></div></div>
-        <button class="switch" id="sw-${id}" title="${id === 'mic' ? 'Ctrl+Alt+V' : 'Ctrl+Alt+B'}"><i></i></button>
+        <button class="switch" id="sw-${id}" data-hk-title="${id}:toggle" role="switch"><i></i></button>
       </div>
       <select class="lc-fxsel" id="fxsel-${id}"></select>
       <div class="meters">
@@ -74,11 +86,12 @@ function buildLanes(): void {
         <span>${t('lane.out')}</span><div class="bar-m"><i id="mo-${id}"></i></div>
       </div>
       <div class="voice" id="voice-${id}"></div>
+      ${id === 'mic' ? micDevices() : ''}
       <div class="lc-ctrls" id="ctrls-${id}"></div>
       <div class="lc-hint" id="hint-${id}"></div>`
     box.appendChild(card)
     card.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('.switch, .lc-ctrls, .lc-hint, select')) return
+      if ((e.target as HTMLElement).closest('.switch, .lc-ctrls, .lc-hint, .lc-devs, select')) return
       selectLane(id)
     })
     $(`sw-${id}`).onclick = () => holo.cmd({ type: 'toggle', lane: id })
@@ -126,6 +139,8 @@ function renderLanes(): void {
     $(`card-${id}`).classList.toggle('on', cfg.enabled)
     $(`card-${id}`).classList.toggle('sel', ui.tab === id)
     $(`sw-${id}`).classList.toggle('on', cfg.enabled)
+    $(`sw-${id}`).setAttribute('aria-checked', String(cfg.enabled))
+    $(`sw-${id}`).setAttribute('aria-label', laneName(id))
     const fxBox = $(`fx-${id}`)
     fxBox.replaceChildren(cfg.enabled ? labeled('', iconOf(cfg.effect), fxLabel(cfg.effect), 13) : t(id === 'mic' ? 'lane.offMic' : 'lane.offSys'))
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
@@ -134,6 +149,7 @@ function renderLanes(): void {
     if (document.activeElement !== q) q.value = cfg.quality
     const h = $(`hint-${id}`)
     h.innerHTML = st.hint[id].html // built in the engine, device labels are escaped there
+    fillHotkeyRefs(h)
     h.classList.toggle('warn', st.hint[id].warn)
   }
   for (const s of laneInputs) {
@@ -187,6 +203,7 @@ function renderCatalog(): void {
   document.querySelectorAll<HTMLElement>('.tile').forEach((tile) => {
     const id = tile.dataset.effect as EffectId
     tile.classList.toggle('sel', id === cfg.effect)
+    tile.setAttribute('aria-pressed', String(id === cfg.effect))
     tile.classList.toggle('live', id === cfg.effect && cfg.enabled)
     const modified = !!cfg.fx[id]?.p && Object.keys(cfg.fx[id]!.p!).length > 0
     let dot = tile.querySelector('.mod-dot')
@@ -429,7 +446,13 @@ function renderDevices(): void {
   fillSelect($('out'), st.outs, st.S.out)
   $<HTMLInputElement>('monitor').checked = st.S.monitor
   $<HTMLInputElement>('monitor-vol').value = String(st.S.monitorVol)
-  $<HTMLSelectElement>('speaker').value = st.S.speaker ?? 'neutral'
+  $('monitor-val').textContent = `${st.S.monitorVol}%`
+  $('monitor-vol').classList.toggle('dim', !st.S.monitor)
+  document.querySelectorAll<HTMLElement>('#speaker button').forEach((b) => {
+    const on = b.dataset.v === (st!.S.speaker ?? 'neutral')
+    b.classList.toggle('on', on)
+    b.setAttribute('aria-checked', String(on))
+  })
 }
 
 function render(): void {
@@ -451,14 +474,18 @@ function render(): void {
 
 // ---------------------------------------------------------------- the user's own voice
 
-/** "My voice: neutral / male / female" — effects with a fixed shift adjust to it */
+/** "Your voice: low / medium / high" — effects with a fixed shift adjust to it */
+const SPEAKERS: [Speaker, string][] = [['male', 'speaker.low'], ['neutral', 'speaker.mid'], ['female', 'speaker.high']]
 function buildSpeaker(): void {
-  const sel = $<HTMLSelectElement>('speaker')
-  const value = sel.value || 'neutral'
-  sel.innerHTML = ''
-  for (const v of ['neutral', 'male', 'female'] as Speaker[]) sel.add(new Option(t(`speaker.${v}`), v))
-  sel.value = value
-  sel.onchange = () => holo.cmd({ type: 'speaker', value: sel.value as Speaker })
+  const box = $('speaker')
+  box.innerHTML = ''
+  for (const [v, key] of SPEAKERS) {
+    const b = el('button', '', t(key))
+    b.dataset.v = v
+    b.setAttribute('role', 'radio')
+    b.onclick = () => holo.cmd({ type: 'speaker', value: v })
+    box.appendChild(b)
+  }
 }
 
 // ---------------------------------------------------------------- hotkeys
@@ -506,6 +533,18 @@ function splitBinding(b: string): [string, HkMode] {
   return [m[1], (m[2] as HkMode) || 'press']
 }
 
+/** Hints and switch tooltips name the CURRENT shortcut of an action ([data-hk] text, [data-hk-title] tooltip) */
+function fillHotkeyRefs(root: ParentNode = document): void {
+  const text = (a: string) => {
+    const k = hk.map[a]
+    if (!k) return t('hk.none')
+    const [combo, mode] = splitBinding(k)
+    return mode === 'press' ? bindingText(combo) : `${bindingText(combo)} (${t(`hk.mode.${mode}`)})`
+  }
+  root.querySelectorAll<HTMLElement>('[data-hk]').forEach((e) => { e.textContent = text(e.dataset.hk!) })
+  root.querySelectorAll<HTMLElement>('[data-hk-title]').forEach((e) => { e.title = text(e.dataset.hkTitle!) })
+}
+
 /** Human-readable shortcut: mouse buttons by name */
 function bindingText(combo: string): string {
   return combo.split('+').map((k) => (/^Mouse\d$/.test(k) ? t(`hk.${k.toLowerCase()}`) : k)).join(' + ')
@@ -544,6 +583,7 @@ function buildHotkeys(): void {
 }
 
 function renderHotkeys(): void {
+  fillHotkeyRefs()
   document.querySelectorAll<HTMLButtonElement>('.hk-key').forEach((b) => {
     if (b.classList.contains('rec')) return
     const a = b.dataset.action!
@@ -552,6 +592,12 @@ function renderHotkeys(): void {
     b.classList.toggle('empty', !k)
     b.classList.toggle('busy', !!k && hk.failed.includes(a))
     b.title = k && hk.failed.includes(a) ? t('hk.busy') : ''
+    // a conflict is spelled out under the row, not just an orange border
+    const row = b.closest('.hk-row')!
+    const busy = !!k && hk.failed.includes(a)
+    let note = row.querySelector('.hk-busy')
+    if (busy && !note) { note = el('div', 'hk-busy', t('hk.busy')); row.appendChild(note) }
+    if (!busy) note?.remove()
   })
   document.querySelectorAll<HTMLSelectElement>('.hk-mode').forEach((m) => {
     const k = hk.map[m.dataset.action!] || ''
@@ -589,6 +635,11 @@ async function record(btn: HTMLButtonElement): Promise<void> {
     // X11: Shift with a digit/symbol yields a different character, and the global shortcut fires as if without Shift
     if (accel && holo.platform === 'linux' && e.shiftKey && /\+[0-9\-=[\];',./\\`]$/.test(accel)) {
       btn.textContent = t('hk.shiftLinux')
+      return
+    }
+    // Windows: Ctrl+Alt is AltGr — Ctrl+Alt+<a typing key> would steal that character on many layouts
+    if (accel && holo.platform === 'win32' && /^Ctrl\+Alt\+(Shift\+)?([0-9A-Z]|[-=[\];',./\\`])$/.test(accel)) {
+      btn.textContent = t('hk.altgr')
       return
     }
     if (accel) finish(accel)
@@ -725,15 +776,15 @@ async function main(): Promise<void> {
     upd.disabled = false
   }
 
-  // devices
+  buildLanes()
+  // devices (in the "My voice" card)
   const mon = $<HTMLInputElement>('monitor'), monVol = $<HTMLInputElement>('monitor-vol')
   mon.onchange = () => holo.cmd({ type: 'monitor', on: mon.checked })
-  monVol.oninput = () => holo.cmd({ type: 'monitorVol', value: Number(monVol.value) })
+  monVol.oninput = () => { $('monitor-val').textContent = `${monVol.value}%`; holo.cmd({ type: 'monitorVol', value: Number(monVol.value) }) }
   buildSpeaker()
   $<HTMLSelectElement>('mic').onchange = (e) => holo.cmd({ type: 'mic', id: (e.target as HTMLSelectElement).value })
   $<HTMLSelectElement>('out').onchange = (e) => holo.cmd({ type: 'out', id: (e.target as HTMLSelectElement).value })
 
-  buildLanes()
   buildCatalog()
   buildHotkeys()
   hk = await holo.getHotkeys()

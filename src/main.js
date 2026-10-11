@@ -5,7 +5,7 @@
 //            to the tray and audio keeps running; if nothing is on — the whole app quits
 //   widget — desktop widget; when pinned it starts with the system (--widget) and does not depend on the panel
 //   osd    — hotkey toast and effect ramp bar; takes no focus and ignores the mouse (doesn't disturb games)
-const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, Notification, nativeImage, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -53,15 +53,40 @@ const hotkeys = new Hotkeys(onHotkey, onHotkeyHold)
 
 // ---------------------------------------------------------------- window settings
 
-const UI_DEFAULTS = { pinned: true, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top', lang: null }
+const UI_DEFAULTS = { pinned: false, trayNotice: false, compact: false, tab: 'mic', widget: false, widgetPinned: true, widgetBounds: null, panelBounds: null, hotkeys: {}, osd: true, rampBar: true, osdPos: 'top', lang: null }
 let ui = { ...UI_DEFAULTS }
 const uiPath = () => path.join(app.getPath('userData'), 'ui.json')
 function loadUi() {
   try { ui = { ...UI_DEFAULTS, ...JSON.parse(fs.readFileSync(uiPath(), 'utf8')) } } catch { /* defaults */ }
   if (!LANG_CODES.includes(ui.lang)) ui.lang = systemLang()
 }
+// Written via a temp file + rename (a crash mid-write must not wipe the settings), and debounced: windows report
+// 'moved' many times per drag.
+let saveTimer = null
 function saveUi() {
-  try { fs.mkdirSync(path.dirname(uiPath()), { recursive: true }); fs.writeFileSync(uiPath(), JSON.stringify(ui)) } catch { /* not critical */ }
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(saveUiNow, 300)
+}
+function saveUiNow() {
+  clearTimeout(saveTimer)
+  try {
+    fs.mkdirSync(path.dirname(uiPath()), { recursive: true })
+    fs.writeFileSync(`${uiPath()}.tmp`, JSON.stringify(ui))
+    fs.renameSync(`${uiPath()}.tmp`, uiPath())
+  } catch { /* not critical */ }
+}
+
+/** Saved bounds that still fit a connected display (a monitor may be gone, the resolution may have changed);
+ *  otherwise only the size is kept, clamped to the primary work area, and the window is centered. */
+function fitBounds(b, w, h) {
+  const area = screen.getPrimaryDisplay().workArea
+  const width = Math.min(b?.width || w, area.width), height = Math.min(b?.height || h, area.height)
+  if (b && Number.isFinite(b.x) && Number.isFinite(b.y)) {
+    const visible = screen.getAllDisplays().some(({ workArea: a }) =>
+      b.x + 40 < a.x + a.width && b.x + Math.min(width, 200) - 40 > a.x && b.y >= a.y - 10 && b.y + 30 < a.y + a.height)
+    if (visible) return { x: b.x, y: b.y, width, height }
+  }
+  return { width, height }
 }
 
 // ---------------------------------------------------------------- startup
@@ -181,9 +206,9 @@ const webPrefs = () => ({
 
 function showPanel() {
   if (panel) { panel.show(); panel.focus(); return }
-  const b = ui.panelBounds || {}
+  const b = fitBounds(ui.panelBounds, PANEL_W, PANEL_H)
   panel = new BrowserWindow({
-    width: b.width || PANEL_W, height: b.height || PANEL_H, x: b.x, y: b.y, minWidth: PANEL_MIN_W, minHeight: PANEL_MIN_H,
+    ...b, minWidth: Math.min(PANEL_MIN_W, b.width), minHeight: Math.min(PANEL_MIN_H, b.height),
     frame: false, alwaysOnTop: ui.pinned, backgroundColor: '#12131a', title: 'HoloVoice', icon: ICON,
     webPreferences: webPrefs(),
   })
@@ -191,8 +216,12 @@ function showPanel() {
   panel.loadFile(PAGE('index'))
   panel.on('close', (e) => {
     if (quitting) return
-    if (isActive() || widget) { e.preventDefault(); panel.hide(); updateTray() } // keep running in the background
-    else quit()
+    if ((isActive() || widget) && tray) { // keep running in the background
+      e.preventDefault()
+      panel.hide()
+      updateTray()
+      trayNotice()
+    } else quit() // nothing to keep running, or no tray to come back from
   })
   panel.on('closed', () => { panel = null })
   // the size and position of the wide window are remembered (not in compact mode)
@@ -211,8 +240,8 @@ ipcMain.handle('win:compact', (_e, on, h) => {
   if (on) {
     if (!panelCompact) { ui.panelBounds = panel.getBounds(); saveUi() }
     panelCompact = true
-    panel.setMinimumSize(260, 150)
-    panel.setSize(300, Math.min(maxH, Math.max(150, Math.round(h))))
+    panel.setMinimumSize(300, 150)
+    panel.setSize(320, Math.min(maxH, Math.max(150, Math.round(h))))
   } else {
     panelCompact = false
     panel.setMinimumSize(PANEL_MIN_W, PANEL_MIN_H)
@@ -223,9 +252,9 @@ ipcMain.handle('win:compact', (_e, on, h) => {
 
 function showWidget() {
   if (widget) { widget.show(); return }
-  const b = ui.widgetBounds || {}
+  const b = fitBounds(ui.widgetBounds, 260, 130)
   widget = new BrowserWindow({
-    width: 260, height: 130, x: b.x, y: b.y, minWidth: 220,
+    ...b, width: 260, height: 130, minWidth: 220,
     frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: ui.widgetPinned, minimizable: false,
     backgroundColor: '#12131a', title: 'HoloVoice', icon: ICON, webPreferences: webPrefs(),
   })
@@ -292,14 +321,35 @@ function createTray() {
   } catch { tray = null } // no notification area — not critical
 }
 
+/** First time the panel goes to the tray: say so — otherwise it looks closed while the mic and hotkeys stay active */
+function trayNotice() {
+  if (ui.trayNotice) return
+  ui.trayNotice = true
+  saveUi()
+  try { if (Notification.isSupported()) new Notification({ title: 'HoloVoice', body: tr('tray.notice'), icon: ICON }).show() } catch { /* no notifications */ }
+}
+
+const fxName = (id) => state?.S.custom?.find((c) => c.id === id)?.name ?? tr(`fx.${id}`)
+const laneStatus = (lane) => {
+  const l = state?.S.lanes[lane]
+  return `${tr(lane === 'mic' ? 'tray.mic' : 'tray.sys')}: ${l?.enabled ? fxName(l.effect) : tr('tray.off')}`
+}
+
 function updateTray() {
   if (!tray) return
   const L = state?.S.lanes
+  tray.setToolTip(state ? `HoloVoice\n${laneStatus('mic')}\n${laneStatus('sys')}` : 'HoloVoice')
+  // quick effect choice without opening the panel: built-in effects in catalog order + the user's own
+  const effects = (lane) => [...(state?.effects ?? []), ...(state?.S.custom ?? []).map((c) => c.id)]
+    .filter((id) => !(lane === 'sys' && id.startsWith('neural')))
+    .map((id) => ({ label: fxName(id), type: 'radio', checked: L?.[lane].effect === id, click: () => toEngine({ type: 'effect', lane, effect: id }) }))
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: tr('tray.open'), click: showPanel },
     { type: 'separator' },
     { label: tr('tray.mic'), type: 'checkbox', checked: !!L?.mic.enabled, click: () => toEngine({ type: 'toggle', lane: 'mic' }) },
+    { label: tr('tray.effect'), submenu: effects('mic'), enabled: !!state },
     { label: tr('tray.sys'), type: 'checkbox', checked: !!L?.sys.enabled, click: () => toEngine({ type: 'toggle', lane: 'sys' }) },
+    { label: tr('tray.effect'), submenu: effects('sys'), enabled: !!state },
     { label: tr('tray.widget'), type: 'checkbox', checked: ui.widget, click: () => setWidget(!ui.widget) },
     { type: 'separator' },
     { label: tr('tray.quit'), click: quit },
@@ -318,7 +368,8 @@ ipcMain.on('state', (e, st) => {
   state = st
   for (const w of [...remotes(), osd].filter((w) => w && !w.isDestroyed())) w.webContents.send('state', st)
   if (osdToast) { const lane = osdToast.lane; if (takeToast(lane)) showOsd(lane, true, null) }
-  if (!prev || prev.S.lanes.mic.enabled !== st.S.lanes.mic.enabled || prev.S.lanes.sys.enabled !== st.S.lanes.sys.enabled) updateTray()
+  const sig = (x) => x && ['mic', 'sys'].map((l) => `${x.S.lanes[l].enabled}${x.S.lanes[l].effect}`).join() + (x.S.custom?.length ?? 0)
+  if (sig(prev) !== sig(st)) updateTray()
 })
 ipcMain.on('levels', (e, l) => {
   if (!engine || e.sender !== engine.webContents) return
@@ -467,7 +518,7 @@ function cleanup() {
   hotkeys.dispose()
   if (router) { router.restoreSync(); router = null }
 }
-app.on('before-quit', () => { quitting = true })
+app.on('before-quit', () => { quitting = true; saveUiNow() })
 app.on('window-all-closed', () => { if (quitting) app.quit() })
 app.on('will-quit', cleanup)
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { cleanup(); process.exit(0) })

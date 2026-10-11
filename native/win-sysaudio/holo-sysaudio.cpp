@@ -21,6 +21,7 @@
 #include <audioclient.h>
 #include <audioclientactivationparams.h>
 #include <audiopolicy.h>
+#include <endpointvolume.h>
 #include <tlhelp32.h>
 #include <shlobj.h>
 #include <wrl/implements.h>
@@ -117,6 +118,7 @@ static void writeState(const std::map<std::wstring, float>& st) {
 struct Session {
   ComPtr<IAudioSessionControl2> ctl;
   ComPtr<ISimpleAudioVolume> vol;
+  ComPtr<IAudioMeterInformation> meter;
   DWORD pid = 0;
   std::wstring id;       // stable across runs (app + device)
   std::wstring instance; // unique to this session
@@ -140,6 +142,7 @@ static std::vector<Session> allSessions() {
     for (int i = 0; i < n; i++) {
       ComPtr<IAudioSessionControl> c; Session s;
       if (FAILED(se->GetSession(i, &c)) || FAILED(c.As(&s.ctl)) || FAILED(c.As(&s.vol))) continue;
+      c.As(&s.meter);
       s.ctl->GetProcessId(&s.pid);
       LPWSTR id = nullptr, inst = nullptr;
       if (SUCCEEDED(s.ctl->GetSessionIdentifier(&id)) && id) s.id = id;
@@ -170,25 +173,42 @@ static void restoreState() {
 class Attenuator {
 public:
   Attenuator(DWORD excludeRoot) : root_(excludeRoot) {}
-  // New sessions outside our tree: remember their volume, turn them down. Cheap, every ~500 ms.
+  // New sessions outside our tree are queued; they are turned down once they actually play (see tick).
+  // Every ~500 ms.
   void scan() {
     auto tree = processTree(root_);
     tree.insert(GetCurrentProcessId());
-    bool changed = false;
     for (auto& s : allSessions()) {
       std::wstring key = s.instance.empty() ? s.id : s.instance;
       if (key.empty() || seen_.count(key)) continue;
       if (s.pid && tree.count(s.pid)) continue; // our own output (a new child may join the tree later: don't mark seen)
       seen_.insert(key);
-      if (FAILED(s.vol->GetMasterVolume(&s.original))) continue;
-      s.set = s.original * g_atten;
-      if (SUCCEEDED(s.vol->SetMasterVolume(s.set, &kHoloContext))) {
-        state_[s.id] = s.original;
-        ours_.push_back(s);
-        changed = true;
-        float back = 0.f; s.vol->GetMasterVolume(&back);
-        logf("attenuated pid=%lu volume=%.3f now=%.7f", s.pid, s.original, back);
+      pending_.push_back(s);
+    }
+  }
+  // Only sessions with sound on their meter are turned down. Sessions on an output device also include other apps'
+  // loopback CAPTURE streams (OBS desktop audio, screen sharing, recorders): their volume scales what they record,
+  // and their meter stays at zero — so they are left alone. Every ~20 ms: the start of a sound leaks for that long.
+  void tick() {
+    bool changed = false;
+    for (size_t i = 0; i < pending_.size();) {
+      auto& s = pending_[i];
+      float peak = 0.f;
+      AudioSessionState st = AudioSessionStateActive;
+      s.ctl->GetState(&st);
+      if (st == AudioSessionStateExpired) { pending_.erase(pending_.begin() + i); continue; }
+      if (!s.meter || FAILED(s.meter->GetPeakValue(&peak)) || peak < 1e-4f) { i++; continue; }
+      if (SUCCEEDED(s.vol->GetMasterVolume(&s.original))) {
+        s.set = s.original * g_atten;
+        if (SUCCEEDED(s.vol->SetMasterVolume(s.set, &kHoloContext))) {
+          state_[s.id] = s.original;
+          ours_.push_back(s);
+          changed = true;
+          float back = 0.f; s.vol->GetMasterVolume(&back);
+          logf("attenuated pid=%lu volume=%.3f now=%.7f", s.pid, s.original, back);
+        }
       }
+      pending_.erase(pending_.begin() + i);
     }
     if (changed) writeState(merged());
   }
@@ -207,6 +227,7 @@ public:
     }
   }
   void restore() {
+    pending_.clear();
     for (auto& s : ours_) {
       float v = 0.f;
       if (SUCCEEDED(s.vol->GetMasterVolume(&v)) && v <= s.set * 2.f + 1e-6f) s.vol->SetMasterVolume(s.original, &kHoloContext);
@@ -230,7 +251,7 @@ private:
   DWORD root_;
   std::set<std::wstring> seen_;
   std::map<std::wstring, float> state_;
-  std::vector<Session> ours_;
+  std::vector<Session> ours_, pending_;
 };
 
 // ------------------------------------------------------------------ process loopback
@@ -319,15 +340,15 @@ static int capture(DWORD pid, bool mute) {
     logf("error service 0x%08lx", hr); return 2;
   }
   Attenuator att(pid);
-  if (mute) att.scan();
+  if (mute) { att.scan(); att.tick(); }
   if (FAILED(hr = client->Start())) { logf("error start 0x%08lx", hr); att.restore(); return 2; }
   logf("ready rate=%lu channels=2 format=%s", g_rate, asFloat ? "f32" : "s16");
 
   std::vector<float> out;
   const float gain = mute ? 1.f / g_atten : 1.f;
-  ULONGLONG lastScan = GetTickCount64(), lastWatch = lastScan;
+  ULONGLONG lastScan = GetTickCount64(), lastWatch = lastScan, lastTick = lastScan;
   while (g_running) {
-    WaitForSingleObject(ev, 50);
+    WaitForSingleObject(ev, 10);
     UINT32 packet = 0;
     while (g_running && SUCCEEDED(cap->GetNextPacketSize(&packet)) && packet) {
       BYTE* data = nullptr; UINT32 frames = 0; DWORD fl = 0;
@@ -341,6 +362,7 @@ static int capture(DWORD pid, bool mute) {
       if (fwrite(out.data(), sizeof(float), out.size(), stdout) != out.size() || fflush(stdout)) g_running = false;
     }
     ULONGLONG now = GetTickCount64();
+    if (mute && now - lastTick >= 20) { att.tick(); lastTick = now; }
     if (mute && now - lastWatch >= 100) { att.watch(); lastWatch = now; }
     if (mute && now - lastScan >= 500) { att.scan(); lastScan = now; }
   }

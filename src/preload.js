@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('holo', {
   routeSys: (on, rate) => ipcRenderer.invoke('routing:sys', on, rate),
   onSysAudio: (cb) => ipcRenderer.on('sysaudio', (_e, buf) => cb(buf)),
   onSysEnd: (cb) => ipcRenderer.on('sysaudio:end', (_e, err) => cb(err)),
+  onRealSink: (cb) => ipcRenderer.on('routing:realSink', (_e, r) => cb(r)),
   pushState: (s) => ipcRenderer.send('state', s),
   pushLevels: (l) => ipcRenderer.send('levels', l),
   pushRamp: (r) => ipcRenderer.send('ramp', r),

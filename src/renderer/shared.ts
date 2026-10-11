@@ -102,6 +102,8 @@ export interface HoloApi {
   routeSys(on: boolean, rate?: number): Promise<RouteResult>
   onSysAudio(cb: (pcm: Uint8Array) => void): void
   onSysEnd(cb: (error: string) => void): void
+  /** Linux: the real output changed while computer sound is captured */
+  onRealSink(cb: (r: { realSinkLabel: string }) => void): void
   pushState(s: EngineState): void
   pushLevels(l: Levels): void
   pushRamp(r: { lane: LaneId; seconds: number; dir: 'in' | 'out' }): void

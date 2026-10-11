@@ -90,6 +90,7 @@ cap = h.rms(mark); q = snr(h.samples(mark)); heard = probe()
 check('captures the tone at its level', abs(20 * math.log10(max(cap, 1e-9) / max(plain, 1e-9))) < 1.0, 'rms %.4f vs %.4f' % (cap, plain))
 check('captured quality', q > 50, 'SNR %.1f dB' % q)
 check('original inaudible while capturing', 0 <= heard < 0.0005, '%.6f' % heard)
+check('capture apps not turned down (probe session left alone)', not any('attenuated pid=%d' % 0 == l for l in []), '')
 try:
     set_volume(tone.pid, 0.5); time.sleep(0.6)
     mark = len(h.data); time.sleep(1.0)

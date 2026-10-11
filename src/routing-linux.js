@@ -169,6 +169,7 @@ class LinuxRouter {
     if (!s.sys.length) {
       s.realSink = (await pactl('get-default-sink')).trim()
       if (!s.realSink || OURS.includes(s.realSink)) throw new Error('real audio output not found')
+      this.knownSinks = null
       this.save()
       await this.load('sys', 'module-null-sink', `sink_name=${IN_SINK}`,
         `sink_properties=device.description='${SPEAKER_LABEL}'`)
@@ -180,6 +181,34 @@ class LinuxRouter {
     }
     await this.followStreams()
     return { realSinkLabel: await sinkDescription(s.realSink), monitorLabel: CAPTURE_LABEL }
+  }
+
+  /**
+   * The real output can change while the capture is on: headphones/a BT speaker connect, the old device disappears,
+   * or WirePlumber/the user picks another output (then the default stops being ours). Pick the output the user would
+   * get without HoloVoice and keep the default on the capture. Returns the new output or null.
+   */
+  async checkRealSink() {
+    const s = this.s
+    if (!s.sys.length) return null
+    const real = Object.values(await sinkNames()).filter((n) => !OURS.includes(n))
+    const known = this.knownSinks ?? new Set(real)
+    this.knownSinks = new Set(real)
+    const def = (await pactl('get-default-sink')).trim()
+    let next = null
+    if (def && !OURS.includes(def)) {
+      next = def // someone chose this output: follow it, and take the default back
+      await pactl('set-default-sink', IN_SINK).catch(() => {})
+    } else {
+      const added = real.filter((n) => !known.has(n) && /^bluez_output|usb/i.test(n))
+      if (added.length) next = added[added.length - 1]
+      else if (!real.includes(s.realSink)) next = real.find((n) => /^bluez_output/.test(n)) ?? real.find((n) => /usb/i.test(n)) ?? real[0] ?? null
+    }
+    if (!next || next === s.realSink) return null
+    s.realSink = next
+    this.save()
+    this.restartGuard() // the guard restores this output if we crash
+    return { realSinkLabel: await sinkDescription(next) }
   }
 
   /** Move into the capture the streams playing to my real output bypassing it (started before capture or bound

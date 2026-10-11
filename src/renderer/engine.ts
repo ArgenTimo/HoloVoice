@@ -447,6 +447,17 @@ if (isWin) {
   })
 }
 
+// Linux: a speaker/headphones connected (or the output was switched) while computer sound is captured
+holo.onRealSink(async ({ realSinkLabel }) => {
+  if (!sysActive) return
+  const real = await findDevice('audiooutput', (l) => l === realSinkLabel, 25)
+  if (!real || real.deviceId === realOutId) return
+  realOutId = real.deviceId
+  await lanes.sys.setSink(realOutId)
+  await applyMonitor()
+  if (pv) try { await pv.ctx.setSinkId?.(realOutId) } catch { /* default */ }
+})
+
 // ---------------------------------------------------------------- self-monitoring
 
 const monAudio = new Audio() as SinkEl

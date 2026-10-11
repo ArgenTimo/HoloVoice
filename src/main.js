@@ -416,7 +416,12 @@ ipcMain.handle('routing:sys', async (_e, on, rate) => {
     if (!on) { await r.releaseSys(); return { ok: true, platform: 'linux' } }
     const res = await r.interceptSys()
     // New streams go to the default output (ours) on their own, but some apps are bound to a device
-    followTimer = setInterval(() => { r.followStreams().catch(() => {}) }, 2000)
+    // and the real output may change (a BT speaker connects…): the engine then plays to the new one
+    followTimer = setInterval(async () => {
+      const changed = await r.checkRealSink().catch(() => null)
+      if (changed) engine?.webContents.send('routing:realSink', changed)
+      await r.followStreams().catch(() => {})
+    }, 2000)
     return { ok: true, platform: 'linux', ...res }
   } catch (e) {
     await r.releaseSys().catch(() => {})

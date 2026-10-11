@@ -172,9 +172,9 @@ class Lane {
     if (on) {
       const nOut = new AudioWorkletNode(this.ctx, 'holo-stream', { numberOfOutputs: 0 })
       nOut.port.onmessage = (e: MessageEvent) => holo.neuralIn(e.data as ArrayBuffer)
-      // the sidecar answers in blocks (~180 ms): the buffer must hold more than one
+      // the sidecar paces its output by its input (steady 10 ms chunks), so a small jitter buffer is enough
       const nIn = new AudioWorkletNode(this.ctx, 'holo-feed',
-        { numberOfInputs: 0, outputChannelCount: [1], processorOptions: { channels: 1, start: 0.25, max: 0.8 } })
+        { numberOfInputs: 0, outputChannelCount: [1], processorOptions: { channels: 1, start: 0.06, max: 0.3 } })
       const nGain = this.ctx.createGain()
       nGain.gain.value = 0
       this.hpIn.connect(nOut)

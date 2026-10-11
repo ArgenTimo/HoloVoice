@@ -1,0 +1,25 @@
+HoloVoice neural voices: target voice references
+=================================================
+
+female.wav  (22.05 kHz mono, 14.0 s; the sidecar uses the first 3 s after leading silence)
+  Speaker:  Hi-Fi TTS speaker 92 (a LibriVox volunteer reader), "clean" subset
+  Source:   Hi-Fi Multi-Speaker English TTS Dataset (Hi-Fi TTS), Bakhturina et al., NVIDIA, 2021
+            https://www.openslr.org/109/
+  Clips:    audio/92_clean/10425/secretagent_05_conrad_0442.flac
+            audio/92_clean/10425/secretagent_06_conrad_0514.flac
+            (J. Conrad, "The Secret Agent"; LibriVox public-domain recording), trimmed and concatenated
+  License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+  Changes:  resampled to 22.05 kHz, concatenated, cut to 14 s
+
+male.wav  (22.05 kHz mono, 14.0 s)
+  Speaker:  LibriTTS-R speaker 1089 (a LibriVox volunteer reader), test-clean subset
+  Source:   LibriTTS-R, Koizumi et al., Google, 2023 (restored LibriTTS, derived from LibriSpeech/LibriVox)
+            https://www.openslr.org/141/
+  Clip:     1089_134691_000005_000005
+            (J. Joyce, "A Portrait of the Artist as a Young Man"; LibriVox public-domain recording)
+  License:  CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+  Changes:  resampled to 22.05 kHz, cut to 14 s
+
+Chosen from 41 candidates: LJSpeech (public domain), LibriTTS-R and Hi-Fi TTS (CC BY 4.0).
+Selection was done by converting HoloVoice's Russian test recordings with the streaming sidecar in both
+directions and scoring UTMOS, speaker similarity to the reference, and Whisper CER.

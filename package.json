@@ -22,6 +22,13 @@
     },
     "npmRebuild": false,
     "afterPack": "build/after-pack.js",
+    "extraResources": [
+      {
+        "from": "native/neural-vc",
+        "to": "neural-vc",
+        "filter": ["*.py", "*.md", "*.sh", "voices/**"]
+      }
+    ],
     "asarUnpack": [
       "node_modules/uiohook-napi/**"
     ],

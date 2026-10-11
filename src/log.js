@@ -39,8 +39,11 @@ function init() {
 
 /** Renderer console → log (warnings and errors only: the engine is chatty otherwise) */
 function attach(name, webContents) {
-  webContents.on('console-message', (_e, level, message, line, source) => {
-    if (level >= 2) write(level === 3 ? 'ERROR' : 'WARN', [`[${name}] ${message} (${path.basename(source || '')}:${line})`])
+  webContents.on('console-message', (e, ...old) => {
+    // Electron 35+: everything is on the event (level 'warning' | 'error' …); older: positional (level 2 | 3)
+    const level = e.level ?? old[0], message = e.message ?? old[1], line = e.lineNumber ?? old[2], source = e.sourceId ?? old[3]
+    const err = level === 'error' || level === 3, warn = level === 'warning' || level === 2
+    if (err || warn) write(err ? 'ERROR' : 'WARN', [`[${name}] ${message} (${path.basename(source || '')}:${line})`])
   })
   webContents.on('render-process-gone', (_e, d) => write('ERROR', [`[${name}] renderer gone: ${d.reason} (${d.exitCode})`]))
 }

@@ -191,5 +191,12 @@
   "ins.saveHint": "現在の設定を新しいエフェクトとして保存します — 「マイエフェクト」、ウィジェット、ショートカットに表示されます。",
   "ins.saveName": "名前",
   "ins.save": "保存",
-  "ins.delete": "エフェクトを削除"
+  "ins.delete": "エフェクトを削除",
+  "holo.title": "HOLO エコシステム",
+  "holo.here": "現在地",
+  "holo.soon": "近日公開",
+  "holo.voice": "声とサウンドのエフェクト",
+  "holo.messenger": "ホログラムのビデオメッセージ",
+  "holo.viewer": "ARのホログラム",
+  "holo.studio": "ホログラム処理"
 }

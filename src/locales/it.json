@@ -191,5 +191,12 @@
   "ins.saveHint": "Salva le impostazioni attuali come nuovo effetto: comparirà in «I miei effetti», nel widget e nelle scorciatoie.",
   "ins.saveName": "Nome",
   "ins.save": "Salva",
-  "ins.delete": "Elimina effetto"
+  "ins.delete": "Elimina effetto",
+  "holo.title": "Ecosistema HOLO",
+  "holo.here": "sei qui",
+  "holo.soon": "presto",
+  "holo.voice": "Effetti voce e audio",
+  "holo.messenger": "Videomessaggi olografici",
+  "holo.viewer": "Ologrammi in AR",
+  "holo.studio": "Elaborazione degli ologrammi"
 }

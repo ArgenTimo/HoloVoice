@@ -570,11 +570,38 @@ function buildLangMenu(): void {
   holo.onLang(() => location.reload()) // окно перестраивается целиком на новом языке; звук в движке не прерывается
 }
 
+// ---------------------------------------------------------------- HOLO ecosystem
+
+/** HoloVoice is one product of the HOLO family; the other entries are placeholders until their links exist. */
+const HOLO_PRODUCTS: { name: string; icon: string; desc: string; url?: string; current?: boolean }[] = [
+  { name: 'HoloVoice', icon: '🎙️', desc: 'holo.voice', current: true },
+  { name: 'HOLO Messenger', icon: '💬', desc: 'holo.messenger' },
+  { name: 'HOLO Viewer', icon: '🥽', desc: 'holo.viewer' },
+  { name: 'HOLO Studio', icon: '🧊', desc: 'holo.studio' },
+]
+
+function buildHoloMenu(): void {
+  const menu = $('holo-menu')
+  menu.appendChild(el('div', 'holo-head', t('holo.title')))
+  for (const p of HOLO_PRODUCTS) {
+    const item = el('button', 'holo-item' + (p.current ? ' current' : ''))
+    item.disabled = !p.current && !p.url
+    const text = el('div')
+    text.append(el('div', 'holo-name', p.name), el('div', 'holo-desc', t(p.desc)))
+    item.append(el('span', 'holo-icon', p.icon), text, el('span', 'holo-badge', p.current ? t('holo.here') : t('holo.soon')))
+    if (p.url) item.onclick = () => holo.open(p.url!)
+    menu.appendChild(item)
+  }
+  $('btn-holo').onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden }
+  document.addEventListener('click', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('#holo-menu')) menu.hidden = true })
+}
+
 async function main(): Promise<void> {
   ui = await holo.getUi()
   setLang(ui.lang)
   applyStatic()
   buildLangMenu()
+  buildHoloMenu()
   $('btn-close').onclick = () => holo.close()
   $('btn-min').onclick = () => holo.minimize()
   const pin = $('btn-pin')

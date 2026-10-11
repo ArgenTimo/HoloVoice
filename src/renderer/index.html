@@ -9,7 +9,7 @@
 <body class="panel">
   <div id="app">
     <header class="titlebar">
-      <div class="brand"><span class="dot"></span>HoloVoice</div>
+      <button class="brand brand-btn" id="btn-holo" data-i18n-title="holo.title"><span class="dot"></span>HoloVoice <span class="caret">▾</span></button>
       <div class="win-btns">
         <button id="btn-lang" class="lang-btn" data-i18n-title="lang.title"></button>
         <button id="btn-widget" data-i18n-title="win.widget">🧩</button>
@@ -50,6 +50,7 @@
     </footer>
 
     <div class="lang-menu" id="lang-menu" hidden></div>
+    <div class="holo-menu" id="holo-menu" hidden></div>
 
     <div class="modal" id="modal-hk" hidden>
       <div class="sheet wide">

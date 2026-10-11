@@ -191,5 +191,12 @@
   "ins.saveHint": "Zapisz bieżące ustawienia jako nowy efekt — pojawi się w „Moje efekty”, w widżecie i w skrótach.",
   "ins.saveName": "Nazwa",
   "ins.save": "Zapisz",
-  "ins.delete": "Usuń efekt"
+  "ins.delete": "Usuń efekt",
+  "holo.title": "Ekosystem HOLO",
+  "holo.here": "jesteś tutaj",
+  "holo.soon": "wkrótce",
+  "holo.voice": "Efekty głosu i dźwięku",
+  "holo.messenger": "Holograficzne wiadomości wideo",
+  "holo.viewer": "Hologramy w AR",
+  "holo.studio": "Obróbka hologramów"
 }

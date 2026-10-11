@@ -191,5 +191,12 @@
   "ins.saveHint": "Simpan pengaturan saat ini sebagai efek baru — efek akan muncul di “Efek saya”, di widget, dan di pintasan.",
   "ins.saveName": "Nama",
   "ins.save": "Simpan",
-  "ins.delete": "Hapus efek"
+  "ins.delete": "Hapus efek",
+  "holo.title": "Ekosistem HOLO",
+  "holo.here": "Anda di sini",
+  "holo.soon": "segera",
+  "holo.voice": "Efek suara dan audio",
+  "holo.messenger": "Pesan video holografik",
+  "holo.viewer": "Hologram di AR",
+  "holo.studio": "Pemrosesan hologram"
 }

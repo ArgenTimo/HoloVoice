@@ -191,5 +191,12 @@
   "ins.saveHint": "Geçerli ayarları yeni bir efekt olarak kaydedin — “Efektlerim”de, widget'ta ve kısayollarda görünür.",
   "ins.saveName": "Ad",
   "ins.save": "Kaydet",
-  "ins.delete": "Efekti sil"
+  "ins.delete": "Efekti sil",
+  "holo.title": "HOLO ekosistemi",
+  "holo.here": "buradasınız",
+  "holo.soon": "yakında",
+  "holo.voice": "Ses ve ses efektleri",
+  "holo.messenger": "Holografik video mesajları",
+  "holo.viewer": "AR'de hologramlar",
+  "holo.studio": "Hologram işleme"
 }

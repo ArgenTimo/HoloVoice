@@ -191,5 +191,12 @@
   "ins.saveHint": "현재 설정을 새 효과로 저장하세요 — “내 효과”, 위젯, 단축키에 나타납니다.",
   "ins.saveName": "이름",
   "ins.save": "저장",
-  "ins.delete": "효과 삭제"
+  "ins.delete": "효과 삭제",
+  "holo.title": "HOLO 생태계",
+  "holo.here": "현재 위치",
+  "holo.soon": "곧 출시",
+  "holo.voice": "목소리와 사운드 효과",
+  "holo.messenger": "홀로그램 영상 메시지",
+  "holo.viewer": "AR 홀로그램",
+  "holo.studio": "홀로그램 처리"
 }

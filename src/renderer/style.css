@@ -225,3 +225,22 @@ body.widget .brand { font-size: 12px; }
 .emoji-btn.sel { border-color: var(--accent); background: #251f45; }
 .name-input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; user-select: text; }
 .name-input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+
+/* ---------------------------------------------------------------- HOLO ecosystem menu */
+.brand-btn { -webkit-app-region: no-drag; background: none; border: 0; padding: 4px 8px; margin-left: -8px; border-radius: 8px; color: var(--text); font: inherit; font-weight: 700; }
+.brand-btn:hover { background: var(--panel); }
+.brand-btn .caret { color: var(--muted); font-size: 10px; }
+.holo-menu { position: fixed; top: 40px; left: 10px; z-index: 20; width: 320px; background: var(--bg2); border: 1px solid var(--line2);
+  border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 16px 40px #000a; }
+[dir=rtl] .holo-menu { left: auto; right: 10px; }
+.holo-head { padding: 6px 10px 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+.holo-item { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 8px 10px; border-radius: 8px; text-align: start; }
+.holo-item:not(:disabled):hover { background: var(--panel); }
+.holo-item:disabled { cursor: default; opacity: .75; }
+.holo-item.current { background: #251f45; }
+.holo-icon { font-size: 20px; width: 28px; text-align: center; }
+.holo-item > div { flex: 1; min-width: 0; }
+.holo-name { font-weight: 600; }
+.holo-desc { font-size: 11.5px; color: var(--muted); }
+.holo-badge { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+.holo-item.current .holo-badge { color: var(--accent-2); border-color: var(--accent); }

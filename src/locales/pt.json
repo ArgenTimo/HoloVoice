@@ -191,5 +191,12 @@
   "ins.saveHint": "Salve as configurações atuais como um novo efeito — ele aparece em “Meus efeitos”, no widget e nos atalhos.",
   "ins.saveName": "Nome",
   "ins.save": "Salvar",
-  "ins.delete": "Excluir efeito"
+  "ins.delete": "Excluir efeito",
+  "holo.title": "Ecossistema HOLO",
+  "holo.here": "você está aqui",
+  "holo.soon": "em breve",
+  "holo.voice": "Efeitos de voz e som",
+  "holo.messenger": "Mensagens de vídeo holográficas",
+  "holo.viewer": "Hologramas em RA",
+  "holo.studio": "Processamento de hologramas"
 }

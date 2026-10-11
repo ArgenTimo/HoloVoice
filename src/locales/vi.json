@@ -191,5 +191,12 @@
   "ins.saveHint": "Lưu cài đặt hiện tại thành hiệu ứng mới — nó sẽ xuất hiện trong “Hiệu ứng của tôi”, trong tiện ích và phím tắt.",
   "ins.saveName": "Tên",
   "ins.save": "Lưu",
-  "ins.delete": "Xóa hiệu ứng"
+  "ins.delete": "Xóa hiệu ứng",
+  "holo.title": "Hệ sinh thái HOLO",
+  "holo.here": "bạn đang ở đây",
+  "holo.soon": "sắp có",
+  "holo.voice": "Hiệu ứng giọng nói và âm thanh",
+  "holo.messenger": "Tin nhắn video ảnh ba chiều",
+  "holo.viewer": "Ảnh ba chiều trong AR",
+  "holo.studio": "Xử lý ảnh ba chiều"
 }

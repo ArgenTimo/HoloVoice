@@ -191,5 +191,12 @@
   "ins.saveHint": "把当前设置保存为新效果 — 它会出现在“我的效果”、小组件和快捷键中。",
   "ins.saveName": "名称",
   "ins.save": "保存",
-  "ins.delete": "删除效果"
+  "ins.delete": "删除效果",
+  "holo.title": "HOLO 生态",
+  "holo.here": "当前位置",
+  "holo.soon": "即将推出",
+  "holo.voice": "人声和声音效果",
+  "holo.messenger": "全息视频消息",
+  "holo.viewer": "AR 全息影像",
+  "holo.studio": "全息影像处理"
 }

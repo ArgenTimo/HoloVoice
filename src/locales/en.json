@@ -191,5 +191,12 @@
   "ins.saveHint": "Save the current settings as a new effect — it appears in “My effects”, in the widget and in hotkeys.",
   "ins.saveName": "Name",
   "ins.save": "Save",
-  "ins.delete": "Delete effect"
+  "ins.delete": "Delete effect",
+  "holo.title": "HOLO ecosystem",
+  "holo.here": "you are here",
+  "holo.soon": "soon",
+  "holo.voice": "Voice and sound effects",
+  "holo.messenger": "Holographic video messages",
+  "holo.viewer": "Holograms in AR",
+  "holo.studio": "Hologram processing"
 }

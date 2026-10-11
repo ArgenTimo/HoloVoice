@@ -191,5 +191,12 @@
   "ins.saveHint": "Speichere die aktuellen Einstellungen als neuen Effekt — er erscheint unter „Meine Effekte“, im Widget und bei den Tastenkürzeln.",
   "ins.saveName": "Name",
   "ins.save": "Speichern",
-  "ins.delete": "Effekt löschen"
+  "ins.delete": "Effekt löschen",
+  "holo.title": "HOLO-Ökosystem",
+  "holo.here": "du bist hier",
+  "holo.soon": "bald",
+  "holo.voice": "Stimm- und Soundeffekte",
+  "holo.messenger": "Holografische Videonachrichten",
+  "holo.viewer": "Hologramme in AR",
+  "holo.studio": "Hologramm-Verarbeitung"
 }

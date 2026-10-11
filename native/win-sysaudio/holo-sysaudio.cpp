@@ -3,14 +3,15 @@
 // Chromium's "loopbackWithMute" mutes the whole output endpoint, which also silences the
 // processed copy HoloVoice plays back. This helper does it per application instead:
 //   * captures everything Windows plays EXCEPT the HoloVoice process tree (process loopback),
-//   * mutes the other applications' audio sessions while it runs, so only the processed copy is heard,
+//   * turns the other applications' audio sessions down to -80 dB while it runs (and scales the capture
+//     back up), so only the processed copy is heard,
 //   * streams float32 stereo 48 kHz to stdout,
-//   * unmutes everything it muted when stdin closes (HoloVoice stopped or died).
-// Sessions it muted are also written to a state file, so a crashed run is undone by the next start
+//   * gives every session its volume back when stdin closes (HoloVoice stopped or died).
+// The original volumes are also written to a state file, so a crashed run is undone by the next start
 // (or by "--restore").
 //
-//   holo-sysaudio.exe <excludePid> [--no-mute]   capture
-//   holo-sysaudio.exe --restore                  only undo a previous run's mutes
+//   holo-sysaudio.exe <excludePid> [--rate 48000] [--atten 0.0001] [--no-mute]   capture
+//   holo-sysaudio.exe --restore                  only undo what a previous run left
 //   holo-sysaudio.exe --probe-endpoint <ms>      (tests) RMS of what the default output actually plays
 //
 // Diagnostics go to stderr as single lines.
@@ -42,7 +43,7 @@
 
 using Microsoft::WRL::ComPtr;
 
-static const GUID kMuteContext = { 0x6f1c2a77, 0x3d2b, 0x4c55, { 0x9a, 0x1e, 0x48, 0x6f, 0x6c, 0x6f, 0x56, 0x63 } };
+static const GUID kHoloContext = { 0x6f1c2a77, 0x3d2b, 0x4c55, { 0x9a, 0x1e, 0x48, 0x6f, 0x6c, 0x6f, 0x56, 0x63 } };
 static std::atomic<bool> g_running{ true };
 
 static void logf(const char* fmt, ...) {
@@ -79,7 +80,13 @@ static std::set<DWORD> processTree(DWORD root) {
   return tree;
 }
 
-// ------------------------------------------------------------------ session muting
+// ------------------------------------------------------------------ session attenuation
+//
+// A muted session is also missing from process loopback, so the other apps are not muted but turned
+// down by a fixed factor (-80 dB: inaudible) and the capture is scaled back up. The engine mixes in
+// float, so nothing is lost. Every session gets the same factor, so the mix keeps its balance.
+
+static float g_atten = 0.0001f;
 
 static std::wstring stateFile() {
   wchar_t* dir = nullptr;
@@ -87,20 +94,24 @@ static std::wstring stateFile() {
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &dir))) p = std::wstring(dir) + L"\\HoloVoice";
   CoTaskMemFree(dir);
   CreateDirectoryW(p.c_str(), nullptr);
-  return p + L"\\muted-sessions.txt";
+  return p + L"\\attenuated-sessions.txt";
 }
 
-static std::set<std::wstring> readState() {
-  std::set<std::wstring> ids;
+// session identifier -> the volume it had before we turned it down
+static std::map<std::wstring, float> readState() {
+  std::map<std::wstring, float> st;
   std::wifstream f(stateFile());
-  for (std::wstring line; std::getline(f, line);) if (!line.empty()) ids.insert(line);
-  return ids;
+  for (std::wstring line; std::getline(f, line);) {
+    size_t tab = line.rfind(L'\t');
+    if (tab != std::wstring::npos) st[line.substr(0, tab)] = (float)_wtof(line.c_str() + tab + 1);
+  }
+  return st;
 }
 
-static void writeState(const std::set<std::wstring>& ids) {
-  if (ids.empty()) { DeleteFileW(stateFile().c_str()); return; }
+static void writeState(const std::map<std::wstring, float>& st) {
+  if (st.empty()) { DeleteFileW(stateFile().c_str()); return; }
   std::wofstream f(stateFile(), std::ios::trunc);
-  for (auto& id : ids) f << id << L"\n";
+  for (auto& kv : st) f << kv.first << L"\t" << kv.second << L"\n";
 }
 
 struct Session {
@@ -109,6 +120,8 @@ struct Session {
   DWORD pid = 0;
   std::wstring id;       // stable across runs (app + device)
   std::wstring instance; // unique to this session
+  float original = 1.f;
+  float set = 1.f;       // what we put there
 };
 
 static std::vector<Session> allSessions() {
@@ -138,67 +151,86 @@ static std::vector<Session> allSessions() {
   return out;
 }
 
-// Undo mutes left by an earlier run (only sessions that are still muted).
+// Undo what an earlier run left (it crashed or was killed): sessions still at our level get their volume back.
 static void restoreState() {
-  auto ids = readState();
-  if (ids.empty()) return;
-  std::set<std::wstring> left = ids;
+  auto st = readState();
+  if (st.empty()) return;
+  auto left = st;
   for (auto& s : allSessions()) {
-    if (!ids.count(s.id)) continue;
-    BOOL m = FALSE; s.vol->GetMute(&m);
-    if (m) s.vol->SetMute(FALSE, &kMuteContext);
+    auto it = st.find(s.id);
+    if (it == st.end()) continue;
+    float v = 1.f; s.vol->GetMasterVolume(&v);
+    if (v <= it->second * g_atten * 1.5f + 1e-6f) s.vol->SetMasterVolume(it->second, &kHoloContext);
     left.erase(s.id);
     logf("restored pid=%lu", s.pid);
   }
-  writeState(left); // apps that aren't running now get unmuted next time
+  writeState(left); // apps that aren't running now are restored next time
 }
 
-class Muter {
+class Attenuator {
 public:
-  Muter(DWORD excludeRoot) : root_(excludeRoot) {}
-  // Mute every session outside our tree that we haven't seen yet. A session the user
-  // unmutes by hand stays unmuted (it's already "seen").
-  void poll() {
+  Attenuator(DWORD excludeRoot) : root_(excludeRoot) {}
+  // New sessions outside our tree: remember their volume, turn them down. Cheap, every ~500 ms.
+  void scan() {
     auto tree = processTree(root_);
     tree.insert(GetCurrentProcessId());
     bool changed = false;
     for (auto& s : allSessions()) {
       std::wstring key = s.instance.empty() ? s.id : s.instance;
       if (key.empty() || seen_.count(key)) continue;
-      if (s.pid && tree.count(s.pid)) continue; // our own output (pid may appear later in the tree: don't mark seen)
+      if (s.pid && tree.count(s.pid)) continue; // our own output (a new child may join the tree later: don't mark seen)
       seen_.insert(key);
-      BOOL m = FALSE;
-      if (FAILED(s.vol->GetMute(&m)) || m) continue; // already muted by the user: leave it alone
-      if (SUCCEEDED(s.vol->SetMute(TRUE, &kMuteContext))) {
-        muted_.push_back(s);
-        ids_.insert(s.id);
+      if (FAILED(s.vol->GetMasterVolume(&s.original))) continue;
+      s.set = s.original * g_atten;
+      if (SUCCEEDED(s.vol->SetMasterVolume(s.set, &kHoloContext))) {
+        state_[s.id] = s.original;
+        ours_.push_back(s);
         changed = true;
-        logf("muted pid=%lu", s.pid);
+        float back = 0.f; s.vol->GetMasterVolume(&back);
+        logf("attenuated pid=%lu volume=%.3f now=%.7f", s.pid, s.original, back);
       }
     }
-    if (changed) writeState(ids_);
+    if (changed) writeState(merged());
+  }
+  // The app (or the user in the mixer) changed its volume: take it as the new level and turn it down again.
+  // Every ~100 ms, so a loud leak stays short.
+  void watch() {
+    for (auto& s : ours_) {
+      float v = 0.f;
+      // only a clear rise counts: the stored value may come back slightly rounded
+      if (FAILED(s.vol->GetMasterVolume(&v)) || v <= s.set * 2.f + 1e-6f) continue;
+      s.original = v;
+      s.set = v * g_atten;
+      s.vol->SetMasterVolume(s.set, &kHoloContext);
+      state_[s.id] = v;
+      writeState(merged());
+    }
   }
   void restore() {
-    for (auto& s : muted_) {
-      BOOL m = FALSE;
-      if (SUCCEEDED(s.vol->GetMute(&m)) && m) s.vol->SetMute(FALSE, &kMuteContext);
-      logf("unmuted pid=%lu", s.pid);
+    for (auto& s : ours_) {
+      float v = 0.f;
+      if (SUCCEEDED(s.vol->GetMasterVolume(&v)) && v <= s.set * 2.f + 1e-6f) s.vol->SetMasterVolume(s.original, &kHoloContext);
+      logf("restored pid=%lu", s.pid);
     }
-    muted_.clear();
-    // keep entries of sessions whose app is gone: Windows remembers the mute for the app
+    // keep apps that already closed: Windows remembers their volume, the next run restores them
     std::set<std::wstring> live;
     for (auto& s : allSessions()) live.insert(s.id);
-    std::set<std::wstring> left;
-    for (auto& id : ids_) if (!live.count(id)) left.insert(id);
-    auto old = readState();
-    for (auto& id : old) if (!ids_.count(id)) left.insert(id);
+    auto left = readState();
+    for (auto& s : ours_) if (live.count(s.id)) left.erase(s.id);
     writeState(left);
-    ids_.clear();
+    ours_.clear();
+    state_.clear();
   }
 private:
+  std::map<std::wstring, float> merged() {
+    auto st = readState();
+    for (auto& kv : state_) st[kv.first] = kv.second;
+    return st;
+  }
   DWORD root_;
-  std::set<std::wstring> seen_, ids_;
-  std::vector<Session> muted_;
+  std::set<std::wstring> seen_;
+  std::map<std::wstring, float> state_;
+  std::vector<Session> ours_;
 };
 
 // ------------------------------------------------------------------ process loopback
@@ -240,11 +272,13 @@ static HRESULT activateLoopback(DWORD pid, ComPtr<IAudioClient>& client) {
   return S_OK;
 }
 
+static DWORD g_rate = 48000;
+
 static WAVEFORMATEX format(bool asFloat) {
   WAVEFORMATEX wf = {};
   wf.wFormatTag = asFloat ? WAVE_FORMAT_IEEE_FLOAT : WAVE_FORMAT_PCM;
   wf.nChannels = 2;
-  wf.nSamplesPerSec = 48000;
+  wf.nSamplesPerSec = g_rate;
   wf.wBitsPerSample = asFloat ? 32 : 16;
   wf.nBlockAlign = wf.nChannels * wf.wBitsPerSample / 8;
   wf.nAvgBytesPerSec = wf.nSamplesPerSec * wf.nBlockAlign;
@@ -284,13 +318,14 @@ static int capture(DWORD pid, bool mute) {
   if (FAILED(hr = client->SetEventHandle(ev)) || FAILED(hr = client->GetService(IID_PPV_ARGS(&cap)))) {
     logf("error service 0x%08lx", hr); return 2;
   }
-  Muter muter(pid);
-  if (mute) muter.poll();
-  if (FAILED(hr = client->Start())) { logf("error start 0x%08lx", hr); muter.restore(); return 2; }
-  logf("ready rate=48000 channels=2 format=%s", asFloat ? "f32" : "s16");
+  Attenuator att(pid);
+  if (mute) att.scan();
+  if (FAILED(hr = client->Start())) { logf("error start 0x%08lx", hr); att.restore(); return 2; }
+  logf("ready rate=%lu channels=2 format=%s", g_rate, asFloat ? "f32" : "s16");
 
   std::vector<float> out;
-  ULONGLONG lastPoll = GetTickCount64();
+  const float gain = mute ? 1.f / g_atten : 1.f;
+  ULONGLONG lastScan = GetTickCount64(), lastWatch = lastScan;
   while (g_running) {
     WaitForSingleObject(ev, 50);
     UINT32 packet = 0;
@@ -299,16 +334,18 @@ static int capture(DWORD pid, bool mute) {
       if (FAILED(cap->GetBuffer(&data, &frames, &fl, nullptr, nullptr))) break;
       out.assign(size_t(frames) * 2, 0.f);
       if (!(fl & AUDCLNT_BUFFERFLAGS_SILENT)) {
-        if (asFloat) memcpy(out.data(), data, out.size() * sizeof(float));
-        else { auto s = reinterpret_cast<const int16_t*>(data); for (size_t i = 0; i < out.size(); i++) out[i] = s[i] / 32768.f; }
+        if (asFloat) { auto f = reinterpret_cast<const float*>(data); for (size_t i = 0; i < out.size(); i++) out[i] = f[i] * gain; }
+        else { auto s = reinterpret_cast<const int16_t*>(data); for (size_t i = 0; i < out.size(); i++) out[i] = s[i] * (gain / 32768.f); }
       }
       cap->ReleaseBuffer(frames);
       if (fwrite(out.data(), sizeof(float), out.size(), stdout) != out.size() || fflush(stdout)) g_running = false;
     }
-    if (mute && GetTickCount64() - lastPoll > 500) { muter.poll(); lastPoll = GetTickCount64(); }
+    ULONGLONG now = GetTickCount64();
+    if (mute && now - lastWatch >= 100) { att.watch(); lastWatch = now; }
+    if (mute && now - lastScan >= 500) { att.scan(); lastScan = now; }
   }
   client->Stop();
-  muter.restore();
+  att.restore();
   CloseHandle(ev);
   logf("stopped");
   return 0;
@@ -358,9 +395,16 @@ int wmain(int argc, wchar_t** argv) {
   SetConsoleCtrlHandler(onCtrl, TRUE);
   if (argc >= 2 && !wcscmp(argv[1], L"--restore")) { restoreState(); return 0; }
   if (argc >= 3 && !wcscmp(argv[1], L"--probe-endpoint")) return probeEndpoint(_wtoi(argv[2]));
-  if (argc < 2) { logf("usage: holo-sysaudio <excludePid> [--no-mute] | --restore"); return 1; }
+  if (argc < 2) { logf("usage: holo-sysaudio <excludePid> [--rate N] [--no-mute] | --restore"); return 1; }
   DWORD pid = wcstoul(argv[1], nullptr, 10);
-  bool mute = !(argc >= 3 && !wcscmp(argv[2], L"--no-mute"));
+  bool mute = true;
+  for (int i = 2; i < argc; i++) {
+    if (!wcscmp(argv[i], L"--no-mute")) mute = false;
+    else if (!wcscmp(argv[i], L"--rate") && i + 1 < argc) g_rate = wcstoul(argv[++i], nullptr, 10);
+    else if (!wcscmp(argv[i], L"--atten") && i + 1 < argc) g_atten = (float)_wtof(argv[++i]);
+  }
+  if (g_rate < 8000 || g_rate > 192000) g_rate = 48000;
+  if (!(g_atten > 0.f && g_atten <= 1.f)) g_atten = 0.0001f;
   restoreState();
   CreateThread(nullptr, 0, stdinWatch, nullptr, 0, nullptr);
   int rc = capture(pid, mute);

@@ -62,6 +62,13 @@ for cycle in (1, 2, 3):
     time.sleep(4)
     st = ev(STATUS) or {}
     print('feed stats:', ev("new Promise((r) => { const p = __hv.lanes.sys.feed.port; p.onmessage = (e) => r(e.data); p.postMessage({ stats: 1 }) })"), flush=True)
+    # the lane's own output, recorded inside the graph: gaps here are ours, gaps only at the device are render underruns
+    inner = ev('''new Promise((res) => { const l = __hv.lanes.sys; const n = new AudioWorkletNode(l.ctx, 'holo-tap');
+      l.limiter.connect(n); n.port.onmessage = (e) => { l.limiter.disconnect(n); const x = e.data, B = Math.round(l.ctx.sampleRate / 100);
+        let all = 0; for (const v of x) all += v * v; const rms = Math.sqrt(all / x.length); let quiet = 0, blocks = 0;
+        for (let i = 0; i + B <= x.length; i += B) { let s = 0; for (let j = i; j < i + B; j++) s += x[j] * x[j]; blocks++; if (Math.sqrt(s / B) < rms * 0.1) quiet++ }
+        res({ rms, quiet, blocks, rate: l.ctx.sampleRate, base: l.ctx.baseLatency, out: l.ctx.outputLatency }) }; n.port.postMessage({ start: 2 }) })''')
+    print('  in-graph output:', inner, flush=True)
     heard = probe(3000)
     print('feed stats after:', ev("new Promise((r) => { const p = __hv.lanes.sys.feed.port; p.onmessage = (e) => r(e.data); p.postMessage({ stats: 1 }) })"), flush=True)
     if cycle == 1:

@@ -82,10 +82,8 @@ class Lane {
   private loaded = false
 
   constructor(readonly id: LaneId) {
-    // buffer: in "quality" 25 ms — headroom against clicks when the system is loaded; in "fast" — minimal (for games).
-    // Windows computer sound: a playback-size buffer — on Windows the 25 ms one dropped out under load, and video doesn't need low latency
-    const hint: AudioContextLatencyCategory | number = id === 'sys' && isWin ? 'playback' : S.lanes[id].quality === 'fast' ? 'interactive' : 0.025
-    const c = (this.ctx = new AudioContext({ latencyHint: hint }) as SinkCtx)
+    // buffer: in "quality" 25 ms — headroom against clicks when the system is loaded; in "fast" — minimal (for games)
+    const c = (this.ctx = new AudioContext({ latencyHint: S.lanes[id].quality === 'fast' ? 'interactive' : 0.025 }) as SinkCtx)
     this.inGain = c.createGain()
     this.gate = c.createGain()
     this.outGain = c.createGain()

@@ -2,7 +2,7 @@
   "name": "holovoice",
   "productName": "HoloVoice",
   "version": "1.0.0",
-  "description": "Эффекты на голос в реальном времени — виртуальный микрофон для Discord, Telegram, Zoom",
+  "description": "Real-time voice and computer-sound effects — a virtual microphone for Discord, Telegram, Zoom and games",
   "main": "src/main.js",
   "author": "skotwind",
   "license": "MIT",

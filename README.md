@@ -1,74 +1,140 @@
 # HoloVoice
 
-Эффекты в реальном времени на две дорожки, у каждой свой эффект:
-- **🎙️ Мой голос** → виртуальный микрофон для Discord / Telegram / Zoom / игр;
-- **🔊 Звук компьютера** → ролики, собеседник в звонке — всё, что играет в колонки.
+Real-time voice and sound effects for Windows and Linux, part of the HOLO family.
 
-Эффекты (19): чистый, мужской, женский, детский, автотюн, великан, бурундук, шёпот, демон, призрак, робот,
-хрипотца, голограмма, тёплая, лёд, провод, VHS, рация, пещера. Все — пресеты одной цепочки (`src/renderer/dsp/rig.ts`):
-- **PSOLA** (`dsp/psola.ts`) для смены голоса: голос нарезается по периодам основного тона и пересобирается
-  с новым шагом — форманты сохраняются сами, без «металла»; тембр — пересэмплированием зёрен; глухие звуки
-  (с, ш) по высоте не сдвигаются. Включена у мужского, женского, детского, автотюна, великана, бурундука,
-  демона, хрипотцы, робота (переключатель «Естественная обработка»);
-- фазовый вокодер в AudioWorklet (`dsp/pv.ts`) с фиксацией фаз — для шёпота, шумоподавления и эффектов;
-- слежение за тоном голоса (`dsp/pitch.ts`, YIN): мужской / женский / детский **подстраиваются под говорящего**
-  (целевая высота ~105 / 215 / 290 Гц, форманты следом — +18 % при смене мужского на женский), автотюн к нотам, монотонный робот на заданной ноте;
-- улучшение голоса: компрессия, де-эссер, теплота, чистота, разборчивость, воздух, блеск, объём (дублер);
-- окраска и пространство: перегруз, огрубление, кольцевая модуляция, эквалайзер, плавание плёнки, хорус,
-  тремоло, эхо, реверберация, шум.
+Two independent lanes, each with its own effect:
 
-У каждого эффекта свои главные ручки + «Все параметры» (35), **нарастание** и **затухание** (0–10 с): голос плавно
-перетекает от обычного к эффекту и между эффектами. Громкость всех эффектов выровнена. «Сила» — доля пути от
-обычного звука к эффекту. «Обработка»: качество (~40 мс) или быстро (~20 мс — для игр).
-**Проверить на записи**: записать 6 с своего голоса и слушать их через эффект, двигая ручки.
-**Свои эффекты**: настроенный эффект сохраняется под своим именем и значком — он появляется в «Мои эффекты»,
-в виджете и в горячих клавишах.
+- **My voice** → a virtual microphone for Discord, Telegram, Zoom, OBS and games;
+- **Computer sound** → everything you hear (videos, the other person in a call) — only you hear the result.
 
-Окно: слева дорожки (вкл/выкл, уровни, тон голоса, сила, громкость, шумодав), по центру каталог эффектов,
-справа настройки эффекта; ▭ — компактный режим (только дорожки).
-Начало — эффекты holo-messenger (`src/client/audio/voice-fx.ts`).
-Перехват звука на Linux — механизм re-traductor (`src/routing-linux.js`: временные модули pipewire-pulse,
-файл состояния, откат при выходе, сторож на случай падения).
+Voices and atmospheres — male, female, child, demon growl, divine, old TTS robot, whisper, giant, chipmunk,
+hologram, radio, cave… — plus your own saved effects, smooth fade-in/out between them, global hotkeys (with
+double/triple press, hold-to-talk and mouse side buttons), a desktop widget and an on-screen overlay.
+Everything runs locally; no audio leaves your computer.
 
-## Языки
-Интерфейс на 23 языках: English, 中文, हिन्दी, Español, Français, العربية, বাংলা, Português, Русский, اردو,
-Bahasa Indonesia, Deutsch, 日本語, मराठी, తెలుగు, Türkçe, தமிழ், Tiếng Việt, 한국어, Italiano, Українська,
-Беларуская, Polski — кнопка с флагом в заголовке окна (по умолчанию — язык системы; арабский и урду — справа
-налево). Словари — `src/locales/*.json`; флаги — свои SVG (`src/renderer/i18n.ts`).
+**Русский:** [кратко по-русски](#по-русски) ниже.
 
-## Как пользоваться
-- Linux: в программе звонка выбрать микрофон **HoloVoice-Microphone**.
-- Windows: поставить бесплатный [VB-Audio Virtual Cable](https://vb-audio.com/Cable/), перезапустить HoloVoice,
-  в программе звонка выбрать микрофон **CABLE Output**. «Звук компьютера» на Windows — экспериментально.
-- Горячие клавиши работают в любой программе и в играх (настраиваются в панели → «⌨️ Горячие клавиши»):
+## Download
 
-  | | Мой голос | Звук компьютера |
-  |---|---|---|
-  | вкл / выкл | `Ctrl+Alt+V` | `Ctrl+Alt+B` |
-  | следующий / предыдущий эффект | `Ctrl+Alt+=` / `Ctrl+Alt+-` | `Ctrl+Shift+F12` / `F11` |
-  | мужской, женский, детский, демон, призрак, робот, голограмма, тёплая, хрипотца | `Ctrl+Alt+1…9` | `Ctrl+Shift+F1…F9` |
-  | чистый | `Ctrl+Alt+0` | `Ctrl+Shift+F10` |
+- **Windows:** [HoloVoice-Setup.exe](https://github.com/ArgenTimo/HoloVoice/releases/latest/download/HoloVoice-Setup.exe)
+- **Linux:** the `.AppImage` from the [latest release](https://github.com/ArgenTimo/HoloVoice/releases/latest),
+  or install from source (below).
 
-  Повторное нажатие сочетания включённого эффекта выключает его. При переключении на секунду
-  появляется подсказка поверх экрана, а если у эффекта задано нарастание/затухание — полоса, которая
-  заполняется за это время и исчезает на пике (включается и ставится в нужный угол в панели → «🖥️ Подсказка
-  на экране»). Не забирает фокус и не ловит мышь. На Linux горячие клавиши работают в X11, не в Wayland.
-  Над играми в монопольном полноэкранном режиме (и над полноэкранным окном в фокусе в GNOME) подсказку
-  система не показывает — переключение при этом работает; в оконном режиме без рамки она видна.
-- 🧩 — виджет рабочего стола (выбор эффектов + вкл/выкл); закреплённый виджет запускается вместе с системой.
-- ✕: если что-то включено или есть виджет — приложение уходит в трей и продолжает работать; иначе закрывается.
+The app checks for updates by itself and shows **Update to X** when a new version is out.
 
-## Устройство
-`src/main.js` — окна и маршрутизация; `engine` — скрытое окно со всем звуком (`src/renderer/engine.ts`);
-панель (`panel.ts`) и виджет (`widget.ts`) — только пульты.
+### Windows
 
-## Разработка и сборка
-```bash
-npm install
-npm start                    # запуск из исходников
-./scripts/install-linux.sh   # ярлык в меню из этой папки (кнопка «Обновить» = git pull из master)
-npm run dist                 # release/: HoloVoice-Setup-<v>.exe (Windows, через wine) и AppImage
+1. Run the installer. It isn't code-signed yet, so Windows SmartScreen may say *“Windows protected your PC”* —
+   click **More info → Run anyway**. Browsers may say the file is *not commonly downloaded* — choose **Keep**.
+2. HoloVoice opens a **setup guide**. To send your voice to other apps, Windows needs the free
+   [VB-Audio Virtual Cable](https://vb-audio.com/Cable/): unpack it, right-click `VBCABLE_Setup_x64.exe` →
+   **Run as administrator** → **Install Driver**, restart if asked. HoloVoice picks the cable up by itself.
+3. In Discord / Telegram / Zoom / the game choose the microphone **CABLE Output**, and turn off the app's own
+   noise suppression (Krisp) and echo cancellation — they fight the effects.
+
+Antivirus note: hotkeys with mouse buttons, double press or hold use a low-level keyboard/mouse hook, and the
+computer-sound lane uses a small helper (`holo-sysaudio.exe`) that turns other apps down while it captures them.
+Both are expected; neither sends anything anywhere.
+
+### Linux
+
+**AppImage:** `chmod +x HoloVoice-*.AppImage` and run it. On Ubuntu 22.04+ install FUSE 2 first:
+`sudo apt install libfuse2t64` (or `libfuse2` on 22.04).
+
+**From source** (Node.js 20+): `git clone https://github.com/ArgenTimo/HoloVoice && cd HoloVoice && sh scripts/install-linux.sh`
+— adds HoloVoice to the applications menu and a `holovoice` command. **Update** in the app then pulls and rebuilds.
+
+Needs PipeWire (with `pipewire-pulse`) or PulseAudio and the `pactl` tool. In your call app choose the
+microphone **HoloVoice-Microphone**.
+
+## Using it
+
+- Turn a lane on with its switch, pick an effect in the catalog (☆ marks favorites), tune it on the right.
+  **Test on a recording** records 6 s of your voice and plays it through the effect while you move the knobs.
+- **Hear myself** (in the My voice card) plays your processed voice in your headphones.
+  HoloVoice never sends your voice to the speakers by itself — on a laptop that would howl.
+- **Your voice: low / medium / high** — effects with a fixed shift (demon, giant, chipmunk…) adjust to it.
+  The setup guide suggests it from your pitch.
+- **Save as my effect** keeps the current settings under your own name and icon.
+- ▭ compact mode, 🧩 desktop widget (starts with the system while pinned), tray menu with on/off and effects.
+- The **HoloVoice** menu (top left) has the setup guide, hotkeys, overlay, updates, logs and diagnostics.
+
+### Hotkeys
+
+They work in any program and in games; each can be a key combination or a middle/side mouse button, pressed
+once, twice, three times, or **held** (the effect is on while you hold it). Defaults:
+
+| | Windows | Linux |
+|---|---|---|
+| My voice on/off | `Alt+Shift+V` | `Ctrl+Alt+V` |
+| next / previous effect | `Alt+Shift+=` / `Alt+Shift+-` | `Ctrl+Alt+=` / `Ctrl+Alt+-` |
+| clean, male, female, child, demon, ghost, robot, hologram, warm, smolder | `Alt+Shift+0…9` | `Ctrl+Alt+0…9` |
+| Computer sound on/off | `Alt+Shift+B` | `Ctrl+Alt+B` |
+| its effects / next / previous | `Ctrl+Shift+F1…F10` / `F12` / `F11` | same |
+
+(On Windows `Ctrl+Alt` is AltGr, so it isn't used.) With two or more favorites, next/previous walk through them.
+
+**Wayland** doesn't let apps catch global keys. Bind system shortcuts to commands instead:
+`holovoice --toggle mic`, `holovoice --effect mic:demon`, `holovoice --next mic` (also `sys`).
+
+### Neural voices (optional, NVIDIA GPU)
+
+“Female (neural)” and “Male (neural)” use a voice-conversion model (Seed-VC) instead of pitch tricks: much more
+natural, ~0.4 s delay. They appear only after installing the add-on: `sh native/neural-vc/install.sh` (Linux;
+~10 GB with CUDA). Seed-VC is GPL-3.0 and runs as a separate process. Until it's ready the regular voices play.
+
+## Troubleshooting
+
+- **Discord doesn't hear me** — pick the right microphone there (**CABLE Output** / **HoloVoice-Microphone**);
+  the My voice card says where your voice goes.
+- **Microphone blocked** (Windows) — Settings → Privacy → Microphone → allow desktop apps (the hint has a link).
+- **Other apps stayed quiet after a crash** (Windows, computer-sound lane) — start HoloVoice again: it restores
+  their volume (and keeps doing so for 2 minutes as apps start). The uninstaller restores them too.
+- **Logs:** HoloVoice menu → *Open the logs folder*, or *Copy diagnostics* and paste it into a bug report.
+  Locations: `%APPDATA%\HoloVoice\logs` (Windows), `~/.config/HoloVoice/logs` (Linux).
+
+## Privacy
+
+Audio is processed only on your computer. The only network access is the update check against GitHub Releases
+(and links you click). Crash dumps stay local.
+
+## Uninstall
+
+- **Windows:** Apps & features → HoloVoice. Settings remain in `%APPDATA%\HoloVoice` — delete it if you like.
+- **Linux:** delete the AppImage or the source folder, `~/.local/share/applications/holovoice.desktop`,
+  `~/.local/bin/holovoice`, `~/.config/autostart/holovoice.desktop` and `~/.config/HoloVoice`.
+  The virtual devices exist only while HoloVoice runs.
+
+## Development
+
 ```
-Репозиторий: https://github.com/ArgenTimo/HoloVoice. Пуш в `main` → `.github/workflows/release.yml` собирает
-Windows-установщик и AppImage в GitHub Releases (версия `1.0.<номер запуска>`); кнопка «Обновить» в установленной
-версии скачивает и ставит их (electron-updater), в git-папке — делает `git pull` и пересборку.
+npm ci
+npm run build:renderer   # esbuild: src/renderer/*.ts → dist/
+npm run typecheck
+npx electron . --no-sandbox
+```
+
+- `src/main.js` — windows, tray, hotkeys (`hotkeys.js`), routing (`routing-linux.js`, `sysaudio-win.js`),
+  updates (`updater.js`), logs (`log.js`), neural sidecar (`neural-vc.js`).
+- `src/renderer/engine.ts` — the audio engine in a hidden window; `dsp/` — AudioWorklet DSP (phase vocoder,
+  PSOLA, pitch tracking, growl, halo…), `rig.ts` — the Web Audio chain; `effects.ts` — parameters and presets.
+- `src/renderer/panel.ts`, `widget.ts`, `osd.ts` — the UI; `src/locales/*.json` — 23 languages.
+- `native/win-sysaudio` — the Windows computer-sound helper (C++), tested in CI on a runner with a virtual sound
+  card, including the app end to end; `native/neural-vc` — the neural voice sidecar.
+- Every push to `main` builds the Windows installer and the AppImage and publishes a release once both succeed.
+
+## По-русски
+
+HoloVoice — эффекты для голоса и звука компьютера в реальном времени (Windows, Linux).
+
+- **Windows:** скачайте [HoloVoice-Setup.exe](https://github.com/ArgenTimo/HoloVoice/releases/latest/download/HoloVoice-Setup.exe).
+  Если появится «Windows защитила ваш компьютер» — **Подробнее → Выполнить в любом случае**. Мастер настройки
+  проведёт по шагам: поставьте бесплатный [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) (установщик —
+  от имени администратора), затем в Discord выберите микрофон **CABLE Output** и отключите там шумоподавление.
+- **Linux:** AppImage из [релизов](https://github.com/ArgenTimo/HoloVoice/releases/latest) (`chmod +x`, на Ubuntu
+  нужен `libfuse2t64`) или `sh scripts/install-linux.sh` из исходников. В программе звонка — микрофон
+  **HoloVoice-Microphone**.
+- Голос сам никогда не уходит в колонки; чтобы послушать себя — «Слышать себя» в наушниках.
+- Горячие клавиши, избранное, свои эффекты, виджет, оверлей, нейросетевые голоса (видеокарта NVIDIA) —
+  описаны выше; интерфейс на 23 языках, выбирается флагом в заголовке.
+- Проблемы: меню HoloVoice → «Скопировать диагностику» и пришлите текст.

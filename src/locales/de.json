@@ -4,6 +4,7 @@
   "lane.sys": "Computer-Sound",
   "grp.voices": "Stimmen",
   "grp.characters": "Figuren",
+  "grp.neural": "Neuronale Stimmen",
   "grp.atmo": "Atmosphäre",
   "win.widget": "Desktop-Widget: Effekte wählen und ein-/ausschalten, bleibt nach Neustart",
   "win.compact": "Kompakt / vollständig",
@@ -127,6 +128,8 @@
   "fx.clean": "Klar",
   "fx.male": "Männlich",
   "fx.female": "Weiblich",
+  "fx.neural_female": "Weiblich (neuronal)",
+  "fx.neural_male": "Männlich (neuronal)",
   "fx.child": "Kind",
   "fx.autotune": "Autotune",
   "fx.giant": "Riese",
@@ -220,5 +223,10 @@
   "holo.voice": "Stimm- und Soundeffekte",
   "holo.messenger": "Holografische Videonachrichten",
   "holo.viewer": "Hologramme in AR",
-  "holo.studio": "Hologramm-Verarbeitung"
+  "holo.studio": "Hologramm-Verarbeitung",
+  "neural.loading": "Stimmmodell wird auf die Grafikkarte geladen…",
+  "neural.ready": "Neuronale Stimme auf <b>{gpu}</b>, Verzögerung ≈ {ms} ms",
+  "neural.error": "Neuronale Stimme nicht verfügbar: {err}. Solange läuft die normale Stimme.",
+  "neural.off": "Startet, wenn der Effekt an ist.",
+  "neural.unavailable": "Neuronale Stimmen brauchen den installierten GPU-Modus (NVIDIA). Solange läuft die normale Stimme."
 }

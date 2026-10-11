@@ -4,6 +4,7 @@
   "lane.sys": "Som do computador",
   "grp.voices": "Vozes",
   "grp.characters": "Personagens",
+  "grp.neural": "Vozes neurais",
   "grp.atmo": "Atmosfera",
   "win.widget": "Widget na área de trabalho: escolher efeitos e ligá-los/desligá-los, permanece após reiniciar",
   "win.compact": "Compacto / completo",
@@ -127,6 +128,8 @@
   "fx.clean": "Limpa",
   "fx.male": "Masculina",
   "fx.female": "Feminina",
+  "fx.neural_female": "Feminina (neural)",
+  "fx.neural_male": "Masculina (neural)",
   "fx.child": "Infantil",
   "fx.autotune": "Autotune",
   "fx.giant": "Gigante",
@@ -220,5 +223,10 @@
   "holo.voice": "Efeitos de voz e som",
   "holo.messenger": "Mensagens de vídeo holográficas",
   "holo.viewer": "Hologramas em RA",
-  "holo.studio": "Processamento de hologramas"
+  "holo.studio": "Processamento de hologramas",
+  "neural.loading": "Carregando o modelo de voz na placa de vídeo…",
+  "neural.ready": "Voz neural em <b>{gpu}</b>, atraso ≈ {ms} ms",
+  "neural.error": "Voz neural indisponível: {err}. Enquanto isso, a voz normal funciona.",
+  "neural.off": "Inicia quando o efeito está ligado.",
+  "neural.unavailable": "Vozes neurais exigem o modo GPU instalado (NVIDIA). Enquanto isso, a voz normal funciona."
 }

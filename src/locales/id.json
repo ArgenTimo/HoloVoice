@@ -4,6 +4,7 @@
   "lane.sys": "Suara komputer",
   "grp.voices": "Suara",
   "grp.characters": "Karakter",
+  "grp.neural": "Suara neural",
   "grp.atmo": "Suasana",
   "win.widget": "Widget desktop: pilih efek dan nyalakan/matikan, tetap ada setelah dinyalakan ulang",
   "win.compact": "Ringkas / lengkap",
@@ -127,6 +128,8 @@
   "fx.clean": "Bersih",
   "fx.male": "Pria",
   "fx.female": "Wanita",
+  "fx.neural_female": "Wanita (neural)",
+  "fx.neural_male": "Pria (neural)",
   "fx.child": "Anak",
   "fx.autotune": "Autotune",
   "fx.giant": "Raksasa",
@@ -220,5 +223,10 @@
   "holo.voice": "Efek suara dan audio",
   "holo.messenger": "Pesan video holografik",
   "holo.viewer": "Hologram di AR",
-  "holo.studio": "Pemrosesan hologram"
+  "holo.studio": "Pemrosesan hologram",
+  "neural.loading": "Memuat model suara ke kartu grafis…",
+  "neural.ready": "Suara neural di <b>{gpu}</b>, jeda ≈ {ms} ms",
+  "neural.error": "Suara neural tidak tersedia: {err}. Sementara itu suara biasa berjalan.",
+  "neural.off": "Mulai saat efek aktif.",
+  "neural.unavailable": "Suara neural memerlukan mode GPU terpasang (NVIDIA). Sementara itu suara biasa berjalan."
 }

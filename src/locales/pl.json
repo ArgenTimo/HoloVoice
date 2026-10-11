@@ -4,6 +4,7 @@
   "lane.sys": "Dźwięk komputera",
   "grp.voices": "Głosy",
   "grp.characters": "Postacie",
+  "grp.neural": "Głosy neuronowe",
   "grp.atmo": "Atmosfera",
   "win.widget": "Widżet na pulpit: wybór efektów i wł./wył., zostaje po ponownym uruchomieniu",
   "win.compact": "Kompaktowo / pełny widok",
@@ -127,6 +128,8 @@
   "fx.clean": "Czysty",
   "fx.male": "Męski",
   "fx.female": "Kobiecy",
+  "fx.neural_female": "Kobiecy (sieć neuronowa)",
+  "fx.neural_male": "Męski (sieć neuronowa)",
   "fx.child": "Dziecięcy",
   "fx.autotune": "Autotune",
   "fx.giant": "Olbrzym",
@@ -220,5 +223,10 @@
   "holo.voice": "Efekty głosu i dźwięku",
   "holo.messenger": "Holograficzne wiadomości wideo",
   "holo.viewer": "Hologramy w AR",
-  "holo.studio": "Obróbka hologramów"
+  "holo.studio": "Obróbka hologramów",
+  "neural.loading": "Ładowanie modelu głosu na kartę graficzną…",
+  "neural.ready": "Głos neuronowy na <b>{gpu}</b>, opóźnienie ≈ {ms} ms",
+  "neural.error": "Głos neuronowy niedostępny: {err}. Na razie działa zwykły głos.",
+  "neural.off": "Uruchomi się, gdy efekt jest włączony.",
+  "neural.unavailable": "Głosy neuronowe wymagają zainstalowanego trybu GPU (NVIDIA). Na razie działa zwykły głos."
 }

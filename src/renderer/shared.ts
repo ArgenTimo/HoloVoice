@@ -19,6 +19,11 @@ export interface Settings {
   custom: CustomEffect[] // custom effects
 }
 export type Speaker = 'neutral' | 'male' | 'female'
+export interface NeuralCheck { ok: boolean; cuda?: boolean; gpu?: string; error?: string; voices: { id: string; path: string }[] }
+export interface NeuralEvent { event: 'loading' | 'ready' | 'stats' | 'error' | 'exit'; message?: string; latency_ms?: number; device?: string
+  block_ms?: number; p95_ms?: number; overruns?: number; code?: number }
+/** Neural voice mode as the engine sees it */
+export interface NeuralState { available: boolean; gpu: string; status: 'off' | 'loading' | 'ready' | 'error'; latencyMs: number; error: string }
 export interface Hint { html: string; warn: boolean }
 export interface Device { id: string; label: string }
 
@@ -29,6 +34,7 @@ export interface EngineState {
   hint: Record<LaneId, Hint>
   ready: boolean
   preview: Preview
+  neural: NeuralState
 }
 /** "Test with a recording": record your voice and play it back through the "My voice" lane effect */
 export interface Preview { recording: boolean; ready: boolean; playing: boolean; seconds: number
@@ -104,6 +110,13 @@ export interface HoloApi {
   onSysEnd(cb: (error: string) => void): void
   /** Linux: the real output changed while computer sound is captured */
   onRealSink(cb: (r: { realSinkLabel: string }) => void): void
+  // neural voices (optional GPU mode)
+  neuralCheck(force?: boolean): Promise<NeuralCheck>
+  neuralStart(voice: string, rate: number): Promise<{ ok: boolean; error?: string }>
+  neuralStop(): Promise<void>
+  neuralIn(buf: ArrayBuffer): void
+  onNeuralAudio(cb: (pcm: Uint8Array) => void): void
+  onNeuralStatus(cb: (s: NeuralEvent) => void): void
   pushState(s: EngineState): void
   pushLevels(l: Levels): void
   pushRamp(r: { lane: LaneId; seconds: number; dir: 'in' | 'out' }): void

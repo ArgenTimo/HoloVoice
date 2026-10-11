@@ -8,8 +8,8 @@
 // Each lane has its own AudioContext: they use different output devices.
 import { VoiceRig } from './dsp/rig'
 import { setLang, t } from './i18n'
-import { NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
-import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type Settings, type Speaker } from './shared'
+import { NEURAL_FALLBACK, NEUTRAL, allEffects, effectFull, effectInfo, effectTarget, forSystemSound, interpolate, isCustom, isNeural, setCustom, type BuiltinId, type EffectId, type FxParams } from './effects'
+import { holo, type Cmd, type EngineState, type Hint, type LaneId, type LaneSettings, type Preview, type RouteResult, type NeuralState, type Settings, type Speaker } from './shared'
 
 const isWin = holo.platform === 'win32'
 
@@ -44,11 +44,13 @@ const hint: Record<LaneId, Hint> = { mic: { html: '', warn: false }, sys: { html
 let mics: MediaDeviceInfo[] = []
 let outs: MediaDeviceInfo[] = []
 let ready = false
+/** Neural voices (optional GPU mode): availability from main, sidecar status */
+const neural: NeuralState = { available: false, gpu: '', status: 'off', latencyMs: 0, error: '' }
 
 function publish(): void {
   try { localStorage.setItem(KEY, JSON.stringify(S)) } catch { /* not critical */ }
   const dev = (d: MediaDeviceInfo) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? t('dev.default') : d.deviceId.slice(0, 8)) })
-  const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview }
+  const st: EngineState = { S, mics: mics.map(dev), outs: outs.map(dev), hint, ready, preview, neural }
   holo.pushState(st)
 }
 
@@ -76,6 +78,9 @@ class Lane {
   src: MediaStreamAudioSourceNode | null = null
   /** Windows computer sound: PCM pushed from holo-sysaudio */
   feed: AudioWorkletNode | null = null
+  /** neural voice: the mic goes out to the sidecar (nOut), the converted voice comes back (nIn) in place of the mic */
+  nOut: AudioWorkletNode | null = null
+  nIn: AudioWorkletNode | null = null
   rig: VoiceRig | null = null
   /** voice pitch from the vocoder: current and average, Hz */
   f0: [number, number] = [0, 0]
@@ -132,6 +137,28 @@ class Lane {
     this.feed.connect(this.inGain)
   }
 
+  /** Route the microphone through the neural voice sidecar (on) or straight into the chain (off) */
+  setNeural(on: boolean): void {
+    if (on === !!this.nIn || !this.loaded) return
+    if (on) {
+      const nOut = new AudioWorkletNode(this.ctx, 'holo-stream', { numberOfOutputs: 0 })
+      nOut.port.onmessage = (e: MessageEvent) => holo.neuralIn(e.data as ArrayBuffer)
+      // the sidecar answers in blocks (~180 ms): the buffer must hold more than one
+      const nIn = new AudioWorkletNode(this.ctx, 'holo-feed',
+        { numberOfInputs: 0, outputChannelCount: [1], processorOptions: { channels: 1, start: 0.25, max: 0.8 } })
+      this.hpIn.connect(nOut)
+      this.hpIn.disconnect(this.gate)
+      nIn.connect(this.gate)
+      this.nOut = nOut
+      this.nIn = nIn
+    } else {
+      if (this.nOut) { this.hpIn.disconnect(this.nOut); this.nOut.port.onmessage = null }
+      this.nIn?.disconnect()
+      this.nOut = this.nIn = null
+      this.hpIn.connect(this.gate)
+    }
+  }
+
   private async loadWorklet(): Promise<void> {
     if (this.loaded) return
     await this.ctx.audioWorklet.addModule(new URL('../../dist/dsp/worklet.js', location.href).href)
@@ -156,11 +183,17 @@ class Lane {
   target(): FxParams {
     const c = this.cfg
     if (!c.enabled) return NEUTRAL
-    if (this.id !== 'sys') return effectTarget(c.effect, c.fx[c.effect], c.amount / 100, S.speaker)
+    if (this.id !== 'sys') {
+      // a neural voice that isn't running (no GPU mode, still loading): its DSP counterpart meanwhile
+      const g = effectInfo(c.effect)?.neural
+      if (g && !this.nIn) { const fb = NEURAL_FALLBACK[g]; return effectTarget(fb, c.fx[fb], c.amount / 100, S.speaker) }
+      return effectTarget(c.effect, c.fx[c.effect], c.amount / 100, S.speaker)
+    }
     // computer sound: "Clean" means untouched (its preset is voice EQ/enhancement) plus only the user's own edits
-    const p = c.effect === 'clean'
+    const fx = effectInfo(c.effect)?.neural ? NEURAL_FALLBACK[effectInfo(c.effect)!.neural!] : c.effect // no neural on this lane
+    const p = fx === 'clean'
       ? interpolate(NEUTRAL, { ...NEUTRAL, ...(c.fx.clean?.p ?? {}) }, c.amount / 100)
-      : effectTarget(c.effect, c.fx[c.effect], c.amount / 100)
+      : effectTarget(fx, c.fx[fx], c.amount / 100)
     return forSystemSound(p)
   }
 
@@ -196,7 +229,8 @@ class Lane {
     setInterval(() => {
       const thr = this.cfg.gate
       let want = true
-      if (thr > -80) {
+      // neural voice: the converted voice comes ~0.4 s after the mic — the sidecar gates silence itself
+      if (thr > -80 && !this.nIn) {
         if (this.level('in', buf) > thr) lastLoud = performance.now()
         want = performance.now() - lastLoud < 250
       }
@@ -223,7 +257,9 @@ let pv: { ctx: SinkCtx; rig: VoiceRig; src: AudioBufferSourceNode | null } | nul
 /** The "My voice" lane effect — the selected one, even if the lane is off: that's the one they want to hear */
 function previewTarget(): FxParams {
   const c = S.lanes.mic
-  return effectTarget(c.effect, c.fx[c.effect], c.amount / 100, S.speaker)
+  const g = effectInfo(c.effect)?.neural
+  const fx = g ? NEURAL_FALLBACK[g] : c.effect // the recording test runs the DSP chain only
+  return effectTarget(fx, c.fx[fx], c.amount / 100, S.speaker)
 }
 function previewFollow(): void { pv?.rig.apply(previewTarget(), 0.05) }
 
@@ -456,6 +492,59 @@ holo.onRealSink(async ({ realSinkLabel }) => {
   if (pv) try { await pv.ctx.setSinkId?.(realOutId) } catch { /* default */ }
 })
 
+// ---------------------------------------------------------------- neural voices
+
+let neuralGender: 'female' | 'male' | null = null // the voice the sidecar runs (or is loading)
+let neuralStopTimer = 0
+
+/** Bring the sidecar in line with the "My voice" lane: started for a neural effect, stopped a while after leaving it */
+async function syncNeural(): Promise<void> {
+  const c = S.lanes.mic
+  const want = neural.available && c.enabled ? effectInfo(c.effect)?.neural ?? null : null
+  if (want) {
+    clearTimeout(neuralStopTimer)
+    if (want === neuralGender && neural.status !== 'error' && neural.status !== 'off') return
+    neuralGender = want
+    if (neural.status === 'off' || neural.status === 'error') { neural.status = 'loading'; neural.error = '' }
+    publish()
+    const r = await holo.neuralStart(want, lanes.mic.ctx.sampleRate)
+    if (!r.ok) { neural.status = 'error'; neural.error = r.error ?? ''; neuralGender = null; publish() }
+    return
+  }
+  lanes.mic.setNeural(false)
+  if (neural.status === 'off' || neuralStopTimer) return
+  // keep the model loaded for a minute: switching back is then instant
+  neuralStopTimer = window.setTimeout(() => {
+    neuralStopTimer = 0
+    if (effectInfo(S.lanes.mic.effect)?.neural && S.lanes.mic.enabled) return
+    holo.neuralStop()
+    neural.status = 'off'
+    neuralGender = null
+    publish()
+  }, 60000)
+}
+
+holo.onNeuralAudio((pcm) => {
+  const buf = pcm.slice().buffer
+  lanes.mic.nIn?.port.postMessage(buf, [buf])
+})
+holo.onNeuralStatus((e) => {
+  const lane = lanes.mic
+  if (e.event === 'loading') neural.status = 'loading'
+  else if (e.event === 'ready') {
+    neural.status = 'ready'
+    neural.latencyMs = e.latency_ms ?? 0
+    if (e.device) neural.gpu ||= e.device
+  } else if (e.event === 'error') { neural.status = 'error'; neural.error = e.message ?? '' }
+  else if (e.event === 'exit') {
+    if (neural.status !== 'error') neural.status = 'off'
+    neuralGender = null
+  } else return // stats
+  const on = neural.status === 'ready' && !!effectInfo(S.lanes.mic.effect)?.neural && S.lanes.mic.enabled
+  if (on !== !!lane.nIn) { lane.setNeural(on); lane.update(0.3) }
+  publish()
+})
+
 // ---------------------------------------------------------------- self-monitoring
 
 const monAudio = new Audio() as SinkEl
@@ -511,7 +600,7 @@ async function handle(c: Cmd): Promise<void> {
       const cfg = S.lanes[c.lane]
       if (c.action === 'toggle') return handle({ type: 'toggle', lane: c.lane })
       if (c.action === 'next' || c.action === 'prev') {
-        const list = allEffects()
+        const list = allEffects().filter((e) => !e.neural || (neural.available && c.lane === 'mic') || e.id === cfg.effect)
         const i = list.findIndex((e) => e.id === cfg.effect)
         const n = list.length
         const next = list[(i + (c.action === 'next' ? 1 : n - 1)) % n].id
@@ -606,7 +695,7 @@ async function handle(c: Cmd): Promise<void> {
 async function main(): Promise<void> {
   setLang((await holo.getUi()).lang)
   holo.onLang((code) => { setLang(code); updateMicHint(); updateSysHint(); publish() })
-  holo.onCmd((c) => { handle(c).catch((e) => console.error(e)) })
+  holo.onCmd((c) => { handle(c).then(() => syncNeural()).catch((e) => console.error(e)) })
   updateSysHint()
   // effect chains first: a missing or broken microphone must not take the computer-sound lane down with it
   await lanes.mic.makeRig()
@@ -632,6 +721,15 @@ async function main(): Promise<void> {
   if (micError) hint.mic = { warn: true, html: t('err.start', { err: esc(micError) }) }
   ready = true
   publish()
+  // neural voices: only with the optional GPU install (checking imports torch — a few seconds, in the background)
+  holo.neuralCheck().then((r) => {
+    const ids = r.voices.map((v) => v.id)
+    neural.available = r.ok && !!r.cuda && ids.some((v) => v.startsWith('female')) && ids.some((v) => v.startsWith('male'))
+    neural.gpu = r.gpu ?? ''
+    if (!neural.available) neural.error = r.error ?? ''
+    publish()
+    return syncNeural()
+  }).catch(() => {})
 
   navigator.mediaDevices.addEventListener('devicechange', () => { refreshDevices() })
   // devicechange doesn't fire in the hidden engine window — otherwise a connected headset goes unseen: re-check the list every 3 s

@@ -2,7 +2,7 @@
 // the effect catalog for the selected lane in the center, the selected effect's settings and "Test with a recording" on the right,
 // devices at the bottom. Hotkeys and the on-screen hint are in windows on top of the panel.
 // No audio is processed here (see engine.ts).
-import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
+import { PARAM, PARAMS, VOICE_ONLY, customs, effectFull, effectInfo, fxLabel, groupLabel, isCustom, isNeural, paramLabel, setCustom, type EffectId, type ParamDef, type ParamKey } from './effects'
 import { LANGS, applyStatic, flagSvg, lang, setLang, t } from './i18n'
 import { CUSTOM_ICONS, DEFAULT_CUSTOM_ICON, applyIcons, icon, iconEl } from './icons'
 import { $, holo, type EngineState, type HotkeyInfo, type LaneId, type Levels, type OsdPos, type Quality, type Speaker, type UiConfig } from './shared'
@@ -22,11 +22,16 @@ const BUILTIN_GROUPS: [string, EffectId[]][] = [
 /** Catalog groups: built-in + "My effects", if any */
 function groups(): [string, EffectId[]][] {
   const mine = customs().map((c) => c.id)
-  return mine.length ? [...BUILTIN_GROUPS, ['grp.custom', mine]] : BUILTIN_GROUPS
+  const out = [...BUILTIN_GROUPS]
+  // neural voices: only with the optional GPU mode installed, only for "My voice" (hidden on the other tab by CSS)
+  if (st?.neural?.available) out.splice(1, 0, ['grp.neural', ['neural_female', 'neural_male']])
+  if (mine.length) out.push(['grp.custom', mine])
+  return out
 }
+const esc = (x: string) => x.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 /** Signature of the custom effect set: when it changes, the catalog, lists and hotkeys are rebuilt */
 let customSig = ''
-const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|')
+const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|') + (st?.neural?.available ? '|neural' : '')
 const iconOf = (id: EffectId) => effectInfo(id)?.icon ?? DEFAULT_CUSTOM_ICON
 /** Icon + text in one element; text goes through textContent (custom effect names are user input) */
 const labeled = (cls: string, ico: string, text: string, size = 16) => {
@@ -78,7 +83,7 @@ function buildLanes(): void {
     })
     $(`sw-${id}`).onclick = () => holo.cmd({ type: 'toggle', lane: id })
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
-    fillFxSelect(sel)
+    fillFxSelect(sel, id)
     sel.onchange = () => holo.cmd({ type: 'effect', lane: id, effect: sel.value as EffectId })
     const ctrls = $(`ctrls-${id}`)
     for (const d of LANE_SLIDERS.filter((x) => x.lanes.includes(id))) {
@@ -104,9 +109,10 @@ function buildLanes(): void {
   }
 }
 
-function fillFxSelect(sel: HTMLSelectElement): void {
+function fillFxSelect(sel: HTMLSelectElement, lane: LaneId): void {
   sel.innerHTML = ''
   for (const [, ids] of groups()) for (const fx of ids) {
+    if (lane === 'sys' && isNeural(fx)) continue
     const o = el('option', '', fxLabel(fx)) // <option> can't hold an SVG
     o.value = fx
     sel.appendChild(o)
@@ -154,7 +160,7 @@ function buildCatalog(): void {
   const box = $('groups')
   box.innerHTML = ''
   for (const [title, ids] of groups()) {
-    const g = el('div', 'group')
+    const g = el('div', title === 'grp.neural' ? 'group neural' : 'group')
     g.appendChild(el('h3', '', t(title)))
     const tiles = el('div', 'tiles')
     for (const id of ids) {
@@ -381,7 +387,15 @@ function renderVoiceInfo(l: Levels): void {
   const cfg = st.S.lanes[ui.tab]
   const p = effectFull(cfg.effect, cfg.fx[cfg.effect])
   const [f0, avg] = l.f0[ui.tab]
-  if (p.autoTarget > 0) {
+  const n = st.neural
+  if (ui.tab === 'mic' && isNeural(cfg.effect)) {
+    info.hidden = false
+    info.innerHTML = !n.available ? t('neural.unavailable')
+      : n.status === 'ready' ? t('neural.ready', { gpu: esc(n.gpu || 'GPU'), ms: Math.round(n.latencyMs) || '≈400' })
+      : n.status === 'loading' ? t('neural.loading')
+      : n.status === 'error' ? t('neural.error', { err: esc(n.error) })
+      : t('neural.off')
+  } else if (p.autoTarget > 0) {
     info.hidden = false
     info.innerHTML = avg > 0
       ? t('info.target', { avg: Math.round(avg), t: Math.round(p.targetHz) })
@@ -424,7 +438,7 @@ function render(): void {
     // the custom effect set changed — rebuild the catalog, card lists and hotkeys
     customSig = sigOf()
     buildCatalog()
-    for (const id of LANES) fillFxSelect($(`fxsel-${id}`) as HTMLSelectElement)
+    for (const id of LANES) fillFxSelect($(`fxsel-${id}`) as HTMLSelectElement, id)
     buildHotkeys()
     renderHotkeys()
     shown = ''

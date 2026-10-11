@@ -4,6 +4,7 @@
   "lane.sys": "PCのサウンド",
   "grp.voices": "声",
   "grp.characters": "キャラクター",
+  "grp.neural": "ニューラル音声",
   "grp.atmo": "雰囲気",
   "win.widget": "デスクトップウィジェット：エフェクトの選択とオン/オフ、再起動後も残ります",
   "win.compact": "コンパクト / 全体",
@@ -127,6 +128,8 @@
   "fx.clean": "クリア",
   "fx.male": "男性",
   "fx.female": "女性",
+  "fx.neural_female": "女性（ニューラル）",
+  "fx.neural_male": "男性（ニューラル）",
   "fx.child": "子ども",
   "fx.autotune": "オートチューン",
   "fx.giant": "巨人",
@@ -220,5 +223,10 @@
   "holo.voice": "声とサウンドのエフェクト",
   "holo.messenger": "ホログラムのビデオメッセージ",
   "holo.viewer": "ARのホログラム",
-  "holo.studio": "ホログラム処理"
+  "holo.studio": "ホログラム処理",
+  "neural.loading": "音声モデルをグラフィックカードに読み込み中…",
+  "neural.ready": "<b>{gpu}</b> でニューラル音声、遅延 ≈ {ms} ms",
+  "neural.error": "ニューラル音声は使用できません：{err}。その間は通常の音声が動作します。",
+  "neural.off": "エフェクトがオンのときに開始します。",
+  "neural.unavailable": "ニューラル音声には GPU モード（NVIDIA）のインストールが必要です。その間は通常の音声が動作します。"
 }

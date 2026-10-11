@@ -13,6 +13,7 @@ const { LinuxRouter } = require('./routing-linux')
 const updater = require('./updater')
 const { Hotkeys } = require('./hotkeys')
 const { WinSysAudio } = require('./sysaudio-win')
+const neuralVc = require('./neural-vc')
 
 // ---------------------------------------------------------------- language (dictionaries shared with the windows: src/locales)
 const LANG_CODES = ['en', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja', 'mr', 'te', 'tr', 'ta', 'vi', 'ko', 'it', 'uk', 'be', 'pl']
@@ -429,11 +430,30 @@ ipcMain.handle('routing:sys', async (_e, on, rate) => {
   }
 })
 
+// ---------------------------------------------------------------- neural voices (optional GPU mode)
+
+let neural = null
+function getNeural() {
+  return (neural ??= new neuralVc.NeuralVc(
+    (buf) => engine?.webContents.send('neural:audio', buf),
+    (status) => engine?.webContents.send('neural:status', status),
+  ))
+}
+ipcMain.handle('neural:check', (_e, force) => neuralVc.check(!!force))
+ipcMain.handle('neural:start', (_e, voiceId, rate) => {
+  const v = neuralVc.voices().find((x) => x.id === voiceId) ?? neuralVc.voices().find((x) => x.id.startsWith(voiceId))
+  if (!v) return { ok: false, error: `voice "${voiceId}" not found` }
+  return getNeural().start(v.path, rate)
+})
+ipcMain.handle('neural:stop', () => { neural?.stop() })
+ipcMain.on('neural:in', (_e, buf) => { neural?.write(Buffer.from(buf)) })
+
 // ---------------------------------------------------------------- exit
 
 function cleanup() {
   clearInterval(followTimer)
   winSys?.stop()
+  neural?.stop()
   hotkeys.dispose()
   if (router) { router.restoreSync(); router = null }
 }

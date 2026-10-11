@@ -9,9 +9,10 @@ const rows = {} as Record<LaneId, HTMLElement>
 document.querySelectorAll<HTMLElement>('.w-row').forEach((r) => { rows[r.dataset.lane as LaneId] = r })
 
 let sig = ''
-function fillOptions(sel: HTMLSelectElement): void {
+function fillOptions(sel: HTMLSelectElement, lane: LaneId, neural: boolean): void {
   sel.innerHTML = ''
   for (const e of allEffects()) {
+    if (e.neural && (lane === 'sys' || !neural)) continue // neural voices: GPU mode, "My voice" only
     const o = document.createElement('option')
     o.value = e.id
     o.textContent = fxLabel(e.id) // <option> can't hold an SVG
@@ -21,8 +22,8 @@ function fillOptions(sel: HTMLSelectElement): void {
 
 function render(st: EngineState): void {
   setCustom(st.S.custom)
-  const now = customs().map((c) => c.id + c.name + c.icon).join('|')
-  if (now !== sig) { sig = now; for (const id of ['mic', 'sys'] as LaneId[]) fillOptions(rows[id].querySelector<HTMLSelectElement>('.w-fx')!) }
+  const now = customs().map((c) => c.id + c.name + c.icon).join('|') + (st.neural?.available ? '|neural' : '')
+  if (now !== sig) { sig = now; for (const id of ['mic', 'sys'] as LaneId[]) fillOptions(rows[id].querySelector<HTMLSelectElement>('.w-fx')!, id, !!st.neural?.available) }
   for (const id of ['mic', 'sys'] as LaneId[]) {
     const cfg = st.S.lanes[id]
     const row = rows[id]
@@ -43,7 +44,7 @@ async function main(): Promise<void> {
   for (const id of ['mic', 'sys'] as LaneId[]) {
     const row = rows[id]
     const sel = row.querySelector<HTMLSelectElement>('.w-fx')!
-    fillOptions(sel)
+    fillOptions(sel, id, false)
     sel.onchange = () => holo.cmd({ type: 'effect', lane: id, effect: sel.value as EffectId })
     row.querySelector<HTMLButtonElement>('.w-sw')!.onclick = () => holo.cmd({ type: 'toggle', lane: id })
   }

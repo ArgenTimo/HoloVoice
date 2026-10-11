@@ -513,14 +513,21 @@ registerProcessor('holo-tap', HoloTap)
 // holo-sysaudio). A small jitter buffer: starts after ~40 ms, re-primes after an underrun, and drops the
 // excess if the helper's clock runs ahead.
 class HoloFeed extends AudioWorkletProcessor {
-  private ring = new Float32Array(2 * 48000)
+  // processorOptions: channels (2 — interleaved stereo, 1 — mono to every output channel), start/max — seconds
+  private readonly ch: number
+  private readonly ring: Float32Array
   private r = 0
   private w = 0
   private primed = false
-  private readonly start = Math.round(0.04 * sampleRate)
-  private readonly max = Math.round(0.15 * sampleRate)
-  constructor(options?: unknown) {
+  private readonly start: number
+  private readonly max: number
+  constructor(options?: { processorOptions?: { channels?: number; start?: number; max?: number } }) {
     super(options)
+    const o = options?.processorOptions ?? {}
+    this.ch = o.channels === 1 ? 1 : 2
+    this.start = Math.round((o.start ?? 0.04) * sampleRate)
+    this.max = Math.round((o.max ?? 0.15) * sampleRate)
+    this.ring = new Float32Array(this.ch * Math.max(sampleRate, 3 * this.max))
     this.port.onmessage = (e: MessageEvent) => {
       if (e.data instanceof ArrayBuffer) this.push(new Float32Array(e.data))
       else if (e.data?.stats) this.port.postMessage({ underruns: this.underruns, drops: this.drops, frames: this.frames })
@@ -529,25 +536,52 @@ class HoloFeed extends AudioWorkletProcessor {
   /** diagnostics: buffer ran dry / excess dropped */
   private underruns = 0
   private drops = 0
-  private get frames(): number { return (this.w - this.r + this.ring.length) % this.ring.length / 2 }
+  private get frames(): number { return (this.w - this.r + this.ring.length) % this.ring.length / this.ch }
   private push(x: Float32Array): void {
     const N = this.ring.length
     for (let i = 0; i < x.length; i++) { this.ring[this.w] = x[i]; this.w = (this.w + 1) % N }
-    if (this.frames > this.max) { this.r = (this.w - 2 * this.start + N) % N; this.drops++ }
+    if (this.frames > this.max) { this.r = (this.w - this.ch * this.start + N) % N; this.drops++ }
   }
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
-    const [L, R] = outputs[0]
-    const n = L.length
+    const out = outputs[0]
+    const n = out[0].length
     if (!this.primed) { if (this.frames < this.start) return true; this.primed = true }
     if (this.frames < n) { this.primed = false; this.underruns++; return true }
     const N = this.ring.length
-    for (let i = 0; i < n; i++) {
-      L[i] = this.ring[this.r]
-      R[i] = this.ring[this.r + 1]
-      this.r = (this.r + 2) % N
+    if (this.ch === 2) {
+      const [L, R] = out
+      for (let i = 0; i < n; i++) {
+        L[i] = this.ring[this.r]
+        if (R) R[i] = this.ring[this.r + 1]
+        this.r = (this.r + 2) % N
+      }
+    } else {
+      const L = out[0]
+      for (let i = 0; i < n; i++) { L[i] = this.ring[this.r]; this.r = (this.r + 1) % N }
+      for (let c = 1; c < out.length; c++) out[c].set(L)
     }
     return true
   }
 }
 
+// "holo-stream": sends its (mono) input out through the port in 10 ms chunks — the microphone for the neural voice
+class HoloStream extends AudioWorkletProcessor {
+  private buf = new Float32Array(Math.round(sampleRate / 100))
+  private n = 0
+  process(inputs: Float32Array[][]): boolean {
+    const x = inputs[0]?.[0]
+    if (!x) return true
+    for (let i = 0; i < x.length; i++) {
+      this.buf[this.n++] = x[i]
+      if (this.n === this.buf.length) {
+        this.port.postMessage(this.buf.buffer, [this.buf.buffer])
+        this.buf = new Float32Array(this.buf.length)
+        this.n = 0
+      }
+    }
+    return true
+  }
+}
+
+registerProcessor('holo-stream', HoloStream)
 registerProcessor('holo-feed', HoloFeed)

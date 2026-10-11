@@ -4,6 +4,7 @@
   "lane.sys": "Bilgisayar sesi",
   "grp.voices": "Sesler",
   "grp.characters": "Karakterler",
+  "grp.neural": "Nöral sesler",
   "grp.atmo": "Atmosfer",
   "win.widget": "Masaüstü widget'ı: efekt seçme ve açma/kapama, yeniden başlatmadan sonra kalır",
   "win.compact": "Kompakt / tam",
@@ -127,6 +128,8 @@
   "fx.clean": "Temiz",
   "fx.male": "Erkek",
   "fx.female": "Kadın",
+  "fx.neural_female": "Kadın (nöral)",
+  "fx.neural_male": "Erkek (nöral)",
   "fx.child": "Çocuk",
   "fx.autotune": "Autotune",
   "fx.giant": "Dev",
@@ -220,5 +223,10 @@
   "holo.voice": "Ses ve ses efektleri",
   "holo.messenger": "Holografik video mesajları",
   "holo.viewer": "AR'de hologramlar",
-  "holo.studio": "Hologram işleme"
+  "holo.studio": "Hologram işleme",
+  "neural.loading": "Ses modeli ekran kartına yükleniyor…",
+  "neural.ready": "<b>{gpu}</b> üzerinde nöral ses, gecikme ≈ {ms} ms",
+  "neural.error": "Nöral ses kullanılamıyor: {err}. Bu arada normal ses çalışır.",
+  "neural.off": "Efekt açıkken başlar.",
+  "neural.unavailable": "Nöral sesler için GPU modunun kurulu olması gerekir (NVIDIA). Bu arada normal ses çalışır."
 }

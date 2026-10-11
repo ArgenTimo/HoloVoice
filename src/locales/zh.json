@@ -4,6 +4,7 @@
   "lane.sys": "电脑声音",
   "grp.voices": "人声",
   "grp.characters": "角色",
+  "grp.neural": "神经网络声音",
   "grp.atmo": "氛围",
   "win.widget": "桌面小组件：选择效果并开关，重启后保留",
   "win.compact": "紧凑 / 完整",
@@ -127,6 +128,8 @@
   "fx.clean": "原声",
   "fx.male": "男声",
   "fx.female": "女声",
+  "fx.neural_female": "女声（神经网络）",
+  "fx.neural_male": "男声（神经网络）",
   "fx.child": "童声",
   "fx.autotune": "自动修音",
   "fx.giant": "巨人",
@@ -220,5 +223,10 @@
   "holo.voice": "人声和声音效果",
   "holo.messenger": "全息视频消息",
   "holo.viewer": "AR 全息影像",
-  "holo.studio": "全息影像处理"
+  "holo.studio": "全息影像处理",
+  "neural.loading": "正在将声音模型加载到显卡…",
+  "neural.ready": "神经网络声音运行于 <b>{gpu}</b>，延迟 ≈ {ms} 毫秒",
+  "neural.error": "神经网络声音不可用：{err}。在此期间使用普通声音。",
+  "neural.off": "效果开启时启动。",
+  "neural.unavailable": "神经网络声音需要安装 GPU 模式（NVIDIA）。在此期间使用普通声音。"
 }

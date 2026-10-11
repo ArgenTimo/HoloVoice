@@ -4,6 +4,7 @@
   "lane.sys": "컴퓨터 소리",
   "grp.voices": "목소리",
   "grp.characters": "캐릭터",
+  "grp.neural": "뉴럴 음성",
   "grp.atmo": "분위기",
   "win.widget": "바탕화면 위젯: 효과 선택과 켜기/끄기, 재부팅 후에도 유지",
   "win.compact": "간단히 / 전체",
@@ -127,6 +128,8 @@
   "fx.clean": "원음",
   "fx.male": "남성",
   "fx.female": "여성",
+  "fx.neural_female": "여성 (뉴럴)",
+  "fx.neural_male": "남성 (뉴럴)",
   "fx.child": "아이",
   "fx.autotune": "오토튠",
   "fx.giant": "거인",
@@ -220,5 +223,10 @@
   "holo.voice": "목소리와 사운드 효과",
   "holo.messenger": "홀로그램 영상 메시지",
   "holo.viewer": "AR 홀로그램",
-  "holo.studio": "홀로그램 처리"
+  "holo.studio": "홀로그램 처리",
+  "neural.loading": "그래픽 카드에 음성 모델을 불러오는 중…",
+  "neural.ready": "<b>{gpu}</b>에서 뉴럴 음성, 지연 ≈ {ms} ms",
+  "neural.error": "뉴럴 음성을 사용할 수 없음: {err}. 그동안 일반 음성이 작동합니다.",
+  "neural.off": "효과가 켜지면 시작됩니다.",
+  "neural.unavailable": "뉴럴 음성에는 GPU 모드(NVIDIA) 설치가 필요합니다. 그동안 일반 음성이 작동합니다."
 }

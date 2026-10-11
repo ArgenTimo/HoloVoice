@@ -102,6 +102,7 @@ export type BuiltinId =
   | 'clean' | 'male' | 'female' | 'child' | 'autotune' | 'giant' | 'chipmunk'
   | 'demon' | 'divine' | 'tts' | 'ghost' | 'digital' | 'whisper' | 'radio'
   | 'hologram_classic' | 'hologram_warm' | 'smolder' | 'ice' | 'electric' | 'vhs' | 'cave'
+  | 'neural_female' | 'neural_male'
 
 /** A user's custom effect: a snapshot of all parameters of a built-in one (with their edits) under its own name */
 export type CustomId = `c-${string}`
@@ -113,6 +114,8 @@ export interface EffectInfo {
   id: EffectId; icon: string // icon id from icons.ts
   preset: Partial<FxParams>
   main: ParamKey[] // the effect's main knobs, shown up front; the rest are under "All parameters"
+  /** neural voice conversion (optional GPU mode, native/neural-vc): the target voice; the preset only polishes the result */
+  neural?: 'female' | 'male'
 }
 
 export const EFFECTS: EffectInfo[] = [
@@ -182,6 +185,14 @@ export const EFFECTS: EffectInfo[] = [
     main: ['drive', 'noise', 'lowcut', 'highcut'] },
   { id: 'cave', icon: 'cave', preset: { reverb: 0.8, size: 1, echo: 0.3, echoTime: 0.45, echoFb: 0.3, bass: 2, level: -1.5 },
     main: ['reverb', 'size', 'echo'] },
+  // Neural voices: a real voice model (Seed-VC on an NVIDIA GPU) instead of pitch/formant tricks; ~0.4 s latency.
+  // Without the GPU mode they fall back to the DSP "female"/"male" (see NEURAL_FALLBACK).
+  { id: 'neural_female', icon: 'venus', neural: 'female',
+    preset: { comp: 0.35, deess: 0.25, lowcut: 80, presence: 1, air: 1.5, level: 0 },
+    main: ['comp', 'deess', 'presence', 'air', 'warmth', 'reverb'] },
+  { id: 'neural_male', icon: 'mars', neural: 'male',
+    preset: { comp: 0.35, deess: 0.2, lowcut: 60, warmth: 1.5, presence: 0.5, level: 0 },
+    main: ['comp', 'deess', 'warmth', 'bass', 'presence', 'reverb'] },
 ]
 export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Record<BuiltinId, EffectInfo>
 
@@ -211,6 +222,9 @@ export function allEffects(): EffectInfo[] { return [...EFFECTS, ...customInfo.v
 export interface EffectUser { p?: Partial<FxParams>; rampIn?: number; rampOut?: number }
 
 /** Full effect parameters: neutral ← preset ← user edits */
+export const NEURAL_FALLBACK: Record<'female' | 'male', BuiltinId> = { female: 'female', male: 'male' }
+export const isNeural = (id: EffectId): boolean => !!effectInfo(id)?.neural
+
 export function effectFull(id: EffectId, user?: EffectUser): FxParams {
   return { ...NEUTRAL, ...(effectInfo(id)?.preset ?? {}), ...(user?.p ?? {}) }
 }

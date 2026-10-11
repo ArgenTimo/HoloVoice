@@ -290,3 +290,6 @@ body.widget .brand { font-size: 12px; }
 .holo-desc { font-size: 11.5px; color: var(--muted); }
 .holo-badge { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
 .holo-item.current .holo-badge { color: var(--accent-2); border-color: var(--accent); }
+
+/* neural voices exist only for "My voice" */
+body.lane-sys .group.neural { display: none; }

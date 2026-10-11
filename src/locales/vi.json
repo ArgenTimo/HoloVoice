@@ -4,6 +4,7 @@
   "lane.sys": "Âm thanh máy tính",
   "grp.voices": "Giọng nói",
   "grp.characters": "Nhân vật",
+  "grp.neural": "Giọng nơ-ron",
   "grp.atmo": "Không khí",
   "win.widget": "Tiện ích màn hình: chọn hiệu ứng và bật/tắt, giữ lại sau khi khởi động lại",
   "win.compact": "Thu gọn / đầy đủ",
@@ -127,6 +128,8 @@
   "fx.clean": "Gốc",
   "fx.male": "Nam",
   "fx.female": "Nữ",
+  "fx.neural_female": "Nữ (nơ-ron)",
+  "fx.neural_male": "Nam (nơ-ron)",
   "fx.child": "Trẻ em",
   "fx.autotune": "Autotune",
   "fx.giant": "Người khổng lồ",
@@ -220,5 +223,10 @@
   "holo.voice": "Hiệu ứng giọng nói và âm thanh",
   "holo.messenger": "Tin nhắn video ảnh ba chiều",
   "holo.viewer": "Ảnh ba chiều trong AR",
-  "holo.studio": "Xử lý ảnh ba chiều"
+  "holo.studio": "Xử lý ảnh ba chiều",
+  "neural.loading": "Đang tải mô hình giọng lên card đồ họa…",
+  "neural.ready": "Giọng nơ-ron trên <b>{gpu}</b>, độ trễ ≈ {ms} ms",
+  "neural.error": "Giọng nơ-ron không khả dụng: {err}. Trong lúc đó giọng thường vẫn hoạt động.",
+  "neural.off": "Bắt đầu khi hiệu ứng được bật.",
+  "neural.unavailable": "Giọng nơ-ron cần cài chế độ GPU (NVIDIA). Trong lúc đó giọng thường vẫn hoạt động."
 }

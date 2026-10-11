@@ -4,6 +4,7 @@
   "lane.sys": "Computer sound",
   "grp.voices": "Voices",
   "grp.characters": "Characters",
+  "grp.neural": "Neural voices",
   "grp.atmo": "Atmosphere",
   "win.widget": "Desktop widget: pick effects and switch them on/off, stays after reboot",
   "win.compact": "Compact / full",
@@ -127,6 +128,8 @@
   "fx.clean": "Clean",
   "fx.male": "Male",
   "fx.female": "Female",
+  "fx.neural_female": "Female (neural)",
+  "fx.neural_male": "Male (neural)",
   "fx.child": "Child",
   "fx.autotune": "Autotune",
   "fx.giant": "Giant",
@@ -220,5 +223,10 @@
   "holo.voice": "Voice and sound effects",
   "holo.messenger": "Holographic video messages",
   "holo.viewer": "Holograms in AR",
-  "holo.studio": "Hologram processing"
+  "holo.studio": "Hologram processing",
+  "neural.loading": "Loading the voice model on the graphics card…",
+  "neural.ready": "Neural voice on <b>{gpu}</b>, delay ≈ {ms} ms",
+  "neural.error": "Neural voice unavailable: {err}. The regular voice works meanwhile.",
+  "neural.off": "Starts when the effect is on.",
+  "neural.unavailable": "Neural voices need the GPU mode installed (NVIDIA). The regular voice works meanwhile."
 }

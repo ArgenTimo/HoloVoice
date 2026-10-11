@@ -81,6 +81,32 @@ static std::set<DWORD> processTree(DWORD root) {
   return tree;
 }
 
+// ------------------------------------------------------------------ recorders
+
+// Apps that record what is playing (loopback capture) have a session on the output device too, and turning it down
+// would make them record silence. The session API doesn't tell recording from playback, so known recorders are
+// skipped by name — they record our processed copy as it plays. Other copies of this helper (tests) as well.
+static const wchar_t* kRecorders[] = {
+  L"obs64.exe", L"obs32.exe", L"obs.exe", L"sharex.exe", L"bdcam.exe", L"bandicam.exe", L"nvcontainer.exe",
+  L"nvidia share.exe", L"nvsphelper64.exe", L"gamebar.exe", L"gamebarftserver.exe", L"streamlabs obs.exe",
+  L"xsplit.core.exe", L"action.exe", L"fraps.exe", L"holo-sysaudio.exe",
+};
+
+static bool isRecorder(DWORD pid) {
+  if (!pid) return false;
+  HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (!h) return false;
+  wchar_t path[MAX_PATH]; DWORD n = MAX_PATH;
+  bool hit = false;
+  if (QueryFullProcessImageNameW(h, 0, path, &n)) {
+    const wchar_t* name = wcsrchr(path, L'\\');
+    name = name ? name + 1 : path;
+    for (auto r : kRecorders) if (!_wcsicmp(name, r)) { hit = true; break; }
+  }
+  CloseHandle(h);
+  return hit;
+}
+
 // ------------------------------------------------------------------ session attenuation
 //
 // A muted session is also missing from process loopback, so the other apps are not muted but turned
@@ -183,12 +209,12 @@ public:
       if (key.empty() || seen_.count(key)) continue;
       if (s.pid && tree.count(s.pid)) continue; // our own output (a new child may join the tree later: don't mark seen)
       seen_.insert(key);
+      if (isRecorder(s.pid)) { logf("skipped recorder pid=%lu", s.pid); continue; }
       pending_.push_back(s);
     }
   }
-  // Only sessions with sound on their meter are turned down. Sessions on an output device also include other apps'
-  // loopback CAPTURE streams (OBS desktop audio, screen sharing, recorders): their volume scales what they record,
-  // and their meter stays at zero — so they are left alone. Every ~20 ms: the start of a sound leaks for that long.
+  // Only sessions with sound on their meter are turned down: silent ones (an idle app) are left as they are.
+  // Every ~20 ms: the start of a sound leaks for that long.
   void tick() {
     bool changed = false;
     for (size_t i = 0; i < pending_.size();) {

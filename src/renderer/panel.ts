@@ -96,6 +96,13 @@ function buildLanes(): void {
       if ((e.target as HTMLElement).closest('.switch, .lc-ctrls, .lc-hint, .lc-devs, select')) return
       selectLane(id)
     })
+    // keyboard: the card is a tab — focus it and press Enter/Space to edit this lane's effect
+    card.tabIndex = 0
+    card.setAttribute('role', 'tab')
+    card.setAttribute('aria-label', laneName(id))
+    card.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); selectLane(id) }
+    })
     $(`sw-${id}`).onclick = () => holo.cmd({ type: 'toggle', lane: id })
     const sel = $<HTMLSelectElement>(`fxsel-${id}`)
     fillFxSelect(sel, id)
@@ -140,6 +147,7 @@ function renderLanes(): void {
     const cfg = st.S.lanes[id]
     $(`card-${id}`).classList.toggle('on', cfg.enabled)
     $(`card-${id}`).classList.toggle('sel', ui.tab === id)
+    $(`card-${id}`).setAttribute('aria-selected', String(ui.tab === id))
     $(`sw-${id}`).classList.toggle('on', cfg.enabled)
     $(`sw-${id}`).setAttribute('aria-checked', String(cfg.enabled))
     $(`sw-${id}`).setAttribute('aria-label', laneName(id))

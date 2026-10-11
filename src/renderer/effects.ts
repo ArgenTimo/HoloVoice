@@ -116,6 +116,8 @@ export interface EffectInfo {
   main: ParamKey[] // the effect's main knobs, shown up front; the rest are under "All parameters"
   /** neural voice conversion (optional GPU mode, native/neural-vc): the target voice; the preset only polishes the result */
   neural?: 'female' | 'male'
+  /** level on the computer-sound track (see systemSoundTarget); without it the preset's level is used */
+  sysLevel?: number
 }
 
 export const EFFECTS: EffectInfo[] = [
@@ -259,6 +261,26 @@ export function forSystemSound(p: FxParams): FxParams {
     out.formantFollow = 0
   }
   return out
+}
+
+/** Level offset (dB) of an effect on the computer-sound track. Mic presets are levelled to the loudness of "Clean"
+ *  (which is compressed and ~7 dB louder than raw speech), but untouched sound is the reference for the computer-sound
+ *  track and the compressor is off there, so each built-in effect carries its own level for that track (sysLevel).
+ *  Custom effects inherit the offset of the effect they were made from. */
+export function sysLevelOffset(id: EffectId): number {
+  const base = isCustom(id) ? CUSTOM.find((c) => c.id === id)?.base : id
+  const info = base ? EFFECT[base] : undefined
+  return info?.sysLevel === undefined ? 0 : info.sysLevel - (info.preset.level ?? 0)
+}
+
+/** What the computer-sound track plays for an effect at strength amount: "Clean" means untouched (its preset is voice
+ *  EQ/enhancement) plus only the user's own edits; other effects get their computer-sound level, then forSystemSound. */
+export function systemSoundTarget(id: EffectId, user: EffectUser | undefined, amount: number): FxParams {
+  const t = Math.max(0, Math.min(1, amount))
+  if (id === 'clean') return forSystemSound(interpolate(NEUTRAL, { ...NEUTRAL, ...(user?.p ?? {}) }, t))
+  const full = effectFull(id, user)
+  full.level = Math.max(PARAM.level.min, Math.min(PARAM.level.max, full.level + sysLevelOffset(id)))
+  return forSystemSound(interpolate(NEUTRAL, full, t))
 }
 
 /**

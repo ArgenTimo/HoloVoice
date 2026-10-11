@@ -530,7 +530,7 @@ function updateMicHint(): void {
 function updateSysHint(err = ''): void {
   if (err) { hint.sys = { warn: true, html: t('hint.sysFail', { err: esc(err) }) }; return }
   hint.sys = { warn: false, html: S.lanes.sys.enabled
-    ? t('hint.sysOn', { key: HK('sys') }) + (isWin ? `<br><i>${t('hint.sysWin')}</i>` : '')
+    ? t('hint.sysOn', { key: HK('sys') })
     : t('hint.sysOff') }
 }
 

@@ -169,6 +169,11 @@ class LinuxRouter {
     if (!s.sys.length) {
       s.realSink = (await pactl('get-default-sink')).trim()
       if (!s.realSink || OURS.includes(s.realSink)) throw new Error('real audio output not found')
+      // a connected BT/USB device wins over built-in speakers (the default may be left over from before it connected)
+      if (!/^bluez_output|usb/i.test(s.realSink)) {
+        const real = Object.values(await sinkNames()).filter((n) => !OURS.includes(n))
+        s.realSink = real.find((n) => /^bluez_output/.test(n)) ?? real.find((n) => /usb/i.test(n)) ?? s.realSink
+      }
       this.knownSinks = null
       this.save()
       await this.load('sys', 'module-null-sink', `sink_name=${IN_SINK}`,

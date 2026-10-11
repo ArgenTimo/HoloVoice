@@ -24,7 +24,7 @@
   "speaker.female": "صوتي: أنثوي",
   "dev.default": "الافتراضي",
   "btn.hotkeys": "اختصارات",
-  "btn.osd": "تلميح على الشاشة",
+  "btn.osd": "Overlay",
   "btn.update": "تحديث",
   "btn.updateTip": "تنزيل الإصدار الجديد",
   "hk.title": "اختصارات لوحة المفاتيح",
@@ -44,7 +44,7 @@
   "hk.busy": "هذا الاختصار يستخدمه برنامج آخر — اختر غيره",
   "hk.press": "اضغط مفتاحًا أو زر فأرة…",
   "hk.shiftLinux": "Shift+رقم لا يعمل في Linux",
-  "osd.title": "تلميح على الشاشة",
+  "osd.title": "On-screen overlay",
   "osd.toast": "إظهار المؤثر عند الضغط على اختصار",
   "osd.bar": "شريط التلاشي التدريجي",
   "osd.where": "الموضع على الشاشة",
@@ -91,7 +91,7 @@
   "info.toneNearest": "الطبقة الآن: <b>{f0}</b> → أقرب نغمة",
   "upd.checking": "جارٍ التحقق…",
   "widget.open": "فتح كل الإعدادات",
-  "widget.unpin": "إلغاء تثبيت الأداة",
+  "widget.unpin": "Remove the widget (it will no longer start with the system)",
   "hint.micOk": "في Discord / Telegram / Zoom اختر الميكروفون <b>{mic}</b>.<br>تشغيل/إيقاف المؤثر — {key}.",
   "hint.cableOut": "خرج الكابل الافتراضي",
   "hint.noCable": "To send the processed voice to Discord or games, install the free <a data-href=\"https://vb-audio.com/Cable/\">VB-Audio Virtual Cable</a> (run the installer as administrator). HoloVoice picks it up by itself — then choose the microphone <b>CABLE Output</b> in your call app. Meanwhile turn on <b>Hear myself</b> (with headphones) to try the effects.",
@@ -284,5 +284,6 @@
   "ins.deleted": "“{name}” deleted",
   "ins.wasReset": "Effect settings reset",
   "ins.mineName": "{name} (mine)",
-  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
+  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
+  "app.loading": "Starting audio…"
 }

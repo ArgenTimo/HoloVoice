@@ -24,7 +24,7 @@
   "speaker.female": "என் குரல்: பெண்",
   "dev.default": "இயல்புநிலை",
   "btn.hotkeys": "குறுக்குவிசைகள்",
-  "btn.osd": "திரைக் குறிப்பு",
+  "btn.osd": "Overlay",
   "btn.update": "புதுப்பி",
   "btn.updateTip": "புதிய பதிப்பைப் பெறு",
   "hk.title": "குறுக்குவிசைகள்",
@@ -44,7 +44,7 @@
   "hk.busy": "இந்த குறுக்குவிசையை வேறு நிரல் பயன்படுத்துகிறது — வேறொன்றைத் தேர்வு செய்யவும்",
   "hk.press": "ஒரு விசை அல்லது மவுஸ் பொத்தானை அழுத்தவும்…",
   "hk.shiftLinux": "Linux-இல் Shift+எண் வேலை செய்யாது",
-  "osd.title": "திரைக் குறிப்பு",
+  "osd.title": "On-screen overlay",
   "osd.toast": "குறுக்குவிசை அழுத்தும்போது விளைவைக் காட்டு",
   "osd.bar": "மெல்லத் தொடக்க / முடிவுப் பட்டை",
   "osd.where": "திரையில் இடம்",
@@ -91,7 +91,7 @@
   "info.toneNearest": "தற்போதைய சுருதி: <b>{f0}</b> → அருகிலுள்ள சுரம்",
   "upd.checking": "சரிபார்க்கிறது…",
   "widget.open": "முழு அமைப்புகளைத் திற",
-  "widget.unpin": "விட்ஜெட்டை அகற்று",
+  "widget.unpin": "Remove the widget (it will no longer start with the system)",
   "hint.micOk": "Discord / Telegram / Zoom-இல் மைக்ரோஃபோன் <b>{mic}</b>-ஐத் தேர்வு செய்யவும்.<br>விளைவு இயக்கு/நிறுத்து — {key}.",
   "hint.cableOut": "மெய்நிகர் கேபிள் வெளியீடு",
   "hint.noCable": "To send the processed voice to Discord or games, install the free <a data-href=\"https://vb-audio.com/Cable/\">VB-Audio Virtual Cable</a> (run the installer as administrator). HoloVoice picks it up by itself — then choose the microphone <b>CABLE Output</b> in your call app. Meanwhile turn on <b>Hear myself</b> (with headphones) to try the effects.",
@@ -284,5 +284,6 @@
   "ins.deleted": "“{name}” deleted",
   "ins.wasReset": "Effect settings reset",
   "ins.mineName": "{name} (mine)",
-  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
+  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
+  "app.loading": "Starting audio…"
 }

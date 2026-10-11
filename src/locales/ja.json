@@ -24,7 +24,7 @@
   "speaker.female": "自分の声：女性",
   "dev.default": "既定",
   "btn.hotkeys": "ショートカット",
-  "btn.osd": "画面表示",
+  "btn.osd": "Overlay",
   "btn.update": "更新",
   "btn.updateTip": "新しいバージョンを取得",
   "hk.title": "ショートカットキー",
@@ -44,7 +44,7 @@
   "hk.busy": "このショートカットは他のアプリが使用中です — 別のキーにしてください",
   "hk.press": "キーまたはマウスボタンを押してください…",
   "hk.shiftLinux": "Shift+数字は Linux では使えません",
-  "osd.title": "画面表示",
+  "osd.title": "On-screen overlay",
   "osd.toast": "ショートカット時にエフェクトを表示",
   "osd.bar": "フェードイン / フェードアウトのバー",
   "osd.where": "画面上の位置",
@@ -91,7 +91,7 @@
   "info.toneNearest": "現在の高さ：<b>{f0}</b> → 最も近い音",
   "upd.checking": "確認中…",
   "widget.open": "すべての設定を開く",
-  "widget.unpin": "ウィジェットの固定を解除",
+  "widget.unpin": "Remove the widget (it will no longer start with the system)",
   "hint.micOk": "Discord / Telegram / Zoom でマイク <b>{mic}</b> を選択してください。<br>エフェクト オン/オフ — {key}。",
   "hint.cableOut": "仮想ケーブルの出力",
   "hint.noCable": "To send the processed voice to Discord or games, install the free <a data-href=\"https://vb-audio.com/Cable/\">VB-Audio Virtual Cable</a> (run the installer as administrator). HoloVoice picks it up by itself — then choose the microphone <b>CABLE Output</b> in your call app. Meanwhile turn on <b>Hear myself</b> (with headphones) to try the effects.",
@@ -284,5 +284,6 @@
   "ins.deleted": "“{name}” deleted",
   "ins.wasReset": "Effect settings reset",
   "ins.mineName": "{name} (mine)",
-  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
+  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
+  "app.loading": "Starting audio…"
 }

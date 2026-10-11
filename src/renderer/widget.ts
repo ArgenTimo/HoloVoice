@@ -1,7 +1,7 @@
 // Desktop widget: no controls — just an input/output effect picked from a list and instant on/off.
 // An engine controller, like the panel; a pinned widget starts with the system (main.js).
 import { allEffects, customs, fxLabel, setCustom, type EffectId } from './effects'
-import { applyStatic, setLang } from './i18n'
+import { applyStatic, setLang, t } from './i18n'
 import { applyIcons } from './icons'
 import { $, holo, type EngineState, type LaneId } from './shared'
 
@@ -30,7 +30,8 @@ function render(st: EngineState): void {
     row.classList.toggle('on', cfg.enabled)
     const sel = row.querySelector<HTMLSelectElement>('.w-fx')!
     if (document.activeElement !== sel) sel.value = cfg.effect
-    row.title = st.hint[id].warn ? st.hint[id].html.replace(/<[^>]+>/g, '') : ''
+    // the row says which lane it is; a warning (no virtual mic, capture failed) wins
+    row.title = st.hint[id].warn ? st.hint[id].html.replace(/<[^>]+>/g, '') : t(id === 'mic' ? 'lane.mic' : 'lane.sys')
   }
 }
 

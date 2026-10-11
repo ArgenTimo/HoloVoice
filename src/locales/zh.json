@@ -24,7 +24,7 @@
   "speaker.female": "我的声音：女声",
   "dev.default": "默认",
   "btn.hotkeys": "快捷键",
-  "btn.osd": "屏幕提示",
+  "btn.osd": "Overlay",
   "btn.update": "更新",
   "btn.updateTip": "获取新版本",
   "hk.title": "快捷键",
@@ -44,7 +44,7 @@
   "hk.busy": "该快捷键已被其他程序占用 — 请换一个",
   "hk.press": "请按一个键或鼠标按钮…",
   "hk.shiftLinux": "Shift+数字在 Linux 上无效",
-  "osd.title": "屏幕提示",
+  "osd.title": "On-screen overlay",
   "osd.toast": "按快捷键时显示效果",
   "osd.bar": "渐入 / 渐出进度条",
   "osd.where": "屏幕位置",
@@ -91,7 +91,7 @@
   "info.toneNearest": "当前音高：<b>{f0}</b> → 最近的音符",
   "upd.checking": "正在检查…",
   "widget.open": "打开完整设置",
-  "widget.unpin": "取消固定小组件",
+  "widget.unpin": "Remove the widget (it will no longer start with the system)",
   "hint.micOk": "在 Discord / Telegram / Zoom 中选择麦克风 <b>{mic}</b>。<br>开/关效果 — {key}。",
   "hint.cableOut": "虚拟声卡输出",
   "hint.noCable": "To send the processed voice to Discord or games, install the free <a data-href=\"https://vb-audio.com/Cable/\">VB-Audio Virtual Cable</a> (run the installer as administrator). HoloVoice picks it up by itself — then choose the microphone <b>CABLE Output</b> in your call app. Meanwhile turn on <b>Hear myself</b> (with headphones) to try the effects.",
@@ -284,5 +284,6 @@
   "ins.deleted": "“{name}” deleted",
   "ins.wasReset": "Effect settings reset",
   "ins.mineName": "{name} (mine)",
-  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
+  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
+  "app.loading": "Starting audio…"
 }

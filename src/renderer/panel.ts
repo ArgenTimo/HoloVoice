@@ -499,6 +499,8 @@ function renderDevices(): void {
 }
 
 function render(): void {
+  // until the engine reports ready, the controls would show made-up positions: show "starting audio" instead
+  document.body.classList.toggle('loading', !st?.ready)
   if (st) setCustom(st.S.custom)
   if (sigOf() !== customSig) {
     // the custom effect set changed — rebuild the catalog, card lists and hotkeys

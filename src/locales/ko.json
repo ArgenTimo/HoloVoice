@@ -24,7 +24,7 @@
   "speaker.female": "내 목소리: 여성",
   "dev.default": "기본값",
   "btn.hotkeys": "단축키",
-  "btn.osd": "화면 알림",
+  "btn.osd": "Overlay",
   "btn.update": "업데이트",
   "btn.updateTip": "새 버전 받기",
   "hk.title": "단축키",
@@ -44,7 +44,7 @@
   "hk.busy": "다른 프로그램이 사용 중인 단축키입니다 — 다른 키를 지정하세요",
   "hk.press": "키 또는 마우스 버튼을 누르세요…",
   "hk.shiftLinux": "Shift+숫자는 Linux에서 작동하지 않습니다",
-  "osd.title": "화면 알림",
+  "osd.title": "On-screen overlay",
   "osd.toast": "단축키를 누르면 효과 표시",
   "osd.bar": "페이드 인 / 아웃 막대",
   "osd.where": "화면 위치",
@@ -91,7 +91,7 @@
   "info.toneNearest": "현재 음높이: <b>{f0}</b> → 가장 가까운 음",
   "upd.checking": "확인 중…",
   "widget.open": "전체 설정 열기",
-  "widget.unpin": "위젯 고정 해제",
+  "widget.unpin": "Remove the widget (it will no longer start with the system)",
   "hint.micOk": "Discord / Telegram / Zoom에서 마이크 <b>{mic}</b>을(를) 선택하세요.<br>효과 켜기/끄기 — {key}.",
   "hint.cableOut": "가상 케이블 출력",
   "hint.noCable": "To send the processed voice to Discord or games, install the free <a data-href=\"https://vb-audio.com/Cable/\">VB-Audio Virtual Cable</a> (run the installer as administrator). HoloVoice picks it up by itself — then choose the microphone <b>CABLE Output</b> in your call app. Meanwhile turn on <b>Hear myself</b> (with headphones) to try the effects.",
@@ -284,5 +284,6 @@
   "ins.deleted": "“{name}” deleted",
   "ins.wasReset": "Effect settings reset",
   "ins.mineName": "{name} (mine)",
-  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>."
+  "hk.wayland": "You are on Wayland: apps can’t catch global keys here, so these shortcuts work only while a HoloVoice window is focused. Add system shortcuts (Settings → Keyboard → Custom shortcuts) with commands like <code>holovoice --toggle mic</code>, <code>holovoice --effect mic:demon</code>, <code>holovoice --next mic</code>.",
+  "app.loading": "Starting audio…"
 }

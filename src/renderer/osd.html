@@ -11,7 +11,9 @@
     #root.off { border-color: #3a3d4d; color: #8a8ea3; }
     #root.sys { border-color: #22d3ee; }
     #root.baronly { border: 0; padding: 3px; }
-    .toast { flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+    .toast { flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 12px; min-width: 0; }
+    .toast > div { flex: 1; min-width: 0; }
+    #text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* long custom effect names */
     .ico { display: grid; place-items: center; width: 24px; height: 24px; color: #a78bfa; }
     #root.sys .ico { color: #22d3ee; }
     #root.off .ico { color: #8a8ea3; }

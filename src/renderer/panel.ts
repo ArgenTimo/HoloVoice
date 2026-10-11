@@ -161,6 +161,12 @@ function renderLanes(): void {
     const h = $(`hint-${id}`)
     h.innerHTML = st.hint[id].html // built in the engine, device labels are escaped there
     fillHotkeyRefs(h)
+    // a setup problem on the voice lane: one click to the guide, where the steps are
+    if (id === 'mic' && st.hint[id].warn) {
+      const b = el('button', 'btn hint-btn', t('menu.setup'))
+      b.onclick = () => openSetup()
+      h.appendChild(b)
+    }
     h.classList.toggle('warn', st.hint[id].warn)
   }
   for (const s of laneInputs) {
@@ -192,8 +198,14 @@ function renderLaneTabs(): void {
   })
 }
 
+/** Bring the selected effect into view (first render, lane switch) — not on every state update */
+function revealSelected(): void {
+  requestAnimationFrame(() => document.querySelector<HTMLElement>('#groups .tile.sel')?.scrollIntoView({ block: 'nearest' }))
+}
+
 function selectLane(id: LaneId): void {
   ui.tab = id
+  revealSelected()
   holo.setUi({ tab: id })
   document.body.classList.toggle('lane-sys', id === 'sys')
   renderLaneTabs()
@@ -257,6 +269,22 @@ function filterCatalog(): void {
     })
     g.hidden = !any
   })
+  let none = document.getElementById('cat-none')
+  const empty = !!q && ![...document.querySelectorAll<HTMLElement>('#groups .tile')].some((x) => !x.hidden)
+  if (empty && !none) {
+    none = el('div', 'cat-none')
+    none.id = 'cat-none'
+    $('groups').appendChild(none)
+  }
+  if (none) {
+    none.hidden = !empty
+    if (empty) {
+      none.replaceChildren(el('span', '', t('cat.none', { q: $<HTMLInputElement>('cat-search').value.trim() })))
+      const clear = el('button', 'btn', t('cat.clear'))
+      clear.onclick = () => { $<HTMLInputElement>('cat-search').value = ''; filterCatalog(); $('cat-search').focus() }
+      none.appendChild(clear)
+    }
+  }
 }
 
 function renderCatalog(): void {
@@ -530,6 +558,10 @@ function renderDevices(): void {
 }
 
 function render(): void {
+  renderBody()
+  syncRanges()
+}
+function renderBody(): void {
   // until the engine reports ready, the controls would show made-up positions: show "starting audio" instead
   document.body.classList.toggle('loading', !st?.ready)
   if (st) setCustom(st.S.custom)
@@ -917,6 +949,14 @@ const HOLO_PRODUCTS: { name: string; icon: string; desc: string; url?: string; c
   { name: 'HOLO Studio', icon: 'cube', desc: 'holo.studio' },
 ]
 
+/** Filled part of a slider: --p from its value (set after every programmatic change and on input) */
+function syncRange(r: HTMLInputElement): void {
+  const lo = Number(r.min || 0), hi = Number(r.max || 100)
+  r.style.setProperty('--p', `${hi > lo ? ((Number(r.value) - lo) / (hi - lo)) * 100 : 0}%`)
+}
+const syncRanges = () => document.querySelectorAll<HTMLInputElement>('input[type=range]').forEach(syncRange)
+document.addEventListener('input', (e) => { if ((e.target as HTMLInputElement).type === 'range') syncRange(e.target as HTMLInputElement) })
+
 /** A short message at the bottom of the panel, optionally with one action (e.g. "Undo") */
 let toastTimer = 0
 function toast(text: string, action?: { label: string; run: () => void }, ms = 4000): void {
@@ -1011,6 +1051,10 @@ async function main(): Promise<void> {
   }
 
   $<HTMLInputElement>('cat-search').oninput = filterCatalog
+  document.addEventListener('keydown', (e) => {
+    const typing = /INPUT|SELECT|TEXTAREA/.test((e.target as HTMLElement).tagName)
+    if ((e.ctrlKey && e.key.toLowerCase() === 'f') || (e.key === '/' && !typing)) { e.preventDefault(); $('cat-search').focus() }
+  })
   $<HTMLInputElement>('cat-search').onkeydown = (e) => { if (e.key === 'Escape') { (e.target as HTMLInputElement).value = ''; filterCatalog() } }
   buildLanes()
   // devices (in the "My voice" card)
@@ -1038,18 +1082,19 @@ async function main(): Promise<void> {
   let setupTick = 0
   holo.onLevels((l) => {
     for (const id of LANES) {
-      $(`mi-${id}`).style.width = `${l[id][0]}%`
-      $(`mo-${id}`).style.width = `${l[id][1]}%`
+      $(`mi-${id}`).style.setProperty('--lvl', `${l[id][0]}%`)
+      $(`mo-${id}`).style.setProperty('--lvl', `${l[id][1]}%`)
     }
     renderVoiceInfo(l)
     if (l.mic[0] > 12) micHeardAt = Date.now()
     if (l.f0.mic[1] > 0) avgPitch = l.f0.mic[1]
     const meter = document.getElementById('st-meter')
-    if (meter) meter.style.width = `${l.mic[0]}%`
+    if (meter) meter.style.setProperty('--lvl', `${l.mic[0]}%`)
     if (Date.now() - setupTick > 500) { setupTick = Date.now(); renderSetup() }
   })
   st = await holo.getState()
   selectLane(ui.tab)
+  revealSelected()
   render()
   if (ui.compact) await setCompact(true)
   maybeGuide()

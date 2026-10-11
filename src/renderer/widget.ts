@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   }).catch(() => {})
   holo.onState(render)
   holo.onLevels((l) => {
-    for (const id of ['mic', 'sys'] as LaneId[]) rows[id].querySelector<HTMLElement>('.w-bar i')!.style.width = `${l[id][1]}%`
+    for (const id of ['mic', 'sys'] as LaneId[]) rows[id].querySelector<HTMLElement>('.w-bar i')!.style.setProperty('--lvl', `${l[id][1]}%`)
   })
   const st = await holo.getState()
   if (st) render(st)

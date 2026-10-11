@@ -292,5 +292,7 @@
   "fx.zombie": "좀비",
   "fx.alien": "외계인",
   "fx.underwater": "물속",
-  "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input)."
+  "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
+  "cat.none": "Nothing found for “{q}”",
+  "cat.clear": "Clear the search"
 }

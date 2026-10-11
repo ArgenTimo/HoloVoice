@@ -171,12 +171,34 @@ function renderLanes(): void {
   }
 }
 
+/** Catalog header: which lane the catalog edits — a tab per lane, with a dot while that lane is on */
+function renderLaneTabs(): void {
+  const box = $('lane-tabs')
+  if (!box.children.length) {
+    for (const id of LANES) {
+      const b = el('button', 'lane-tab')
+      b.dataset.lane = id
+      b.setAttribute('role', 'tab')
+      b.append(iconEl(LANE_ICO[id], 15), el('span', '', laneName(id)), el('i', 'live-dot'))
+      b.onclick = () => selectLane(id)
+      box.appendChild(b)
+    }
+  }
+  box.querySelectorAll<HTMLElement>('.lane-tab').forEach((b) => {
+    const id = b.dataset.lane as LaneId
+    b.classList.toggle('sel', ui.tab === id)
+    b.setAttribute('aria-selected', String(ui.tab === id))
+    b.classList.toggle('on', !!st?.S.lanes[id].enabled)
+  })
+}
+
 function selectLane(id: LaneId): void {
   ui.tab = id
   holo.setUi({ tab: id })
   document.body.classList.toggle('lane-sys', id === 'sys')
-  $('cat-lane').replaceChildren(labeled('', LANE_ICO[id], laneName(id), 16))
+  renderLaneTabs()
   renderLanes()
+  renderLaneTabs()
   renderSetup()
   renderCatalog()
   renderInspector()

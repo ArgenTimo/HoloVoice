@@ -20,6 +20,7 @@
     "directories": {
       "output": "release"
     },
+    "npmRebuild": false,
     "asarUnpack": [
       "node_modules/uiohook-napi/**"
     ],

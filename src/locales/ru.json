@@ -312,5 +312,17 @@
   "var.demon.refined": "Сиплый",
   "var.demon.refinedTip": "Тяжёлая сиплость, при которой гласные остаются чёткими",
   "var.demon.monster": "Монстр",
-  "var.demon.monsterTip": "Киношный огромный монстр: очень низко, мощный подтон, большое пространство"
+  "var.demon.monsterTip": "Киношный огромный монстр: очень низко, мощный подтон, большое пространство",
+  "var.neural_female.female": "Спокойный",
+  "var.neural_female.femaleTip": "Ровный, спокойный женский голос средней высоты",
+  "var.neural_female.female2": "Тёплый",
+  "var.neural_female.female2Tip": "Тёплый, более низкий женский голос, тембр полнее",
+  "var.neural_female.female3": "Звонкий",
+  "var.neural_female.female3Tip": "Звонкий, молодой, живой женский голос с выразительной интонацией",
+  "var.neural_male.male": "Баритон",
+  "var.neural_male.maleTip": "Нейтральный баритон",
+  "var.neural_male.male2": "Низкий",
+  "var.neural_male.male2Tip": "Глубокий, густой бас",
+  "var.neural_male.male3": "Молодой",
+  "var.neural_male.male3Tip": "Более лёгкий, молодой голос, ближе к тенору"
 }

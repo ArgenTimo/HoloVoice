@@ -267,10 +267,14 @@ export const EFFECTS: EffectInfo[] = [
   // Without the GPU mode they fall back to the DSP "female"/"male" (see NEURAL_FALLBACK).
   { id: 'neural_female', icon: 'venus', neural: 'female',
     preset: { comp: 0.35, deess: 0.25, lowcut: 80, presence: 1, air: 1.5, level: 2.5 },
-    main: ['comp', 'deess', 'presence', 'air', 'warmth', 'reverb'] },
+    main: ['comp', 'deess', 'presence', 'air', 'warmth', 'reverb'] ,
+    // timbres: the style id names the voice file in the neural add-on (voices/<id>.wav)
+    variants: [{ id: 'female', preset: { comp: 0.35, deess: 0.25, lowcut: 80, presence: 1, air: 1.5, level: 2.5 } }, { id: 'female2', preset: { comp: 0.35, deess: 0.25, lowcut: 80, presence: 1, air: 1.5, level: 2.5 } }, { id: 'female3', preset: { comp: 0.35, deess: 0.25, lowcut: 80, presence: 1, air: 1.5, level: 2.5 } }] },
   { id: 'neural_male', icon: 'mars', neural: 'male',
     preset: { comp: 0.35, deess: 0.2, lowcut: 60, warmth: 1.5, presence: 0.5, level: 1.5 },
-    main: ['comp', 'deess', 'warmth', 'bass', 'presence', 'reverb'] },
+    main: ['comp', 'deess', 'warmth', 'bass', 'presence', 'reverb'] ,
+    // timbres: the style id names the voice file in the neural add-on (voices/<id>.wav)
+    variants: [{ id: 'male', preset: { comp: 0.35, deess: 0.2, lowcut: 60, warmth: 1.5, presence: 0.5, level: 1.5 } }, { id: 'male2', preset: { comp: 0.35, deess: 0.2, lowcut: 60, warmth: 1.5, presence: 0.5, level: 1.5 } }, { id: 'male3', preset: { comp: 0.35, deess: 0.2, lowcut: 60, warmth: 1.5, presence: 0.5, level: 1.5 } }] },
 ]
 export const EFFECT = Object.fromEntries(EFFECTS.map((e) => [e.id, e])) as Record<BuiltinId, EffectInfo>
 

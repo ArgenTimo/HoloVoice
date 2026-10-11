@@ -166,6 +166,19 @@ class LinuxRouter {
   /** Returns descriptions of the real output (where to play the result) and the capture monitor (what to read). */
   async interceptSys() {
     const s = this.s
+    // modules gone (PipeWire restarted): start over instead of trusting stale ids
+    if (s.sys.length) {
+      const out = await pactl('list', 'short', 'modules').catch(() => '')
+      const alive = new Set(out.split('\n').map((l) => Number(l.split('\t')[0])))
+      if (!s.sys.every((m) => alive.has(m))) {
+        for (const m of s.sys) await pactl('unload-module', String(m)).catch(() => {})
+        if (s.defaultChanged && s.realSink) await pactl('set-default-sink', s.realSink).catch(() => {})
+        s.sys = []
+        s.defaultChanged = false
+        s.moved = {}
+        this.save()
+      }
+    }
     if (!s.sys.length) {
       s.realSink = (await pactl('get-default-sink')).trim()
       if (!s.realSink || OURS.includes(s.realSink)) throw new Error('real audio output not found')

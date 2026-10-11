@@ -141,6 +141,9 @@ function start() {
   })
   engine.loadFile(PAGE('engine'))
   log.attach('engine', engine.webContents)
+  // the engine reloads itself (quality change): helpers it started must start over with the new page,
+  // otherwise e.g. the neural sidecar never says "ready" again
+  engine.webContents.on('did-start-loading', () => { winSys?.stop(); neural?.stop() })
   engine.on('closed', () => { engine = null; if (!quitting) app.quit() })
   // The engine renderer crashed: release what it held (the Windows helper keeps other apps turned down otherwise)
   // and start it again — settings are in its localStorage, so it comes back in the same state.

@@ -97,9 +97,13 @@ class Lane {
   src: MediaStreamAudioSourceNode | null = null
   /** Windows computer sound: PCM pushed from holo-sysaudio */
   feed: AudioWorkletNode | null = null
-  /** neural voice: the mic goes out to the sidecar (nOut), the converted voice comes back (nIn) in place of the mic */
+  /** neural voice: the mic goes out to the sidecar (nOut), the converted voice comes back (nIn → nGain) in place
+   *  of the mic (direct); the two are crossfaded so switching never clicks or lets the real voice through */
   nOut: AudioWorkletNode | null = null
   nIn: AudioWorkletNode | null = null
+  nGain: GainNode | null = null
+  neuralOn = false
+  private direct!: GainNode
   rig: VoiceRig | null = null
   /** voice pitch from the vocoder: current and average, Hz */
   f0: [number, number] = [0, 0]
@@ -120,7 +124,8 @@ class Lane {
     const L = this.limiter
     L.threshold.value = -3; L.knee.value = 0; L.ratio.value = 20; L.attack.value = 0.002; L.release.value = 0.1
     this.anIn.fftSize = 1024; this.anOut.fftSize = 1024 // ≈20 ms: for both the meter and the gate
-    this.inGain.connect(this.hpIn).connect(this.gate)
+    this.direct = c.createGain()
+    this.inGain.connect(this.hpIn).connect(this.direct).connect(this.gate)
     this.hpIn.connect(this.anIn)
     this.outGain.connect(this.hpOut).connect(L)
     L.connect(this.ctx.destination)
@@ -156,25 +161,42 @@ class Lane {
     this.feed.connect(this.inGain)
   }
 
-  /** Route the microphone through the neural voice sidecar (on) or straight into the chain (off) */
-  setNeural(on: boolean): void {
-    if (on === !!this.nIn || !this.loaded) return
+  /** Stream the mic to the sidecar and buffer its answer (while it loads, too — so the switch finds it primed) */
+  streamNeural(on: boolean): void {
+    if (on === !!this.nOut || !this.loaded) return
     if (on) {
       const nOut = new AudioWorkletNode(this.ctx, 'holo-stream', { numberOfOutputs: 0 })
       nOut.port.onmessage = (e: MessageEvent) => holo.neuralIn(e.data as ArrayBuffer)
       // the sidecar answers in blocks (~180 ms): the buffer must hold more than one
       const nIn = new AudioWorkletNode(this.ctx, 'holo-feed',
         { numberOfInputs: 0, outputChannelCount: [1], processorOptions: { channels: 1, start: 0.25, max: 0.8 } })
+      const nGain = this.ctx.createGain()
+      nGain.gain.value = 0
       this.hpIn.connect(nOut)
-      this.hpIn.disconnect(this.gate)
-      nIn.connect(this.gate)
-      this.nOut = nOut
-      this.nIn = nIn
+      nIn.connect(nGain).connect(this.gate)
+      Object.assign(this, { nOut, nIn, nGain })
     } else {
-      if (this.nOut) { this.hpIn.disconnect(this.nOut); this.nOut.port.onmessage = null }
-      this.nIn?.disconnect()
-      this.nOut = this.nIn = null
-      this.hpIn.connect(this.gate)
+      this.setNeural(false)
+      const { nOut, nIn, nGain } = this
+      this.nOut = this.nIn = this.nGain = null
+      // after the crossfade back
+      setTimeout(() => {
+        if (nOut) { try { this.hpIn.disconnect(nOut) } catch { /* gone */ } nOut.port.onmessage = null }
+        nIn?.disconnect(); nGain?.disconnect()
+      }, 150)
+    }
+  }
+
+  /** Crossfade between the real mic (direct) and the converted voice (20 ms) */
+  setNeural(on: boolean): void {
+    if (on && !this.nGain) return
+    if (on === this.neuralOn) return
+    this.neuralOn = on
+    const t = this.ctx.currentTime
+    for (const [g, v] of [[this.direct.gain, on ? 0 : 1], [this.nGain?.gain, on ? 1 : 0]] as [AudioParam | undefined, number][]) {
+      if (!g) continue
+      g.cancelScheduledValues(t)
+      g.setTargetAtTime(v, t, 0.02)
     }
   }
 
@@ -205,7 +227,7 @@ class Lane {
     if (this.id !== 'sys') {
       // a neural voice that isn't running (no GPU mode, still loading): its DSP counterpart meanwhile
       const g = effectInfo(c.effect)?.neural
-      if (g && !this.nIn) { const fb = NEURAL_FALLBACK[g]; return effectTarget(fb, c.fx[fb], c.amount / 100, S.speaker) }
+      if (g && !this.neuralOn) { const fb = NEURAL_FALLBACK[g]; return effectTarget(fb, c.fx[fb], c.amount / 100, S.speaker) }
       return effectTarget(c.effect, c.fx[c.effect], c.amount / 100, S.speaker)
     }
     // computer sound: "Clean" means untouched (its preset is voice EQ/enhancement) plus only the user's own edits
@@ -217,7 +239,13 @@ class Lane {
   }
 
   /** Smoothly transition to the settings over seconds: fade-in, fade-out, switching between effects */
-  update(seconds = 0.05): void {
+  /** when the current fade ends (ctx time): touching a knob mid-fade must not cut a 10 s fade to 50 ms */
+  private rampEnd = 0
+
+  update(seconds?: number): void {
+    const now = this.ctx.currentTime
+    if (seconds === undefined) seconds = Math.max(0.05, this.rampEnd - now)
+    else this.rampEnd = now + seconds
     this.rig?.apply(this.target(), seconds)
     if (this.id === 'mic') previewFollow()
     // noticeable transition — show the fade bar (main decides whether it is enabled)
@@ -228,9 +256,9 @@ class Lane {
   rampOut(effect: EffectId = this.cfg.effect): number { return this.cfg.fx[effect]?.rampOut ?? 0 }
 
   /** id 'none' — render without playing anywhere (the chain, meters and self-monitoring keep working) */
-  async setSink(id: string): Promise<void> {
+  async setSink(id: string): Promise<boolean> {
     const sink = id === 'none' ? { type: 'none' } : id === 'default' ? '' : id
-    try { await (this.ctx as unknown as { setSinkId?: (s: unknown) => Promise<void> }).setSinkId?.(sink) } catch (e) { console.warn('setSinkId', e) }
+    try { await (this.ctx as unknown as { setSinkId?: (s: unknown) => Promise<void> }).setSinkId?.(sink); return true } catch (e) { console.warn('setSinkId', e); return false }
   }
 
   level(which: 'in' | 'out', buf: Float32Array): number {
@@ -251,7 +279,7 @@ class Lane {
       const thr = this.cfg.gate
       let want = true
       // neural voice: the converted voice comes ~0.4 s after the mic — the sidecar gates silence itself
-      if (thr > -80 && !this.nIn) {
+      if (thr > -80 && !this.neuralOn) {
         if (this.level('in', buf) > thr) lastLoud = performance.now()
         want = performance.now() - lastLoud < 250
       }
@@ -274,6 +302,7 @@ const REC_SECONDS = 6
 let recBuffer: AudioBuffer | null = null
 let tap: AudioWorkletNode | null = null
 let pv: { ctx: SinkCtx; rig: VoiceRig; src: AudioBufferSourceNode | null } | null = null
+let pvInit: Promise<void> | null = null
 
 /** The "My voice" lane effect — the selected one, even if the lane is off: that's the one they want to hear */
 function previewTarget(): FxParams {
@@ -306,13 +335,16 @@ async function startRecording(): Promise<void> {
   }
   preview.recording = true
   tap.port.postMessage({ start: REC_SECONDS })
+  // a dead microphone never fills the buffer: stop by the clock too
+  setTimeout(() => { if (preview.recording) tap?.port.postMessage({ stop: true }) }, (REC_SECONDS + 1) * 1000)
   publish()
 }
 
 async function playPreview(): Promise<void> {
   if (!recBuffer) return
   stopPreview()
-  if (!pv) {
+  // one context, created once even if "play" is pressed twice quickly
+  pvInit ??= (async () => {
     const ctx = new AudioContext({ latencyHint: 'interactive' }) as SinkCtx
     await ctx.audioWorklet.addModule(new URL('../../dist/dsp/worklet.js', location.href).href)
     const rig = new VoiceRig(ctx, new AudioWorkletNode(ctx, 'holo-voice', { processorOptions: { fftSize: 2048 } }))
@@ -320,7 +352,9 @@ async function playPreview(): Promise<void> {
     lim.threshold.value = -3; lim.ratio.value = 20; lim.attack.value = 0.002
     rig.output.connect(lim).connect(ctx.destination)
     pv = { ctx, rig, src: null }
-  }
+  })()
+  await pvInit
+  if (!pv) return
   // to the headphones: while computer audio is captured the default output is ours, so set the real one explicitly
   try { await pv.ctx.setSinkId?.(realOutId) } catch { /* default */ }
   await pv.ctx.resume()
@@ -328,7 +362,7 @@ async function playPreview(): Promise<void> {
   const src = pv.ctx.createBufferSource()
   src.buffer = recBuffer
   src.connect(pv.rig.input)
-  src.onended = () => { if (pv?.src === src) { pv.src = null; preview.playing = false; publish() } }
+  src.onended = () => { if (pv?.src === src) { pv.src = null; preview.playing = false; publish(); idlePreview() } }
   src.start()
   pv.src = src
   preview.playing = true
@@ -339,6 +373,11 @@ function stopPreview(): void {
   if (preview.recording) tap?.port.postMessage({ stop: true })
   if (pv?.src) { const s = pv.src; pv.src = null; try { s.stop() } catch { /* already */ } }
   preview.playing = false
+  idlePreview()
+}
+/** The test chain is a full third DSP chain and keeps the headphones' stream open: sleep when not playing */
+function idlePreview(): void {
+  setTimeout(() => { if (pv && !pv.src) pv.ctx.suspend().catch(() => {}) }, 300)
 }
 
 // ---------------------------------------------------------------- devices
@@ -369,18 +408,24 @@ async function findDevice(kind: MediaDeviceKind, test: (label: string) => boolea
 
 let micError = '' // the last failure to open the microphone (shown in the hint until it opens again)
 
+/** S.mic is the user's choice and is kept even while that mic is unplugged; activeMic is what is open now */
+let activeMic = ''
+const wantedMic = () => (S.mic && S.mic !== 'default' && mics.some((d) => d.deviceId === S.mic) ? S.mic : 'default')
+
 async function openMic(): Promise<void> {
   const audio: MediaTrackConstraints = {
     echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1,
   }
-  if (S.mic && S.mic !== 'default') audio.deviceId = { exact: S.mic }
+  let id = mics.length ? wantedMic() : S.mic || 'default'
+  if (id !== 'default') audio.deviceId = { exact: id }
   let stream: MediaStream
   try {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio })
     } catch (e) {
       if ((e as Error)?.name === 'NotAllowedError') throw e // a different device won't help
-      S.mic = 'default'
+      // fall back for now — without forgetting the choice (it comes back when that mic is available again)
+      id = 'default'
       delete audio.deviceId
       stream = await navigator.mediaDevices.getUserMedia({ audio })
     }
@@ -391,6 +436,7 @@ async function openMic(): Promise<void> {
     throw e
   }
   micError = ''
+  activeMic = id
   // unplugged (or taken away by the system): try again shortly — a replugged USB mic keeps its id
   stream.getAudioTracks()[0]?.addEventListener('ended', () => {
     console.warn('microphone track ended')
@@ -420,17 +466,22 @@ let micSink = ''
 async function applyMicOut(): Promise<void> {
   const target = isVirtualOut(outLabelOf(S.out)) || S.outManual ? S.out : 'none'
   if (target === micSink) return
-  micSink = target
-  await lanes.mic.setSink(target)
+  // remembered only when it worked — a failed switch is retried on the next refresh
+  micSink = (await lanes.mic.setSink(target)) ? target : ''
 }
 
 let rerouteAt = 0
-async function refreshDevices(): Promise<void> {
+/** One refresh at a time: the poll, devicechange, resume and track 'ended' can all ask at once */
+let refreshing: Promise<void> = Promise.resolve()
+function refreshDevices(): Promise<void> {
+  refreshing = refreshing.then(doRefreshDevices, doRefreshDevices)
+  return refreshing
+}
+async function doRefreshDevices(): Promise<void> {
   await listDevices()
   const pick = (items: MediaDeviceInfo[], v: string) => (items.some((d) => d.deviceId === v) ? v : items[0]?.deviceId ?? 'default')
-  const mic = pick(mics, S.mic)
   const dead = lanes.mic.stream?.getAudioTracks()[0]?.readyState !== 'live'
-  if (mic !== S.mic || dead || micError) { S.mic = mic; await openMic().catch(() => {}) }
+  if (wantedMic() !== activeMic || dead || micError) await openMic().catch(() => {})
   // Linux: PipeWire restarted (update, resume) and took the HoloVoice sink with it — create it again
   if (holo.platform === 'linux' && micRoute.ok && micRoute.sinkLabel && !outs.some((d) => d.label === micRoute.sinkLabel)
     && Date.now() - rerouteAt > 10000) {
@@ -438,6 +489,7 @@ async function refreshDevices(): Promise<void> {
     console.warn('virtual microphone gone — recreating')
     micRoute = await holo.routeMic()
     if (micRoute.ok && micRoute.sinkLabel) await findDevice('audiooutput', (l) => l === micRoute.sinkLabel)
+    micSink = '' // the new sink has the same id but is a new device: bind again
   }
   // a virtual cable that appears (VB-Cable just installed, PipeWire restarted) is taken at once — no restart needed
   const virt = virtualOut()
@@ -500,11 +552,11 @@ async function setSys(on: boolean): Promise<void> {
 async function applySys(on: boolean): Promise<void> {
   const lane = lanes.sys
   if (!on) {
+    sysActive = false // first: a toggle-on arriving during the release must queue a new start
     lane.setStream(null)
     await holo.routeSys(false)
     await lane.ctx.suspend()
     realOutId = ''
-    sysActive = false
     updateSysHint()
     return
   }
@@ -529,6 +581,12 @@ async function applySys(on: boolean): Promise<void> {
         deviceId: { exact: cap.deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false,
         channelCount: 2,
       } })
+      // the capture device vanished (PipeWire restarted, resume): set the interception up again
+      stream.getAudioTracks()[0]?.addEventListener('ended', () => {
+        if (!sysActive) return
+        console.warn('computer-sound capture ended — restarting it')
+        setSys(false).then(() => { if (S.lanes.sys.enabled) return setSys(true) }).catch(() => {})
+      })
     }
     lane.rig?.apply(NEUTRAL, 0) // captured audio starts as is — then the effect fades in
     if (stream) lane.setStream(stream)
@@ -558,6 +616,7 @@ if (isWin) {
     sysWanted = false
     sysActive = false
     lanes.sys.setStream(null)
+    lanes.sys.ctx.suspend().catch(() => {})
     updateSysHint(error)
     publish()
   })
@@ -578,13 +637,26 @@ holo.onRealSink(async ({ realSinkLabel }) => {
 
 let neuralGender: 'female' | 'male' | null = null // the voice the sidecar runs (or is loading)
 let neuralStopTimer = 0
+let neuralOffTimer = 0
+
+/** Switch between the converted voice and the DSP fallback: parameters and audio path change together */
+function neuralSwitch(on: boolean): void {
+  const lane = lanes.mic
+  if (on === lane.neuralOn) return
+  lane.setNeural(on)
+  lane.update(0.02)
+}
 
 /** Bring the sidecar in line with the "My voice" lane: started for a neural effect, stopped a while after leaving it */
 async function syncNeural(): Promise<void> {
   const c = S.lanes.mic
   const want = neural.available && c.enabled ? effectInfo(c.effect)?.neural ?? null : null
   if (want) {
+    clearTimeout(neuralOffTimer)
     clearTimeout(neuralStopTimer)
+    neuralStopTimer = 0
+    lanes.mic.streamNeural(true)
+    if (neural.status === 'ready' && want === neuralGender) neuralSwitch(true)
     if (want === neuralGender && neural.status !== 'error' && neural.status !== 'off') return
     neuralGender = want
     if (neural.status === 'off' || neural.status === 'error') { neural.status = 'loading'; neural.error = '' }
@@ -593,7 +665,16 @@ async function syncNeural(): Promise<void> {
     if (!r.ok) { neural.status = 'error'; neural.error = r.error ?? ''; neuralGender = null; publish() }
     return
   }
-  lanes.mic.setNeural(false)
+  // leaving the neural voice: a lane being turned off fades out ON the neural voice first
+  if (lanes.mic.neuralOn) {
+    clearTimeout(neuralOffTimer)
+    const wait = S.lanes.mic.enabled ? 0 : lanes.mic.rampOut() * 1000 + 50
+    neuralOffTimer = window.setTimeout(() => {
+      if (effectInfo(S.lanes.mic.effect)?.neural && S.lanes.mic.enabled) return
+      neuralSwitch(false)
+      lanes.mic.streamNeural(false)
+    }, wait)
+  } else lanes.mic.streamNeural(false)
   if (neural.status === 'off' || neuralStopTimer) return
   // keep the model loaded for a minute: switching back is then instant
   neuralStopTimer = window.setTimeout(() => {
@@ -623,7 +704,8 @@ holo.onNeuralStatus((e) => {
     neuralGender = null
   } else return // stats
   const on = neural.status === 'ready' && !!effectInfo(S.lanes.mic.effect)?.neural && S.lanes.mic.enabled
-  if (on !== !!lane.nIn) { lane.setNeural(on); lane.update(0.3) }
+  if (on !== lane.neuralOn) neuralSwitch(on)
+  if (neural.status === 'off' || neural.status === 'error') lane.streamNeural(false)
   publish()
 })
 
@@ -662,7 +744,7 @@ async function handle(c: Cmd): Promise<void> {
       updateSysHint(); publish()
       if (on) {
         if (sysActive) lane.update(lane.rampIn()) // hasn't turned off yet — just fade back in
-        else await setSys(true)
+        await setSys(true) // always through the queue: a release may be in progress right now
       } else {
         const t = lane.rampOut()
         lane.update(t)
@@ -784,7 +866,7 @@ async function handle(c: Cmd): Promise<void> {
     case 'record': await startRecording(); return
     case 'play': await playPreview(); return
     case 'stopPreview': stopPreview(); break
-    case 'mic': S.mic = c.id; await openMic(); break
+    case 'mic': S.mic = c.id; await openMic().catch(() => {}); updateMicHint(); break
     case 'out': S.out = c.id; S.outManual = !isVirtualOut(outLabelOf(c.id)); await applyMicOut(); updateMicHint(); break
     case 'monitor': S.monitor = c.on; await applyMonitor(); break
     case 'monitorVol': S.monitorVol = c.value; await applyMonitor(); break
@@ -831,6 +913,11 @@ async function main(): Promise<void> {
   }).catch(() => {})
 
   navigator.mediaDevices.addEventListener('devicechange', () => { refreshDevices() })
+  // a context the system suspended (device switch, audio server hiccup) is woken up while it should run
+  lanes.mic.ctx.addEventListener('statechange', () => { if (lanes.mic.ctx.state === 'suspended') lanes.mic.ctx.resume().catch(() => {}) })
+  lanes.sys.ctx.addEventListener('statechange', () => {
+    if (lanes.sys.ctx.state === 'suspended' && sysActive && !sysBusy) lanes.sys.ctx.resume().catch(() => {})
+  })
   // after sleep: contexts may be suspended, devices re-enumerated
   holo.onResume(() => {
     console.log('resumed from sleep')

@@ -30,6 +30,8 @@
       "!src/**/*.ts",
       "dist/**/*.js",
       "build/icon.png",
+      "build/tray.png",
+      "build/tray-live.png",
       "package.json"
     ],
     "linux": {

@@ -37,6 +37,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 app.disableHardwareAcceleration() // windows are tiny; without a GPU process there are fewer crashes across drivers
 
 const ICON = path.join(__dirname, '..', 'build', 'icon.png')
+const TRAY_ICON = { off: path.join(__dirname, '..', 'build', 'tray.png'), live: path.join(__dirname, '..', 'build', 'tray-live.png') }
+const trayImage = (live) => nativeImage.createFromPath(live ? TRAY_ICON.live : TRAY_ICON.off).resize({ width: 22, height: 22 })
 const PAGE = (name) => path.join(__dirname, 'renderer', `${name}.html`)
 const fromAutostart = process.argv.includes('--widget')
 
@@ -345,7 +347,7 @@ function setAutostart(on) {
 
 function createTray() {
   try {
-    tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 22, height: 22 }))
+    tray = new Tray(trayImage(false))
     tray.setToolTip('HoloVoice')
     tray.on('click', showPanel)
     updateTray()
@@ -370,6 +372,9 @@ function updateTray() {
   if (!tray) return
   const L = state?.S.lanes
   tray.setToolTip(state ? `HoloVoice\n${laneStatus('mic')}\n${laneStatus('sys')}` : 'HoloVoice')
+  // a green dot while any effect is on — so "it's still running" is visible at a glance
+  const live = !!(L?.mic.enabled || L?.sys.enabled)
+  if (tray.live !== live) { tray.live = live; tray.setImage(trayImage(live)) }
   // quick effect choice without opening the panel: built-in effects in catalog order + the user's own
   const effects = (lane) => [...(state?.effects ?? []), ...(state?.S.custom ?? []).map((c) => c.id)]
     .filter((id) => !(lane === 'sys' && id.startsWith('neural')))

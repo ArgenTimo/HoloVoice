@@ -24,7 +24,7 @@
   "btn.update": "Aktualisieren",
   "btn.updateTip": "Neue Version holen",
   "hk.title": "Tastenkürzel",
-  "hk.note": "Sie funktionieren in jedem Programm und in Spielen. Erneutes Drücken des Kürzels des aktiven Effekts schaltet ihn aus. Klicke auf ein Kürzel und drücke dann eine Taste, eine Kombination oder die mittlere/seitliche Maustaste (Esc — abbrechen, Entf — entfernen). Daneben 1×, 2×, 3× oder „Halten“ wählen — der Effekt bleibt an, solange die Taste gedrückt ist.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "Alle zurücksetzen",
   "hk.toggle": "Effekt ein / aus",
   "hk.next": "Nächster Effekt",
@@ -149,7 +149,7 @@
   "pg.tone": "Klang",
   "pg.motion": "Bewegung",
   "pg.space": "Raum",
-  "p.psola": "Natürliche Verarbeitung (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "Ziel-Stimmhöhe",
   "p.autoTarget": "An Ziel anpassen",
   "p.formantFollow": "Klangfarbe folgt der Tonhöhe",
@@ -231,7 +231,7 @@
   "tray.off": "aus",
   "dev.micL": "Mikrofon",
   "dev.outL": "Senden an",
-  "speaker.title": "Deine Stimme",
+  "speaker.title": "Your natural voice",
   "speaker.low": "Tief",
   "speaker.mid": "Mittel",
   "speaker.high": "Hoch",
@@ -294,5 +294,10 @@
   "fx.underwater": "Unter Wasser",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

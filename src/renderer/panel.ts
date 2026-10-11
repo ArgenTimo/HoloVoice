@@ -20,10 +20,13 @@ const BUILTIN_GROUPS: [string, EffectId[]][] = [
   ['grp.devices', ['telephone', 'radio', 'megaphone', 'vhs']],
   ['grp.atmo', ['hologram_classic', 'hologram_warm', 'ice', 'electric', 'stadium', 'cave', 'underwater']],
 ]
+const SYS_ORDER = ['grp.atmo', 'grp.devices', 'grp.characters', 'grp.voices']
 /** Catalog groups: built-in + "My effects", if any */
 function groups(): [string, EffectId[]][] {
   const mine = customs().map((c) => c.id)
+  // computer sound: atmospheres and devices suit videos better than voice changers — they come first there
   const out = [...BUILTIN_GROUPS]
+  if (ui?.tab === 'sys') out.sort((a, b) => SYS_ORDER.indexOf(a[0]) - SYS_ORDER.indexOf(b[0]))
   const fav = (st?.S.favorites ?? []).filter((id) => effectInfo(id as EffectId)) as EffectId[]
   if (fav.length) out.unshift(['grp.fav', fav])
   // neural voices: only with the optional GPU mode installed, only for "My voice" (hidden on the other tab by CSS)
@@ -34,7 +37,7 @@ function groups(): [string, EffectId[]][] {
 const esc = (x: string) => x.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 /** Signature of the custom effect set: when it changes, the catalog, lists and hotkeys are rebuilt */
 let customSig = ''
-const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|') + (st?.neural?.available ? '|neural' : '') + `|${(st?.S.favorites ?? []).join(',')}`
+const sigOf = () => customs().map((c) => c.id + c.name + c.icon).join('|') + (st?.neural?.available ? '|neural' : '') + `|${(st?.S.favorites ?? []).join(',')}|${ui?.tab}`
 const iconOf = (id: EffectId) => effectInfo(id)?.icon ?? DEFAULT_CUSTOM_ICON
 /** Icon + text in one element; text goes through textContent (custom effect names are user input) */
 const labeled = (cls: string, ico: string, text: string, size = 16) => {
@@ -228,7 +231,10 @@ function buildCatalog(): void {
     for (const id of ids) {
       const tile = el('button', 'tile')
       tile.dataset.effect = id
-      tile.append(iconEl(iconOf(id), 24, 't-icon'), el('span', 't-name', fxLabel(id)), el('span', 't-key'))
+      // a neural voice tile shows the plain voice name — the AI badge tells it apart (full name in the tooltip)
+      const neuralOf = effectInfo(id)?.neural
+      tile.append(iconEl(iconOf(id), 24, 't-icon'), el('span', 't-name', fxLabel(neuralOf ?? id)), el('span', 't-key'))
+      if (isNeural(id)) tile.appendChild(el('span', 't-badge', 'AI'))
       tile.onclick = () => holo.cmd({ type: 'effect', lane: ui.tab, effect: id })
       tile.dataset.name = fxLabel(id).toLowerCase()
       const fav = !!st?.S.favorites?.includes(id)
@@ -300,8 +306,9 @@ function renderCatalog(): void {
     if (modified && !dot) { dot = el('i', 'mod-dot'); (dot as HTMLElement).title = t('ins.custom'); tile.appendChild(dot) }
     if (!modified && dot) dot.remove()
     const key = hk.map[`${ui.tab}:${id}`]
-    tile.querySelector('.t-key')!.textContent = key || ''
-    tile.title = `${fxLabel(id)}${key ? ` — ${key}` : ''}`
+    const keyText = key ? hotkeyText(key) : ''
+    tile.querySelector('.t-key')!.textContent = keyText
+    tile.title = `${fxLabel(id)}${keyText ? ` — ${keyText}` : ''}${isNeural(id) && st?.neural?.latencyMs ? ` · ≈${st.neural.latencyMs} ms` : ''}`
   })
 }
 
@@ -325,15 +332,34 @@ function paramSlider(lane: LaneId, effect: EffectId, d: ParamDef, parent: HTMLEl
   input.type = 'range'
   if (d.log) { input.min = '0'; input.max = String(STEPS); input.step = '1' }
   else { input.min = String(d.min); input.max = String(d.max); input.step = String(d.step) }
-  input.oninput = () => {
-    const v = fromSlider(d, Number(input.value))
+  const send = (v: number) => {
     val.textContent = d.fmt(v)
     row.classList.add('mod')
     holo.cmd({ type: 'fxParam', lane, effect, key: d.key, value: v })
   }
+  input.oninput = () => send(fromSlider(d, Number(input.value)))
+  // double-click: back to this effect's own value for the knob
+  row.title = t('ins.dblReset')
+  row.ondblclick = (e) => {
+    e.preventDefault()
+    const v = effectFull(effect)[d.key]
+    input.value = String(toSlider(d, v))
+    syncRange(input)
+    send(v)
+  }
   row.append(head, input)
+  // an on/off parameter is a switch, not a two-position slider
+  if (d.min === 0 && d.max === 1 && d.step === 1) {
+    row.classList.add('toggle-row')
+    const sw = el('button', 'switch small')
+    sw.setAttribute('role', 'switch')
+    sw.append(el('i'))
+    sw.onclick = (e) => { e.preventDefault(); input.value = Number(input.value) ? '0' : '1'; input.dispatchEvent(new Event('input', { bubbles: true })) }
+    head.appendChild(sw)
+    input.addEventListener('input', () => sw.classList.toggle('on', Number(input.value) > 0))
+    fxInputs.push({ key: d.key, input, val, row, toSlider: (v) => { sw.classList.toggle('on', v > 0); return toSlider(d, v) }, fmt: d.fmt })
+  } else fxInputs.push({ key: d.key, input, val, row, toSlider: (v) => toSlider(d, v), fmt: d.fmt })
   parent.appendChild(row)
-  fxInputs.push({ key: d.key, input, val, row, toSlider: (v) => toSlider(d, v), fmt: d.fmt })
 }
 
 function rampSlider(lane: LaneId, effect: EffectId, which: 'rampIn' | 'rampOut', label: string, parent: HTMLElement): void {
@@ -385,7 +411,8 @@ function buildInspector(lane: LaneId, effect: EffectId): void {
   }
   main.appendChild(all)
   const btns = el('div', 'row-btns')
-  const reset = el('button', 'btn', t('ins.reset'))
+  btns.id = 'ins-reset'
+  const reset = el('button', 'btn', t(isCustom(effect) ? 'ins.resetCustom' : 'ins.reset'))
   reset.onclick = () => {
     const before = st?.S.lanes[lane].fx[effect]
     holo.cmd({ type: 'fxReset', lane, effect })
@@ -480,6 +507,9 @@ function renderInspector(): void {
     f.val.textContent = f.fmt(v)
     if (!ramp) f.row.classList.toggle('mod', user?.p?.[f.key as ParamKey] !== undefined)
   }
+  // "reset" only makes sense once something was changed
+  const resetBox = document.getElementById('ins-reset')
+  if (resetBox) resetBox.hidden = !user?.p || !Object.keys(user.p).length
   const pv = st.preview
   const rec = document.getElementById('pv-rec') as HTMLButtonElement | null
   if (rec) {
@@ -641,32 +671,36 @@ function splitBinding(b: string): [string, HkMode] {
   return [m[1], (m[2] as HkMode) || 'press']
 }
 
+/** "Ctrl+F8 x2" → "Ctrl+F8 (Double)", mouse buttons by name */
+function hotkeyText(k: string): string {
+  const [combo, mode] = splitBinding(k)
+  return mode === 'press' ? bindingText(combo) : `${bindingText(combo)} (${t(`hk.mode.${mode}`)})`
+}
+
 /** Hints and switch tooltips name the CURRENT shortcut of an action ([data-hk] text, [data-hk-title] tooltip) */
 function fillHotkeyRefs(root: ParentNode = document): void {
-  const text = (a: string) => {
-    const k = hk.map[a]
-    if (!k) return t('hk.none')
-    const [combo, mode] = splitBinding(k)
-    return mode === 'press' ? bindingText(combo) : `${bindingText(combo)} (${t(`hk.mode.${mode}`)})`
-  }
+  const text = (a: string) => (hk.map[a] ? hotkeyText(hk.map[a]) : t('hk.none'))
   root.querySelectorAll<HTMLElement>('[data-hk]').forEach((e) => { e.textContent = text(e.dataset.hk!) })
   root.querySelectorAll<HTMLElement>('[data-hk-title]').forEach((e) => { e.title = text(e.dataset.hkTitle!) })
 }
 
 /** Human-readable shortcut: mouse buttons by name */
 function bindingText(combo: string): string {
-  return combo.split('+').map((k) => (/^Mouse\d$/.test(k) ? t(`hk.${k.toLowerCase()}`) : k)).join(' + ')
+  return combo.split('+').map((k) => (/^Mouse\d$/.test(k) ? t(`hk.${k.toLowerCase()}`) : k)).join('+')
 }
 
 function buildHotkeys(): void {
   for (const lane of LANES) {
     const list = $(`hk-${lane}`)
     list.innerHTML = ''
+    // main actions, then the effects under the same group headings as the catalog
     const actions: [string, string][] = [
       ['toggle', t('hk.toggle')], ['next', t('hk.next')], ['prev', t('hk.prev')],
-      ...groups().flatMap(([, ids]) => ids.map((id): [string, string] => [id, fxLabel(id)])),
+      ...groups().filter(([g]) => g !== 'grp.fav' && !(lane === 'sys' && g === 'grp.neural'))
+        .flatMap(([g, ids]) => [['#', t(g)] as [string, string], ...ids.map((id): [string, string] => [id, fxLabel(id)])]),
     ]
     for (const [what, label] of actions) {
+      if (what === '#') { list.appendChild(el('div', 'hk-group', label)); continue }
       const row = el('div', 'hk-row')
       const fx = effectInfo(what)
       const btn = el('button', 'hk-key')
@@ -703,7 +737,7 @@ function renderHotkeys(): void {
     if (b.classList.contains('rec')) return
     const a = b.dataset.action!
     const k = hk.map[a] || ''
-    b.textContent = k ? bindingText(splitBinding(k)[0]) : '—'
+    b.textContent = k ? bindingText(splitBinding(k)[0]) : t('hk.set')
     b.classList.toggle('empty', !k)
     b.classList.toggle('busy', !!k && hk.failed.includes(a))
     b.title = k && hk.failed.includes(a) ? t('hk.busy') : ''
@@ -717,7 +751,7 @@ function renderHotkeys(): void {
   document.querySelectorAll<HTMLSelectElement>('.hk-mode').forEach((m) => {
     const k = hk.map[m.dataset.action!] || ''
     m.value = splitBinding(k)[1]
-    m.disabled = !k
+    m.hidden = !k // a mode only once there is a key
   })
   renderCatalog()
 }
@@ -799,7 +833,7 @@ function openModal(id: string): void {
   m.hidden = false
   m.onclick = (e) => { if (e.target === m || (e.target as HTMLElement).closest('[data-close]')) closeModal(m) }
   // keyboard users land inside the dialog
-  m.querySelector<HTMLElement>('button, input, select')?.focus()
+  m.querySelector<HTMLElement>('button:not([data-close]), input, select')?.focus({ preventScroll: true })
 }
 function closeModal(m: HTMLElement): void {
   m.hidden = true
@@ -850,7 +884,7 @@ function buildSetup(): void {
 function renderSetup(): void {
   const m = document.getElementById('modal-setup')
   if (!m || m.hidden || !st) return
-  const step = (id: string, state: 'ok' | 'todo' | 'info', text: string, ctl?: (box: HTMLElement) => void) => {
+  const step = (id: string, state: 'ok' | 'todo' | 'info' | 'wait', text: string, ctl?: (box: HTMLElement) => void) => {
     const li = $(id)
     li.className = state
     li.querySelector('.st-text')!.innerHTML = text
@@ -863,7 +897,9 @@ function renderSetup(): void {
   const heard = Date.now() - micHeardAt < 8000
   const micLabel = st.mics.find((d) => d.id === st!.S.mic)?.label || t('dev.default')
 
-  step('st-mic', heard ? 'ok' : 'todo', heard ? t('setup.micOk', { mic: esc(micLabel) }) : t('setup.micSay', { mic: esc(micLabel) }))
+  // pending steps are neutral; only a real problem (no virtual mic, cable left as default) is amber
+  $('setup-done').textContent = t(heard && virtual ? 'setup.done' : 'setup.later')
+  step('st-mic', heard ? 'ok' : 'wait', heard ? t('setup.micOk', { mic: esc(micLabel) }) : t('setup.micSay', { mic: esc(micLabel) }))
   // the cable installer made the cable the default output: the user hears nothing until that is undone
   const cableDefault = win && /CABLE Input/i.test(st.outs.find((d) => d.id === 'default')?.label ?? '')
   step('st-virt', virtual && !cableDefault ? 'ok' : 'todo',
@@ -880,7 +916,7 @@ function renderSetup(): void {
       b.onclick = () => holo.open('https://vb-audio.com/Cable/')
       box.append(b, el('span', 'st-wait', t('setup.virtWait')))
     })
-  step('st-app', virtual ? 'info' : 'todo', t('setup.app', { mic: micName }), (box) => {
+  step('st-app', 'info', t('setup.app', { mic: micName }), (box) => {
     const b = el('button', 'btn', t('setup.copy'))
     b.onclick = async () => { try { await navigator.clipboard.writeText(micName); toast(t('setup.copied', { mic: micName })) } catch { /* no clipboard */ } }
     box.appendChild(b)
@@ -987,11 +1023,15 @@ function buildHoloMenu(): void {
   item('monitor', t('btn.osd'), () => openModal('modal-osd'))
   item('refresh', t('menu.update'), () => $<HTMLButtonElement>('btn-update').click())
   menu.appendChild(el('div', 'menu-sep'))
-  item('eye', t('menu.logs'), () => holo.openLogs())
+  item('folder', t('menu.logs'), () => holo.openLogs())
   item('message', t('menu.diag'), async () => { await holo.copyDiagnostics(); toast(t('menu.diagDone')) })
-  item('power', t('menu.quit'), () => holo.quit())
   menu.appendChild(el('div', 'menu-sep'))
-  menu.appendChild(el('div', 'holo-head', t('holo.title')))
+  // the HOLO family: one line until the other apps exist
+  const family = el('details', 'holo-family')
+  const sum = el('summary', 'menu-item')
+  sum.append(iconEl('cube', 16), el('span', '', t('holo.others')))
+  family.appendChild(sum)
+  menu.appendChild(family)
   for (const p of HOLO_PRODUCTS) {
     const item = el('button', 'holo-item' + (p.current ? ' current' : ''))
     item.disabled = !p.current && !p.url
@@ -999,8 +1039,10 @@ function buildHoloMenu(): void {
     text.append(el('div', 'holo-name', p.name), el('div', 'holo-desc', t(p.desc)))
     item.append(iconEl(p.icon, 20, 'holo-icon'), text, el('span', 'holo-badge', p.current ? t('holo.here') : t('holo.soon')))
     if (p.url) item.onclick = () => holo.open(p.url!)
-    menu.appendChild(item)
+    family.appendChild(item)
   }
+  menu.appendChild(el('div', 'menu-sep'))
+  item('power', t('menu.quit'), () => holo.quit())
   $('btn-holo').onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden }
   document.addEventListener('click', (e) => { if (!menu.hidden && !(e.target as HTMLElement).closest('#holo-menu')) menu.hidden = true })
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { menu.hidden = true; $('lang-menu').hidden = true } })

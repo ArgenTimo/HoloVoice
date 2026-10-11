@@ -24,7 +24,7 @@
   "btn.update": "Update",
   "btn.updateTip": "Get the new version",
   "hk.title": "Hotkeys",
-  "hk.note": "They work in any program and in games. Pressing the shortcut of the active effect again turns it off. Click a shortcut, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it choose 1×, 2×, 3× or Hold — the effect stays on while the key is held.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "Reset all",
   "hk.toggle": "Effect on / off",
   "hk.next": "Next effect",
@@ -149,7 +149,7 @@
   "pg.tone": "Tone",
   "pg.motion": "Motion",
   "pg.space": "Space",
-  "p.psola": "Natural processing (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "Target voice pitch",
   "p.autoTarget": "Adapt to target",
   "p.formantFollow": "Timbre follows pitch",
@@ -231,7 +231,7 @@
   "tray.off": "off",
   "dev.micL": "Microphone",
   "dev.outL": "Send to",
-  "speaker.title": "Your voice",
+  "speaker.title": "Your natural voice",
   "speaker.low": "Low",
   "speaker.mid": "Medium",
   "speaker.high": "High",
@@ -294,5 +294,10 @@
   "fx.underwater": "Underwater",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

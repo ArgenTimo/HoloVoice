@@ -24,7 +24,7 @@
   "btn.update": "Cập nhật",
   "btn.updateTip": "Lấy phiên bản mới",
   "hk.title": "Phím tắt",
-  "hk.note": "Hoạt động trong mọi chương trình và trò chơi. Nhấn lại phím tắt của hiệu ứng đang bật sẽ tắt nó. Nhấp vào phím tắt, rồi nhấn một phím, tổ hợp phím hoặc nút giữa/nút bên của chuột (Esc — hủy, Delete — xóa). Bên cạnh chọn 1×, 2×, 3× hoặc «Giữ» — hiệu ứng bật khi phím còn được giữ.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "Đặt lại tất cả",
   "hk.toggle": "Bật / tắt hiệu ứng",
   "hk.next": "Hiệu ứng tiếp theo",
@@ -149,7 +149,7 @@
   "pg.tone": "Âm sắc",
   "pg.motion": "Chuyển động",
   "pg.space": "Không gian",
-  "p.psola": "Xử lý tự nhiên (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "Cao độ giọng mục tiêu",
   "p.autoTarget": "Điều chỉnh theo mục tiêu",
   "p.formantFollow": "Âm sắc theo cao độ",
@@ -231,7 +231,7 @@
   "tray.off": "tắt",
   "dev.micL": "Micro",
   "dev.outL": "Gửi tới",
-  "speaker.title": "Giọng của bạn",
+  "speaker.title": "Your natural voice",
   "speaker.low": "Trầm",
   "speaker.mid": "Vừa",
   "speaker.high": "Cao",
@@ -294,5 +294,10 @@
   "fx.underwater": "Dưới nước",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

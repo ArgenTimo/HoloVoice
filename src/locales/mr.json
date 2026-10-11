@@ -24,7 +24,7 @@
   "btn.update": "अपडेट करा",
   "btn.updateTip": "नवीन आवृत्ती मिळवा",
   "hk.title": "हॉटकी",
-  "hk.note": "हे कोणत्याही प्रोग्राममध्ये आणि गेममध्ये काम करतात. सक्रिय इफेक्टचा शॉर्टकट पुन्हा दाबल्यास तो बंद होतो. शॉर्टकटवर क्लिक करा, मग की, संयोजन किंवा माउसचे मधले/बाजूचे बटण दाबा (Esc — रद्द, Delete — काढा). शेजारी 1×, 2×, 3× किंवा «दाबून ठेवा» निवडा — की दाबलेली असेपर्यंत इफेक्ट चालू राहतो.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "सर्व रीसेट करा",
   "hk.toggle": "इफेक्ट चालू / बंद",
   "hk.next": "पुढील इफेक्ट",
@@ -149,7 +149,7 @@
   "pg.tone": "स्वर",
   "pg.motion": "गती",
   "pg.space": "जागा",
-  "p.psola": "नैसर्गिक प्रक्रिया (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "लक्ष्य सूर",
   "p.autoTarget": "लक्ष्याशी जुळवणे",
   "p.formantFollow": "टिम्बर सुरासोबत",
@@ -231,7 +231,7 @@
   "tray.off": "बंद",
   "dev.micL": "मायक्रोफोन",
   "dev.outL": "इथे पाठवा",
-  "speaker.title": "तुमचा आवाज",
+  "speaker.title": "Your natural voice",
   "speaker.low": "खालचा",
   "speaker.mid": "मध्यम",
   "speaker.high": "उंच",
@@ -294,5 +294,10 @@
   "fx.underwater": "पाण्याखाली",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

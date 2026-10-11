@@ -24,7 +24,7 @@
   "btn.update": "Atualizar",
   "btn.updateTip": "Obter a nova versão",
   "hk.title": "Atalhos de teclado",
-  "hk.note": "Funcionam em qualquer programa e em jogos. Pressionar de novo o atalho do efeito ativo o desliga. Clique em um atalho e pressione uma tecla, uma combinação ou o botão do meio/lateral do mouse (Esc — cancelar, Delete — remover). Ao lado escolha 1×, 2×, 3× ou “Segurar” — o efeito fica ativo enquanto a tecla estiver pressionada.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "Redefinir todos",
   "hk.toggle": "Efeito liga / desliga",
   "hk.next": "Próximo efeito",
@@ -149,7 +149,7 @@
   "pg.tone": "Timbre",
   "pg.motion": "Movimento",
   "pg.space": "Espaço",
-  "p.psola": "Processamento natural (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "Tom de voz alvo",
   "p.autoTarget": "Ajuste ao alvo",
   "p.formantFollow": "Timbre acompanha o tom",
@@ -231,7 +231,7 @@
   "tray.off": "desligado",
   "dev.micL": "Microfone",
   "dev.outL": "Enviar para",
-  "speaker.title": "Sua voz",
+  "speaker.title": "Your natural voice",
   "speaker.low": "Grave",
   "speaker.mid": "Média",
   "speaker.high": "Aguda",
@@ -294,5 +294,10 @@
   "fx.underwater": "Debaixo d’água",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

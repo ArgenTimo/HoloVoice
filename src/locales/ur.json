@@ -24,7 +24,7 @@
   "btn.update": "اپ ڈیٹ",
   "btn.updateTip": "نیا ورژن حاصل کریں",
   "hk.title": "ہاٹ کیز",
-  "hk.note": "یہ ہر پروگرام اور گیمز میں کام کرتے ہیں۔ فعال اثر کا شارٹ کٹ دوبارہ دبانے سے وہ بند ہو جاتا ہے۔ شارٹ کٹ پر کلک کریں، پھر کوئی کلید، مجموعہ یا ماؤس کا درمیانی/سائیڈ بٹن دبائیں (Esc — منسوخ، Delete — ہٹائیں)۔ ساتھ میں 1×، 2×، 3× یا «دبائے رکھیں» چنیں — کلید دبی رہنے تک اثر چلتا رہتا ہے۔",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "سب ری سیٹ کریں",
   "hk.toggle": "ایفیکٹ آن / آف",
   "hk.next": "اگلا ایفیکٹ",
@@ -149,7 +149,7 @@
   "pg.tone": "لہجہ",
   "pg.motion": "حرکت",
   "pg.space": "جگہ",
-  "p.psola": "قدرتی پروسیسنگ (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "ہدف پچ",
   "p.autoTarget": "ہدف کے مطابق ڈھالنا",
   "p.formantFollow": "ٹمبر پچ کے ساتھ",
@@ -231,7 +231,7 @@
   "tray.off": "آف",
   "dev.micL": "مائیکروفون",
   "dev.outL": "یہاں بھیجیں",
-  "speaker.title": "آپ کی آواز",
+  "speaker.title": "Your natural voice",
   "speaker.low": "نیچی",
   "speaker.mid": "درمیانی",
   "speaker.high": "اونچی",
@@ -294,5 +294,10 @@
   "fx.underwater": "پانی کے اندر",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

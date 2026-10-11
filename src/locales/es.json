@@ -24,7 +24,7 @@
   "btn.update": "Actualizar",
   "btn.updateTip": "Obtener la versión nueva",
   "hk.title": "Atajos de teclado",
-  "hk.note": "Funcionan en cualquier programa y en juegos. Volver a pulsar el atajo del efecto activo lo apaga. Haz clic en un atajo y pulsa una tecla, una combinación o el botón central/lateral del ratón (Esc — cancelar, Supr — quitar). Al lado elige 1×, 2×, 3× o «Mantener»: el efecto sigue activo mientras la tecla esté pulsada.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "Restablecer todos",
   "hk.toggle": "Efecto sí / no",
   "hk.next": "Efecto siguiente",
@@ -149,7 +149,7 @@
   "pg.tone": "Tono",
   "pg.motion": "Movimiento",
   "pg.space": "Espacio",
-  "p.psola": "Procesado natural (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "Tono de voz objetivo",
   "p.autoTarget": "Ajuste al objetivo",
   "p.formantFollow": "Timbre sigue al tono",
@@ -231,7 +231,7 @@
   "tray.off": "apagado",
   "dev.micL": "Micrófono",
   "dev.outL": "Enviar a",
-  "speaker.title": "Tu voz",
+  "speaker.title": "Your natural voice",
   "speaker.low": "Grave",
   "speaker.mid": "Media",
   "speaker.high": "Aguda",
@@ -294,5 +294,10 @@
   "fx.underwater": "Bajo el agua",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

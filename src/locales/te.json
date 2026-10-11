@@ -24,7 +24,7 @@
   "btn.update": "అప్‌డేట్",
   "btn.updateTip": "కొత్త వెర్షన్ పొందండి",
   "hk.title": "హాట్‌కీలు",
-  "hk.note": "ఇవి ఏ ప్రోగ్రామ్‌లోనైనా, గేమ్‌లలోనూ పనిచేస్తాయి. యాక్టివ్ ఎఫెక్ట్ షార్ట్‌కట్‌ను మళ్లీ నొక్కితే అది ఆఫ్ అవుతుంది. షార్ట్‌కట్‌పై క్లిక్ చేసి, ఒక కీ, కాంబినేషన్ లేదా మౌస్ మధ్య/పక్క బటన్ నొక్కండి (Esc — రద్దు, Delete — తొలగించు). పక్కన 1×, 2×, 3× లేదా «పట్టుకోండి» ఎంచుకోండి — కీ నొక్కి ఉన్నంత వరకు ఎఫెక్ట్ ఆన్‌లో ఉంటుంది.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "అన్నీ రీసెట్ చేయి",
   "hk.toggle": "ఎఫెక్ట్ ఆన్ / ఆఫ్",
   "hk.next": "తదుపరి ఎఫెక్ట్",
@@ -149,7 +149,7 @@
   "pg.tone": "స్వరం",
   "pg.motion": "కదలిక",
   "pg.space": "స్థలం",
-  "p.psola": "సహజ ప్రాసెసింగ్ (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "లక్ష్య స్వరం",
   "p.autoTarget": "లక్ష్యానికి సర్దుబాటు",
   "p.formantFollow": "టింబర్ స్వరాన్ని అనుసరిస్తుంది",
@@ -231,7 +231,7 @@
   "tray.off": "ఆఫ్",
   "dev.micL": "మైక్రోఫోన్",
   "dev.outL": "ఇక్కడికి పంపు",
-  "speaker.title": "మీ గొంతు",
+  "speaker.title": "Your natural voice",
   "speaker.low": "తక్కువ",
   "speaker.mid": "మధ్యస్థం",
   "speaker.high": "ఎక్కువ",
@@ -294,5 +294,10 @@
   "fx.underwater": "నీటి అడుగున",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

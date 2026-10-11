@@ -24,7 +24,7 @@
   "btn.update": "Aktualizuj",
   "btn.updateTip": "Pobierz nową wersję",
   "hk.title": "Skróty klawiszowe",
-  "hk.note": "Działają w każdym programie i w grach. Ponowne naciśnięcie skrótu aktywnego efektu wyłącza go. Kliknij skrót, potem naciśnij klawisz, kombinację lub środkowy/boczny przycisk myszy (Esc — anuluj, Delete — usuń). Obok wybierz 1×, 2×, 3× lub „Przytrzym.” — efekt działa, dopóki klawisz jest wciśnięty.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "Przywróć wszystkie",
   "hk.toggle": "Efekt wł. / wył.",
   "hk.next": "Następny efekt",
@@ -149,7 +149,7 @@
   "pg.tone": "Ton",
   "pg.motion": "Ruch",
   "pg.space": "Przestrzeń",
-  "p.psola": "Naturalne przetwarzanie (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "Docelowa wysokość głosu",
   "p.autoTarget": "Dopasowanie do celu",
   "p.formantFollow": "Barwa podąża za wysokością",
@@ -231,7 +231,7 @@
   "tray.off": "wył.",
   "dev.micL": "Mikrofon",
   "dev.outL": "Wysyłaj do",
-  "speaker.title": "Twój głos",
+  "speaker.title": "Your natural voice",
   "speaker.low": "Niski",
   "speaker.mid": "Średni",
   "speaker.high": "Wysoki",
@@ -294,5 +294,10 @@
   "fx.underwater": "Pod wodą",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

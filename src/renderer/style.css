@@ -436,3 +436,46 @@ select { -webkit-appearance: none; appearance: none; padding-right: 24px !import
 .lc-hint .hint-btn { display: flex; margin-top: 8px; }
 
 .cat-none { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 10px; color: var(--muted); }
+
+/* on/off parameters: label + small switch on one line */
+.slider.toggle-row input[type=range] { display: none; }
+.slider.toggle-row > span { align-items: center; }
+.slider.toggle-row > span b { display: none; }
+.switch.small { width: 32px; height: 18px; border-radius: 9px; flex: none; }
+.switch.small i { top: 2px; left: 2px; width: 14px; height: 14px; }
+.switch.small.on i { left: 16px; }
+
+/* "Hear myself": the checkbox drawn as a small switch, like every other on/off */
+.dev-row .check input[type=checkbox] { -webkit-appearance: none; appearance: none; width: 32px; height: 18px; border-radius: 9px; margin: 0;
+  background: var(--off); position: relative; cursor: pointer; flex: none; transition: background .15s; }
+.dev-row .check input[type=checkbox]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; transition: left .15s; }
+.dev-row .check input[type=checkbox]:checked { background: var(--accent); }
+.dev-row .check input[type=checkbox]:checked::after { left: 16px; }
+/* neural tiles: a small AI badge */
+.t-badge { position: absolute; top: 6px; right: 7px; font-size: 9.5px; font-weight: 700; letter-spacing: .4px; padding: 1px 5px; border-radius: 5px;
+  color: #fff; background: linear-gradient(135deg, var(--accent), #ec4899); }
+/* the HOLO family folds into one menu line */
+.holo-family > summary { list-style: none; }
+.holo-family > summary::-webkit-details-marker { display: none; }
+.holo-family[open] > summary { color: var(--muted); }
+
+/* hotkeys modal */
+.hk-key { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 150px !important; }
+.hk-key.empty { color: var(--faint); font-style: italic; }
+.hk-row > .hk-label { min-width: 120px; }
+.hk-cols h4 { position: sticky; top: 0; z-index: 1; background: var(--bg2); padding: 2px 0 6px; }
+.hk-group { margin: 10px 0 2px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+/* setup guide: done steps fold to one line, pending ones stay neutral */
+.setup .steps > li.ok .st-text, .setup .steps > li.ok .st-ctl { display: none; }
+.setup .steps > li.ok { padding-top: 7px; padding-bottom: 7px; }
+.setup .steps > li.ok .st-body b { margin: 2px 0 0; }
+li.wait > .st-mark { border-color: var(--line2); }
+.setup footer { gap: 8px; align-items: center; }
+/* hotkey row: name | key | mode on one line; a conflict note spans the row */
+.hk-row { display: grid !important; grid-template-columns: minmax(0, 1fr) 136px 92px; gap: 6px; align-items: center; }
+.hk-row > .hk-label { min-width: 0 !important; }
+.hk-key { flex: none !important; width: 100%; }
+.hk-mode { width: 100% !important; }
+.hk-mode[hidden] { display: block !important; visibility: hidden; }
+.hk-busy { grid-column: 1 / -1; }

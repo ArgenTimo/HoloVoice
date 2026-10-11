@@ -24,7 +24,7 @@
   "btn.update": "تحديث",
   "btn.updateTip": "تنزيل الإصدار الجديد",
   "hk.title": "اختصارات لوحة المفاتيح",
-  "hk.note": "تعمل في أي برنامج وفي الألعاب. الضغط مجددًا على اختصار التأثير النشط يوقفه. انقر على اختصار ثم اضغط مفتاحًا أو تركيبة أو زر الفأرة الأوسط/الجانبي (Esc — إلغاء، Delete — حذف). بجانبه اختر 1× أو 2× أو 3× أو «ضغط مطوّل» — يبقى التأثير يعمل ما دام المفتاح مضغوطًا.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "إعادة تعيين الكل",
   "hk.toggle": "تشغيل / إيقاف المؤثر",
   "hk.next": "المؤثر التالي",
@@ -149,7 +149,7 @@
   "pg.tone": "النغمة",
   "pg.motion": "الحركة",
   "pg.space": "المكان",
-  "p.psola": "معالجة طبيعية (PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "طبقة الصوت المستهدفة",
   "p.autoTarget": "التكيّف مع الهدف",
   "p.formantFollow": "الجرس يتبع الطبقة",
@@ -231,7 +231,7 @@
   "tray.off": "متوقف",
   "dev.micL": "الميكروفون",
   "dev.outL": "الإرسال إلى",
-  "speaker.title": "صوتك",
+  "speaker.title": "Your natural voice",
   "speaker.low": "منخفض",
   "speaker.mid": "متوسط",
   "speaker.high": "مرتفع",
@@ -294,5 +294,10 @@
   "fx.underwater": "تحت الماء",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }

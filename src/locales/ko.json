@@ -24,7 +24,7 @@
   "btn.update": "업데이트",
   "btn.updateTip": "새 버전 받기",
   "hk.title": "단축키",
-  "hk.note": "어떤 프로그램과 게임에서도 작동합니다. 활성 효과의 단축키를 다시 누르면 꺼집니다. 단축키를 클릭한 다음 키, 조합 또는 마우스 가운데/측면 버튼을 누르세요(Esc — 취소, Delete — 삭제). 옆에서 1×, 2×, 3× 또는 «누르고 있기»를 선택하면 키를 누르는 동안 효과가 켜집니다.",
+  "hk.note": "Work in any program and in games. Click a key field, then press a key, a combination or a middle/side mouse button (Esc — cancel, Delete — remove). Next to it pick Press, Double, Triple or Hold — Hold keeps the effect on only while held. Pressing the active effect’s key again turns it off.",
   "hk.resetAll": "모두 초기화",
   "hk.toggle": "효과 켜기 / 끄기",
   "hk.next": "다음 효과",
@@ -149,7 +149,7 @@
   "pg.tone": "음색",
   "pg.motion": "움직임",
   "pg.space": "공간",
-  "p.psola": "자연스러운 처리(PSOLA)",
+  "p.psola": "Natural timbre",
   "p.targetHz": "목표 음높이",
   "p.autoTarget": "목표에 맞추기",
   "p.formantFollow": "음색이 음높이를 따름",
@@ -231,7 +231,7 @@
   "tray.off": "끔",
   "dev.micL": "마이크",
   "dev.outL": "보낼 곳",
-  "speaker.title": "내 목소리",
+  "speaker.title": "Your natural voice",
   "speaker.low": "낮음",
   "speaker.mid": "중간",
   "speaker.high": "높음",
@@ -294,5 +294,10 @@
   "fx.underwater": "물속",
   "hint.cableDefault": "Windows now plays all sound into <b>CABLE Input</b> — that’s why you hear nothing. In Sound settings choose your speakers or headphones as the output (and your real microphone as the input).",
   "cat.none": "Nothing found for “{q}”",
-  "cat.clear": "Clear the search"
+  "cat.clear": "Clear the search",
+  "ins.dblReset": "Double-click to return to this effect’s value",
+  "ins.resetCustom": "Back to the saved settings",
+  "holo.others": "Other HOLO apps",
+  "hk.set": "set…",
+  "setup.later": "Close (finish later)"
 }
